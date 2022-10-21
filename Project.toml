@@ -3,6 +3,11 @@ uuid = "29a2b48e-e97a-4ce0-9095-f15688946fdc"
 authors = ["Christoph Ortner <christohortner@gmail.com> and contributors"]
 version = "0.0.1"
 
+[deps]
+ACEcore = "44c1e890-45d1-48ea-94d6-c2ea5b573f71"
+ObjectPools = "658cac36-ff0f-48ad-967c-110375d98c9d"
+Polynomials4ML = "03c4bcba-a943-47e9-bfa1-b1661fc2974f"
+
 [compat]
 julia = "1"
 
