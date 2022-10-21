@@ -4,21 +4,23 @@ using ACEcore
 
 ##
 
-module M 
+module M
 
+   using ACEcore
    using Polynomials4ML: OrthPolyBasis1D3T
    using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd
    using ACEcore.Utils: gensparse
-   using LinearAlgebra: qr 
+   using LinearAlgebra: qr, I
 
 
-   struct BFOrbs{T, TPOLY, TPOOL}
+   struct BFOrbs{T, TPOLY}
       polys::TPOLY
       pooling::PooledSparseProduct{2}
       corr::SparseSymmProdDAG{T}
       W::Matrix{T}
    end
 
+   (Φ::BFOrbs)(args...) = evaluate(Φ, args...)
 
    function BFOrbs(Nel::Integer, polys; 
                         ν = 3, T = Float64)
@@ -64,19 +66,24 @@ module M
       # one-hot embedding - generalize to ∅, ↑, ↓
       S = Matrix{Bool}(I, (nX, nX))
 
-      A = zeros(length(orb.pooling), nX) 
+      A = zeros(nX, length(orb.pooling)) 
       Si = zeros(Bool, nX, 2)
       for i = 1:nX 
          onehot!(Si, i)
-         Ai = evaluate(orb.pooling, (parent(P), Si))
+         Ai = ACEcore.evaluate(orb.pooling, (parent(P), Si))
          A[i, :] .= parent(Ai)
       end
 
-      AA = evaluate(orb.corr, A)  # nX x length(orb.corr)
+      AA = ACEcore.evaluate(orb.corr, A)  # nX x length(orb.corr)
       return parent(AA) * orb.W
    end
 end
 
 
+Nel = 5
 polys = legendre_basis(8)
-M.BFOrbs(3, polys)
+orb = M.BFOrbs(Nel, polys)
+
+X = 2 * rand(Nel) .- 1
+orb(X)
+
