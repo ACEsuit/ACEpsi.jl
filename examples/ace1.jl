@@ -64,8 +64,6 @@ module M
       P = wf.polys(X) # nX x dim(polys)
       
       # one-hot embedding - generalize to ∅, ↑, ↓
-      S = Matrix{Bool}(I, (nX, nX))
-
       A = zeros(nX, length(wf.pooling)) 
       Ai = zeros(length(wf.pooling))
       Si = zeros(Bool, nX, 2)
@@ -93,22 +91,24 @@ module M
 
       # ------ forward pass  ----- 
 
-      # position embedding
-      # here we do forward-mode, i.e. we evaluate and differentiate 
-      # at the same time 
-      P, dP = Polynomials4ML.evaluate_ed(wf.polys, X) 
+      # position embedding (forward-mode)
+      # here we evaluate and differentiate at the same time, which is cheap
+      P, dP = Polynomials4ML.evaluate_ed(wf.polys, X)
       
       # one-hot embedding - TODO: generalize to ∅, ↑, ↓
-      # no gradients here
+      # no gradients here - need to somehow "constify" this vector 
+      # could use other packages for inspiration ... 
       S = zeros(Bool, nX, 2)
 
       # pooling : need an elegant way to shift this loop into a kernel!
+      #           e.g. by passing output indices to the pooling function.
       A = zeros(nX, length(wf.pooling)) 
+      Ai = zeros(length(wf.pooling))
       Si = zeros(Bool, nX, 2)
       for i = 1:nX 
          onehot!(Si, i)
-         Ai = ACEcore.evaluate(wf.pooling, (parent(P), Si))
-         A[i, :] .= parent(Ai)
+         ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
+         A[i, :] .= Ai
       end
 
       # n-correlations 
@@ -121,10 +121,10 @@ module M
       ψ = logabsdet(Φ)[1]
 
       # ------ backward pass ------
-      #∂Φ = ∂ψ / ∂Φ = Φ⁻¹
-      ∂Φ = pinv(Φ)  
+      #∂Φ = ∂ψ / ∂Φ = Φ⁻ᵀ
+      ∂Φ = pinv(Φ)'
 
-      # ∂AA = ∂ψ/∂AA = ∂ψ/∂Φ * ∂Φ/∂AA = ∂Φ * wf.W
+      # ∂AA = ∂ψ/∂AA = ∂ψ/∂Φ * ∂Φ/∂AA = ∂Φ * wf.W'
       ∂AA =  ∂Φ * wf.W'
 
       # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
@@ -135,12 +135,12 @@ module M
       # but need to do some work here since multiple 
       # pullbacks can be combined here into a single one maybe? 
       ∂P = zeros(size(P))
-      ∂P1 = zeros(size(P))
+      ∂Pi = zeros(size(P))
       ∂Si = zeros(size(Si))   # should use ZeroNoEffect here ?!??!
       for i = 1:nX 
          onehot!(Si, i)
-         ACEcore._pullback_evalpool!((∂P1, ∂Si), ∂A[i, :], wf.pooling, (P, Si))
-         ∂P .+= ∂P1
+         ACEcore._pullback_evalpool!((∂Pi, ∂Si), ∂A[i, :], wf.pooling, (P, Si))
+         ∂P += ∂Pi
       end
 
       # ∂X = ∂ψ/∂X = ∂ψ/∂P * ∂P/∂X 
@@ -177,7 +177,7 @@ using BenchmarkTools
 ##
 
 @profview let wf=wf, X=X 
-   for n = 1:60_000 
-      g = M.gradient(wf, X)
+   for n = 1:50_000 
+      M.gradient(wf, X)
    end
 end
