@@ -136,9 +136,10 @@ module M
       # pullbacks can be combined here into a single one maybe? 
       ∂P = zeros(size(P))
       ∂P1 = zeros(size(P))
+      ∂Si = zeros(size(Si))   # should use ZeroNoEffect here ?!??!
       for i = 1:nX 
          onehot!(Si, i)
-         ACEcore._pullback_evalpool!((∂P1, ZeroNoEffect()), ∂A[i, :], wf.pooling, (P, Si))
+         ACEcore._pullback_evalpool!((∂P1, ∂Si), ∂A[i, :], wf.pooling, (P, Si))
          ∂P .+= ∂P1
       end
 
@@ -176,7 +177,7 @@ using BenchmarkTools
 ##
 
 @profview let wf=wf, X=X 
-   for n = 1:20_000 
+   for n = 1:60_000 
       g = M.gradient(wf, X)
    end
 end
