@@ -6,23 +6,23 @@ using ACEcore
 
 module M
 
-   using ACEcore
+   using ACEcore, Polynomials4ML
    using Polynomials4ML: OrthPolyBasis1D3T
    using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd
    using ACEcore.Utils: gensparse
-   using LinearAlgebra: qr, I
+   using LinearAlgebra: qr, I, logabsdet, pinv
 
 
-   struct BFOrbs{T, TPOLY}
+   struct BFwf{T, TPOLY}
       polys::TPOLY
       pooling::PooledSparseProduct{2}
       corr::SparseSymmProdDAG{T}
       W::Matrix{T}
    end
 
-   (Φ::BFOrbs)(args...) = evaluate(Φ, args...)
+   (Φ::BFwf)(args...) = evaluate(Φ, args...)
 
-   function BFOrbs(Nel::Integer, polys; 
+   function BFwf(Nel::Integer, polys; 
                         ν = 3, T = Float64)
       # 1-particle spec 
       K = length(polys)
@@ -46,7 +46,7 @@ module M
       Q, _ = qr(randn(T, length(corr), Nel))
       W = Matrix(Q) 
 
-      return BFOrbs(polys, pooling, corr, W)
+      return BFwf(polys, pooling, corr, W)
    end
 
 
@@ -57,33 +57,126 @@ module M
       Si[i, 2] = 0
    end
 
-   function evaluate(orb::BFOrbs, X::AbstractVector)
+   function orbitals(wf::BFwf, X::AbstractVector)
       nX = length(X)
       
       # position embedding 
-      P = orb.polys(X) # nX x dim(polys)
+      P = wf.polys(X) # nX x dim(polys)
       
       # one-hot embedding - generalize to ∅, ↑, ↓
       S = Matrix{Bool}(I, (nX, nX))
 
-      A = zeros(nX, length(orb.pooling)) 
+      A = zeros(nX, length(wf.pooling)) 
+      Ai = zeros(length(wf.pooling))
       Si = zeros(Bool, nX, 2)
       for i = 1:nX 
          onehot!(Si, i)
-         Ai = ACEcore.evaluate(orb.pooling, (parent(P), Si))
+         ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
+         A[i, :] .= Ai
+      end
+
+      AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+      return parent(AA) * wf.W
+   end
+
+
+   evaluate(wf::BFwf, X) = logabsdet(orbitals(wf, X))[1]
+
+   struct ZeroNoEffect end 
+   Base.size(::ZeroNoEffect, ::Integer) = Inf
+   Base.setindex!(A::ZeroNoEffect, args...) = nothing
+   Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
+
+
+   function gradient(wf::BFwf, X)
+      nX = length(X)
+
+      # ------ forward pass  ----- 
+
+      # position embedding
+      # here we do forward-mode, i.e. we evaluate and differentiate 
+      # at the same time 
+      P, dP = Polynomials4ML.evaluate_ed(wf.polys, X) 
+      
+      # one-hot embedding - TODO: generalize to ∅, ↑, ↓
+      # no gradients here
+      S = zeros(Bool, nX, 2)
+
+      # pooling : need an elegant way to shift this loop into a kernel!
+      A = zeros(nX, length(wf.pooling)) 
+      Si = zeros(Bool, nX, 2)
+      for i = 1:nX 
+         onehot!(Si, i)
+         Ai = ACEcore.evaluate(wf.pooling, (parent(P), Si))
          A[i, :] .= parent(Ai)
       end
 
-      AA = ACEcore.evaluate(orb.corr, A)  # nX x length(orb.corr)
-      return parent(AA) * orb.W
+      # n-correlations 
+      AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+
+      # generalized orbitals 
+      Φ = parent(AA) * wf.W
+
+      # and finally the wave function 
+      ψ = logabsdet(Φ)[1]
+
+      # ------ backward pass ------
+      #∂Φ = ∂ψ / ∂Φ = Φ⁻¹
+      ∂Φ = pinv(Φ)  
+
+      # ∂AA = ∂ψ/∂AA = ∂ψ/∂Φ * ∂Φ/∂AA = ∂Φ * wf.W
+      ∂AA =  ∂Φ * wf.W'
+
+      # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
+      ∂A = zeros(size(A))
+      ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, AA)
+
+      # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 
+      # but need to do some work here since multiple 
+      # pullbacks can be combined here into a single one maybe? 
+      ∂P = zeros(size(P))
+      ∂P1 = zeros(size(P))
+      for i = 1:nX 
+         onehot!(Si, i)
+         ACEcore._pullback_evalpool!((∂P1, ZeroNoEffect()), ∂A[i, :], wf.pooling, (P, Si))
+         ∂P .+= ∂P1
+      end
+
+      # ∂X = ∂ψ/∂X = ∂ψ/∂P * ∂P/∂X 
+      #   here we can now finally employ the dP=∂P/∂X that we already know.
+      # ∂ψ/∂Xi = ∑_k ∂ψ/∂Pik * ∂Pik/∂Xi
+      #        = ∑_k ∂P[i, k] * dP[i, k]
+      g = sum(∂P .* dP, dims = 2)[:]
+      return g
    end
 end
 
+##
 
 Nel = 5
 polys = legendre_basis(8)
-orb = M.BFOrbs(Nel, polys)
+wf = M.BFwf(Nel, polys)
 
 X = 2 * rand(Nel) .- 1
-orb(X)
+wf(X)
+g = M.gradient(wf, X)
 
+##
+
+using ACEbase.Testing: fdtest 
+
+fdtest(wf, X -> M.gradient(wf, X), X)
+
+
+##
+using BenchmarkTools
+@btime M.evaluate($wf, $X)
+@btime M.gradient($wf, $X)
+
+##
+
+@profview let wf=wf, X=X 
+   for n = 1:20_000 
+      g = M.gradient(wf, X)
+   end
+end
