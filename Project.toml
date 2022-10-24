@@ -11,6 +11,7 @@ ObjectPools = "658cac36-ff0f-48ad-967c-110375d98c9d"
 Polynomials4ML = "03c4bcba-a943-47e9-bfa1-b1661fc2974f"
 
 [compat]
+BenchmarkTools = "1"
 julia = "1"
 
 [extras]
