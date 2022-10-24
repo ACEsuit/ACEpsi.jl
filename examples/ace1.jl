@@ -139,6 +139,7 @@ module M
       ∂Si = zeros(size(Si))   # should use ZeroNoEffect here ?!??!
       for i = 1:nX 
          onehot!(Si, i)
+         fill!(∂Pi, 0)
          ACEcore._pullback_evalpool!((∂Pi, ∂Si), ∂A[i, :], wf.pooling, (P, Si))
          ∂P += ∂Pi
       end
@@ -150,7 +151,10 @@ module M
       g = sum(∂P .* dP, dims = 2)[:]
       return g
    end
+
+
 end
+
 
 ##
 
