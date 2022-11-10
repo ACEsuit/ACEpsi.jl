@@ -35,7 +35,7 @@ module M
 
    (Φ::BFwf)(args...) = evaluate(Φ, args...)
 
-   function BFwf(Nel::Integer, polys; 
+   function BFwf(Nel::Integer, polys; totdeg = length(polys), 
                         ν = 3, T = Float64)
       # 1-particle spec 
       K = length(polys)
@@ -44,7 +44,7 @@ module M
 
       # generate the many-particle spec 
       tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-      admissible = bb -> (length(bb) == 0) || (sum( b[1] for b in bb ) <= 7 )
+      admissible = bb -> (length(bb) == 0) || (sum( b[1]-1 for b in bb ) <= totdeg )
       
       specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = admissible,
                            minvv = fill(0, ν), 
@@ -196,8 +196,8 @@ end
 
 ##
 
-Nel = 5
-polys = legendre_basis(15)
+Nel = 10
+polys = legendre_basis(10)
 wf = M.BFwf(Nel, polys; ν=4)
 
 X = 2 * rand(Nel) .- 1
