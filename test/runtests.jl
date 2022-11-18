@@ -2,5 +2,8 @@ using ACEpsi
 using Test
 
 @testset "ACEpsi.jl" begin
-    # Write your tests here.
+    
+
+    @testset "BFwf" begin include("test_bflow.jl") end 
+
 end

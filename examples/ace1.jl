@@ -218,8 +218,9 @@ using BenchmarkTools
 
 ##
 
-@profview let wf=wf, X=X 
-   for n = 1:50_000 
-      M.gradient(wf, X)
-   end
-end
+# @profview let wf=wf, X=X 
+#    for n = 1:50_000 
+#       M.gradient(wf, X)
+#    end
+# end
+
