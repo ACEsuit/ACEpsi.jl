@@ -76,6 +76,7 @@ function onehot!(Si, i)
    Si[i, 2] = 0
 end
 
+
 function evaluate(wf::BFwf, X::AbstractVector)
    nX = length(X)
    
@@ -188,6 +189,9 @@ end
 
 function laplacian(wf::BFwf, X)
    
+   spec_AA = ACEcore.reconstruct_spec(wf.corr)
+   spec_A = wf.pooling.spec 
+
 end 
 
 """
@@ -196,32 +200,99 @@ This will compute the following:
 * `dA[k, k'] = ∑_i ∂_i P_k * ∂_i P_k'` 
 * `ddA[k] = ∑_i P_k''(x_i) = ΔA[k]`.
 """
-function _assemble_A_dA_ddA(polys, X)
+function _assemble_A_dA_ddA(wf, X)
    TX = eltype(X)
-   A = zeros(TX, length(polys))
-   dA = zeros(TX, length(polys), length(polys))
-   ddA = zeros(TX, length(polys))
-   _assemble_A_dA_ddA!(A, dA, ddA, polys, X)
+   A = zeros(TX, length(X), length(wf.pooling))
+   dA = zeros(TX, length(X), length(wf.pooling), length(wf.pooling))
+   ddA = zeros(TX, length(X), length(wf.pooling))
+   _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
    return A, dA, ddA
 end
 
-function _assemble_A_dA_ddA!(A, dA, ddA, polys, X)
-   P, dP, ddP = Polynomials4ML.evaluate_ed(polys, X)
-   for i = 1:length(X) 
-      A[:] += P[i, :]
-      dA[:,:] += dP[i,:] * dP[i,:]'
-      ddA[:] += ddP[i,:]
+# TODO: to do this more elegantly we really need 
+#       the jacobian of the pooling w.r.t. X
+
+import ForwardDiff
+
+function _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
+   nX = length(X) 
+   spec_A = wf.pooling.spec
+   P, dP, ddP = Polynomials4ML.evaluate_ed2(wf.polys, X)
+   Si_ = zeros(nX, 2)
+   Ai = zeros(length(wf.pooling))
+   ∂Ai = zeros(eltype(P), length(wf.pooling), nX)
+   for i = 1:nX # loop over orbital bases (which i becomes ∅)
+      fill!(Si_, 0)
+      onehot!(Si_, i)
+      # ACEcore.evalpool!(Ai, wf.pooling, (P, Si_))
+      Ai = ACEcore.evalpool(wf.pooling, (P, Si_))
+      A[i, :] = Ai 
+   
+      for (iA, (k, σ)) in enumerate(spec_A)
+         # jacobian  -> there is still a bug here ... 
+         #    ∂A / ∂X
+         # and laplacian  -> this part is tested and seems to work fine.
+         #   ΔA_n∅ = Pn''(xi) 
+         #   ΔA_n↑ =  ∑_{j ≂̸ i} Pn''(xj)
+         if σ == 1 
+            ∂Ai[iA, i] = dP[i, k]
+            ddA[i, iA] = ddP[i, k]
+         else 
+            ∂Ai[iA, :] = dP[:, k] 
+            ∂Ai[iA, i] = 0 
+            ddA[i, iA] = sum(ddP[:, k]) - ddP[i, k]
+         end
+      end
+
+      # # a little test 
+      # _Ai = ACEcore.evalpool(wf.pooling, (P, Si_))
+      # _∂Ai = ForwardDiff.jacobian(X -> ACEcore.evalpool(wf.pooling, (wf.polys(X), Si_)), X)
+      # @show Ai ≈ _Ai
+      # @show ∂Ai ≈ _∂Ai
+
+
+      # now the `dA` array actually contains something else: 
+      #   dA[k, k'] = ∑_i ∂_i A_k * ∂_i A_k'
+      dA[i, :, :] = ∂Ai * transpose(∂Ai)
    end
-   return nothing 
+   return nothing       
 end
 
 
-function _laplacian_inner(spec, c, A, dA, ddA)
+function _laplacian_inner()
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)
    # where Φᵢ = ∂_{xi} Φ
-   Δ = 0.0
 
 
+   nX = length(X)
+   
+   # position embedding 
+   P = wf.P 
+   evaluate!(P, wf.polys, X)    # nX x dim(polys)
+   
+   # one-hot embedding - generalize to ∅, ↑, ↓
+   A = wf.A    # zeros(nX, length(wf.pooling)) 
+   Ai = wf.Ai  # zeros(length(wf.pooling))
+   Si = wf.Si  # zeros(Bool, nX, 2)
+   for i = 1:nX 
+      onehot!(Si, i)
+      ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
+      A[i, :] .= Ai
+   end
+
+   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   Φ = wf.Φ 
+   mul!(Φ, parent(AA), wf.W)
+   Φ⁻ᵀ = transpose(pinv(Φ))
+
+   ΔAA = zeros(nX, length(wf.corr))
+
+   for iAA = 1:length(spec)
+      
+
+
+
+   end
 end
 
 
