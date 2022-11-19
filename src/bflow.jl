@@ -229,27 +229,17 @@ function _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
       A[i, :] = Ai 
    
       for (iA, (k, σ)) in enumerate(spec_A)
-         # jacobian  -> there is still a bug here ... 
-         #    ∂A / ∂X
-         # and laplacian  -> this part is tested and seems to work fine.
-         #   ΔA_n∅ = Pn''(xi) 
-         #   ΔA_n↑ =  ∑_{j ≂̸ i} Pn''(xj)
-         if σ == 1 
-            ∂Ai[iA, i] = dP[i, k]
-            ddA[i, iA] = ddP[i, k]
-         else 
-            ∂Ai[iA, :] = dP[:, k] 
-            ∂Ai[iA, i] = 0 
-            ddA[i, iA] = sum(ddP[:, k]) - ddP[i, k]
-         end
+         # jacobian ∂Ai
+         # and laplacian ddA[i, :]
+         ddA[i, iA] = sum(ddP[:, k] .* Si_[:, σ])
+         ∂Ai[iA, :] = dP[:, k] .* Si_[:, σ]
       end
 
-      # # a little test 
+      # # a little test for debugging -> this passes now 
       # _Ai = ACEcore.evalpool(wf.pooling, (P, Si_))
       # _∂Ai = ForwardDiff.jacobian(X -> ACEcore.evalpool(wf.pooling, (wf.polys(X), Si_)), X)
       # @show Ai ≈ _Ai
       # @show ∂Ai ≈ _∂Ai
-
 
       # now the `dA` array actually contains something else: 
       #   dA[k, k'] = ∑_i ∂_i A_k * ∂_i A_k'
@@ -262,29 +252,15 @@ end
 function _laplacian_inner()
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)
    # where Φᵢ = ∂_{xi} Φ
-
-
    nX = length(X)
    
-   # position embedding 
-   P = wf.P 
-   evaluate!(P, wf.polys, X)    # nX x dim(polys)
-   
-   # one-hot embedding - generalize to ∅, ↑, ↓
-   A = wf.A    # zeros(nX, length(wf.pooling)) 
-   Ai = wf.Ai  # zeros(length(wf.pooling))
-   Si = wf.Si  # zeros(Bool, nX, 2)
-   for i = 1:nX 
-      onehot!(Si, i)
-      ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
-      A[i, :] .= Ai
-   end
-
+   # compute the n-correlations, the wf, and the first layer of derivatives 
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
    Φ = wf.Φ 
    mul!(Φ, parent(AA), wf.W)
    Φ⁻ᵀ = transpose(pinv(Φ))
 
+   # this is now the key component 
    ΔAA = zeros(nX, length(wf.corr))
 
    for iAA = 1:length(spec)

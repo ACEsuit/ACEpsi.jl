@@ -49,9 +49,9 @@ _∂A1(X)
 _ΔA1(X) ≈ _adΔA1(X)
 
 
+##
 
-
-# A, dA, ddA = ACEpsi._assemble_A_dA_ddA(wf, X)
+A, dA, ddA = ACEpsi._assemble_A_dA_ddA(wf, X)
 
 ##
 
