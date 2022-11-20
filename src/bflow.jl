@@ -192,6 +192,10 @@ function laplacian(wf::BFwf, X)
    spec_AA = ACEcore.reconstruct_spec(wf.corr)
    spec_A = wf.pooling.spec 
 
+   A, dA, ddA = _assemble_A_dA_ddA(wf, X)
+   AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, dA, ddA, wf)
+
+   return _laplacian_inner(wf, X, A, dA, ddA, spec_A, spec_AA)
 end 
 
 """
@@ -202,9 +206,12 @@ This will compute the following:
 """
 function _assemble_A_dA_ddA(wf, X)
    TX = eltype(X)
-   A = zeros(TX, length(X), length(wf.pooling))
-   dA = zeros(TX, length(X), length(wf.pooling), length(wf.pooling))
-   ddA = zeros(TX, length(X), length(wf.pooling))
+   lenA = length(wf.pooling)
+   lenX = length(X)
+   A = zeros(TX, lenX, lenA)
+   dA = zeros(TX, lenX, lenX, lenA)
+   # xdA = zeros(TX, lenX, lenA, lenA)
+   ddA = zeros(TX, lenX, lenA)
    _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
    return A, dA, ddA
 end
@@ -214,13 +221,12 @@ end
 
 import ForwardDiff
 
-function _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
+function _assemble_A_dA_ddA!(A, dA, xdA, ddA, wf, X)
    nX = length(X) 
    spec_A = wf.pooling.spec
    P, dP, ddP = Polynomials4ML.evaluate_ed2(wf.polys, X)
    Si_ = zeros(nX, 2)
    Ai = zeros(length(wf.pooling))
-   ∂Ai = zeros(eltype(P), length(wf.pooling), nX)
    for i = 1:nX # loop over orbital bases (which i becomes ∅)
       fill!(Si_, 0)
       onehot!(Si_, i)
@@ -231,8 +237,8 @@ function _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
       for (iA, (k, σ)) in enumerate(spec_A)
          # jacobian ∂Ai
          # and laplacian ddA[i, :]
+         dAi[i, :, iA] = dP[:, k] .* Si_[:, σ]
          ddA[i, iA] = sum(ddP[:, k] .* Si_[:, σ])
-         ∂Ai[iA, :] = dP[:, k] .* Si_[:, σ]
       end
 
       # # a little test for debugging -> this passes now 
@@ -243,107 +249,69 @@ function _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
 
       # now the `dA` array actually contains something else: 
       #   dA[k, k'] = ∑_i ∂_i A_k * ∂_i A_k'
-      dA[i, :, :] = ∂Ai * transpose(∂Ai)
+      # ∂Ai = @view dAi[i, :, :]
+      # xdA[i, :, :] = transpose(∂Ai) * ∂Ai
    end
-   return nothing       
+   return nothing
+end
+
+function _assemble_AA_∇AA_ΔAA(A, dA, ddA, wf)
+   nX = size(A, 1)
+   AA = zeros(nX, length(wf.corr))
+   ∇AA = zeros(nX, nX, length(wf.corr))
+   ΔAA = zeros(nX, length(wf.corr))
+
+   for iAA = 1:wf.corr.num1 
+      AA[:, iAA] .= A[:, iAA] 
+      ∇AA[:, :, iAA] .= dA[:, :, iAA]
+      ΔAA[:, iAA] .= ddA[:, iAA]
+   end
+
+   lenAA = length(wf.corr)
+   spec = wf.corr.spec
+   for iAA = wf.corr.num1+1:lenAA 
+      k1, k2 = wf.corr.spec[iAA]
+      for i = 1:nX 
+         AA[i, iAA] = A[i, k1] * A[i, k2]
+         ΔAA[i, iAA] = ΔAA[i, k1] * AA[i, k2] + AA[i, k1] * ΔAA[i, k2]
+      end 
+      for j = 1:nX         
+         for i = 1:nX 
+            ΔAA[i, iAA] += 2 * ∇AA[i, j, k1] * ∇AA[i, j, k2]
+            ∇AA[i, j, iAA] = ∇AA[i, j, k1] * A[i, k2] + A[i, k1] * ∇AA[i, j, k2]
+         end
+      end      
+   end
+   return AA, ∇AA, ΔAA
 end
 
 
-function _laplacian_inner()
+function _laplacian_inner(AA, ∇AA, ΔAA, wf)
+
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)
    # where Φᵢ = ∂_{xi} Φ
-   nX = length(X)
+
+   nX = size(AA, 1)
    
-   # compute the n-correlations, the wf, and the first layer of derivatives 
-   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
    mul!(Φ, parent(AA), wf.W)
    Φ⁻ᵀ = transpose(pinv(Φ))
 
-   # this is now the key component 
-   ΔAA = zeros(nX, length(wf.corr))
+   # first contribution to the laplacian
+   ΔΦ = ΔAA * wf.W 
+   Δψ = dot(Φ⁻ᵀ, Φ)
 
-   for iAA = 1:length(spec)
-      
-
-
-
+   # the gradient contribution 
+   # TODO: we can rework this into a single BLAS3 call
+   # which will also give us a single back-propagation 
+   Φ⁻ᵀ∇Φi = zeros(nX, nX)
+   for i = 1:nX 
+      mul!(Φ⁻ᵀ∇Φi, ∇AA[:, i, :], wf.W)
+      mul!(Φ⁻ᵀ∇Φi, Φ⁻ᵀ, Φ⁻ᵀ∇Φi)
+      Δψ -= dot(Φ⁻ᵀ∇Φi, Φ⁻ᵀ∇Φi)
    end
+
+   return Δψ
 end
 
-
-# # ------------------ old codes 
-
-# function _assemble_A_dA_ddA(pibasis, cfg)
-#    B1p = pibasis.basis1p 
-#    TX = typeof(cfg[1].x)
-#    A = zeros(TX, length(B1p))
-#    dA = zeros(TX, length(B1p), length(B1p))
-#    ddA = zeros(TX, length(B1p))
-#    _assemble_A_dA_ddA!(A, dA, ddA, B1p, cfg) 
-#    return A, dA, ddA 
-# end
-
-# function _assemble_A_dA_ddA!(A, dA, ddA, B1p, cfg)
-#    # this is a hack because we know a priori what the basis is.  .... 
-#    # P = B1p["Pn"].basis
-#    _deriv(y) = getproperty.(evaluate_d(B1p, y), :x)
-#    _deriv(y, δx) = _deriv(El1dState(y.x+δx, y.σ))
-
-#    for y in cfg
-#       A[:] += evaluate(B1p, y)
-#       dϕ = _deriv(y)
-#       dA[:,:] += dϕ * dϕ'
-#       dϕ_p = _deriv(y,  1e-4)
-#       dϕ_m = _deriv(y, -1e-4)
-#       ddA[:] += (dϕ_p - dϕ_m) / (2*1e-4)
-#    end
-#    return dA, ddA 
-# end
-
-# function _At(A, spec, iAA, t)
-#    iAt = spec.iAA2iA[iAA, t]
-#    return A[iAt], iAt
-# end 
-
-# _prodA(A, spec, iAA) = 
-#       prod( _At(A, spec, iAA, t)[1] for t = 1:spec.orders[iAA];
-#             init = one(eltype(A)) )
-
-# function _laplacian_inner(spec, c, A, dA, ddA)
-#    Δ = 0.0
-#    for iAA = 1:length(spec)
-#       ord = spec.orders[iAA]
-
-#       if ord == 1
-#          ddA1 = ddA[ spec.iAA2iA[iAA, 1] ]
-#          Δ += c[iAA] * ddA1
-#          continue
-#       end
-
-#       if ord == 2 
-#          A1, iA1 = _At(A, spec, iAA, 1)     
-#          A2, iA2 = _At(A, spec, iAA, 2)
-#          Δ += c[iAA] * ( A1 * ddA[iA2] + ddA[iA1] * A2 + 2 * dA[iA1, iA2] )
-#          continue 
-#       end
-
-#       # compute the product basis function 
-#       aa = _prodA(A, spec, iAA)
-
-#       # now compute the back-prop       
-#       for t = 1:ord
-#          At, iAt = _At(A, spec, iAA, t)
-#          AA_t = sign(At) * aa / (abs(At) + eps())
-#          Δ += c[iAA] * AA_t * ddA[iAt]
-
-#          for s = t+1:ord 
-#             As, iAs = _At(A, spec, iAA, s)
-#             AA_ts = sign(As) * AA_t / (abs(As) + eps())
-#             Δ += 2 * c[iAA] * AA_ts * dA[iAt, iAs]
-#          end
-#       end
-#    end
-
-#    return Δ
-# end

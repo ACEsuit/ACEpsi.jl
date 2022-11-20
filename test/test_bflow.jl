@@ -76,3 +76,7 @@ dAA = randn(274, 10)
 nX = length(X)
 Si = zeros(Bool, nX, 2)
 ACEpsi.onehot!(Si, 1)
+
+##
+
+ACEpsi.laplacian(wf, X)
