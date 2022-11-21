@@ -282,17 +282,17 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf)
 
    # first contribution to the laplacian
    ΔΦ = ΔAA * wf.W 
-   Δψ = dot(Φ⁻ᵀ, Φ)
+   Δψ = dot(Φ⁻ᵀ, ΔΦ)
 
    # the gradient contribution 
    # TODO: we can rework this into a single BLAS3 call
    # which will also give us a single back-propagation 
    ∇Φi = zeros(nX, nX)
-   Φ⁻ᵀ∇Φi = zeros(nX, nX)
+   Φ⁻¹∇Φi = zeros(nX, nX)
    for i = 1:nX 
       mul!(∇Φi, ∇AA[:, i, :], wf.W)
-      mul!(Φ⁻ᵀ∇Φi, Φ⁻ᵀ, ∇Φi)
-      Δψ -= dot(Φ⁻ᵀ∇Φi', Φ⁻ᵀ∇Φi)
+      mul!(Φ⁻¹∇Φi, transpose(Φ⁻ᵀ), ∇Φi)
+      Δψ -= dot(transpose(Φ⁻¹∇Φi), Φ⁻¹∇Φi)
    end
 
    return Δψ

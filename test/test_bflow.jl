@@ -59,19 +59,18 @@ lap_test(X -> f_AA(X)[1], X -> f_AA(X)[3], X)
 
 ##
 
-
+lap_test(X -> [wf(X);;], X -> [ACEpsi.laplacian(wf, X);;], X)
 
 ## 
 
 function grad_test(f, df, X)
    F = f(X) 
    ∇F = df(X)
-   ∇F = permutedims(∇F, (2, 1, 3))
    nX, nF = size(F)
    U = randn(nX)
    V = randn(nF) ./ (1:nF).^2
    f0 = U' * F * V
-   ∇f0 = [ U' * ∇F[i, :,:] * V for i = 1:nX ]
+   ∇f0 = [ U' * ∇F[:, i, :] * V for i = 1:nX ]
    EE = Matrix(I, (Nel, Nel))
    for h in 0.1.^(2:10)
       gh = [ (U'*f(X + h * EE[:, i])*V - f0) / h for i = 1:Nel ]
@@ -82,15 +81,16 @@ end
 function lap_test(f, Δf, X)
    F = f(X) 
    ΔF = Δf(X)
-   nX, nF = size(F)
-   U = randn(nX)
+   nX = length(X) 
+   n1, nF = size(F)
+   U = randn(n1)
    V = randn(nF) ./ (1:nF).^2
    f0 = U' * F * V
    Δf0 = U' * ΔF * V
-   EE = Matrix(I, (Nel, Nel))
+   EE = Matrix(I, (nX, nX))
    for h in sqrt(0.1).^((2:10))
       Δfh = 0.0
-      for i = 1:Nel
+      for i = 1:nX
          Δfh += (U'*f(X + h * EE[:, i])*V - f0) / h^2
          Δfh += (U'*f(X - h * EE[:, i])*V - f0) / h^2
       end
