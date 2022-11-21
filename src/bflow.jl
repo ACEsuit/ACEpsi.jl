@@ -3,7 +3,7 @@ using ACEcore, Polynomials4ML
 using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
-using LinearAlgebra: qr, I, logabsdet, pinv, mul!
+using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot 
 
 
 struct BFwf{T, TPOLY}
@@ -189,41 +189,24 @@ end
 
 function laplacian(wf::BFwf, X)
    
-   spec_AA = ACEcore.reconstruct_spec(wf.corr)
-   spec_A = wf.pooling.spec 
+   # spec_AA = ACEcore.reconstruct_spec(wf.corr)
+   # spec_A = wf.pooling.spec 
 
    A, dA, ddA = _assemble_A_dA_ddA(wf, X)
    AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, dA, ddA, wf)
 
-   return _laplacian_inner(wf, X, A, dA, ddA, spec_A, spec_AA)
+   return _laplacian_inner(AA, ∇AA, ΔAA, wf)
 end 
 
-"""
-This will compute the following: 
-* `A` just the normal pooling operation, `A[k] = ∑_i P_k(x_i)`
-* `dA[k, k'] = ∑_i ∂_i P_k * ∂_i P_k'` 
-* `ddA[k] = ∑_i P_k''(x_i) = ΔA[k]`.
-"""
 function _assemble_A_dA_ddA(wf, X)
    TX = eltype(X)
    lenA = length(wf.pooling)
-   lenX = length(X)
-   A = zeros(TX, lenX, lenA)
-   dA = zeros(TX, lenX, lenX, lenA)
-   # xdA = zeros(TX, lenX, lenA, lenA)
-   ddA = zeros(TX, lenX, lenA)
-   _assemble_A_dA_ddA!(A, dA, ddA, wf, X)
-   return A, dA, ddA
-end
-
-# TODO: to do this more elegantly we really need 
-#       the jacobian of the pooling w.r.t. X
-
-import ForwardDiff
-
-function _assemble_A_dA_ddA!(A, dA, xdA, ddA, wf, X)
    nX = length(X) 
+   A = zeros(TX, nX, lenA)
+   dA = zeros(TX, nX, nX, lenA)
+   ddA = zeros(TX, nX, lenA)
    spec_A = wf.pooling.spec
+
    P, dP, ddP = Polynomials4ML.evaluate_ed2(wf.polys, X)
    Si_ = zeros(nX, 2)
    Ai = zeros(length(wf.pooling))
@@ -237,7 +220,7 @@ function _assemble_A_dA_ddA!(A, dA, xdA, ddA, wf, X)
       for (iA, (k, σ)) in enumerate(spec_A)
          # jacobian ∂Ai
          # and laplacian ddA[i, :]
-         dAi[i, :, iA] = dP[:, k] .* Si_[:, σ]
+         dA[i, :, iA] = dP[:, k] .* Si_[:, σ]
          ddA[i, iA] = sum(ddP[:, k] .* Si_[:, σ])
       end
 
@@ -252,7 +235,7 @@ function _assemble_A_dA_ddA!(A, dA, xdA, ddA, wf, X)
       # ∂Ai = @view dAi[i, :, :]
       # xdA[i, :, :] = transpose(∂Ai) * ∂Ai
    end
-   return nothing
+   return A, dA, ddA 
 end
 
 function _assemble_AA_∇AA_ΔAA(A, dA, ddA, wf)
@@ -268,17 +251,16 @@ function _assemble_AA_∇AA_ΔAA(A, dA, ddA, wf)
    end
 
    lenAA = length(wf.corr)
-   spec = wf.corr.spec
    for iAA = wf.corr.num1+1:lenAA 
-      k1, k2 = wf.corr.spec[iAA]
+      k1, k2 = wf.corr.nodes[iAA]
       for i = 1:nX 
-         AA[i, iAA] = A[i, k1] * A[i, k2]
+         AA[i, iAA] = AA[i, k1] * AA[i, k2]         
          ΔAA[i, iAA] = ΔAA[i, k1] * AA[i, k2] + AA[i, k1] * ΔAA[i, k2]
       end 
       for j = 1:nX         
          for i = 1:nX 
             ΔAA[i, iAA] += 2 * ∇AA[i, j, k1] * ∇AA[i, j, k2]
-            ∇AA[i, j, iAA] = ∇AA[i, j, k1] * A[i, k2] + A[i, k1] * ∇AA[i, j, k2]
+            ∇AA[i, j, iAA] = ∇AA[i, j, k1] * AA[i, k2] + AA[i, k1] * ∇AA[i, j, k2]
          end
       end      
    end
@@ -305,11 +287,12 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf)
    # the gradient contribution 
    # TODO: we can rework this into a single BLAS3 call
    # which will also give us a single back-propagation 
+   ∇Φi = zeros(nX, nX)
    Φ⁻ᵀ∇Φi = zeros(nX, nX)
    for i = 1:nX 
-      mul!(Φ⁻ᵀ∇Φi, ∇AA[:, i, :], wf.W)
-      mul!(Φ⁻ᵀ∇Φi, Φ⁻ᵀ, Φ⁻ᵀ∇Φi)
-      Δψ -= dot(Φ⁻ᵀ∇Φi, Φ⁻ᵀ∇Φi)
+      mul!(∇Φi, ∇AA[:, i, :], wf.W)
+      mul!(Φ⁻ᵀ∇Φi, Φ⁻ᵀ, ∇Φi)
+      Δψ -= dot(Φ⁻ᵀ∇Φi', Φ⁻ᵀ∇Φi)
    end
 
    return Δψ
