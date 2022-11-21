@@ -97,3 +97,4 @@ function lap_test(f, Δf, X)
       @printf(" %.1e | %.2e \n", h, abs(Δfh - Δf0))
    end
 end
+

@@ -192,73 +192,58 @@ function laplacian(wf::BFwf, X)
    # spec_AA = ACEcore.reconstruct_spec(wf.corr)
    # spec_A = wf.pooling.spec 
 
-   A, dA, ddA = _assemble_A_dA_ddA(wf, X)
-   AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, dA, ddA, wf)
+   A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X)
+   AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
 
    return _laplacian_inner(AA, ∇AA, ΔAA, wf)
 end 
 
-function _assemble_A_dA_ddA(wf, X)
+function _assemble_A_∇A_ΔA(wf, X)
    TX = eltype(X)
    lenA = length(wf.pooling)
    nX = length(X) 
    A = zeros(TX, nX, lenA)
-   dA = zeros(TX, nX, nX, lenA)
-   ddA = zeros(TX, nX, lenA)
+   ∇A = zeros(TX, nX, nX, lenA)
+   ΔA = zeros(TX, nX, lenA)
    spec_A = wf.pooling.spec
 
    P, dP, ddP = Polynomials4ML.evaluate_ed2(wf.polys, X)
    Si_ = zeros(nX, 2)
    Ai = zeros(length(wf.pooling))
-   for i = 1:nX # loop over orbital bases (which i becomes ∅)
+   @inbounds for i = 1:nX # loop over orbital bases (which i becomes ∅)
       fill!(Si_, 0)
       onehot!(Si_, i)
-      # ACEcore.evalpool!(Ai, wf.pooling, (P, Si_))
       Ai = ACEcore.evalpool(wf.pooling, (P, Si_))
       A[i, :] = Ai 
-   
       for (iA, (k, σ)) in enumerate(spec_A)
-         # jacobian ∂Ai
-         # and laplacian ddA[i, :]
-         dA[i, :, iA] = dP[:, k] .* Si_[:, σ]
-         ddA[i, iA] = sum(ddP[:, k] .* Si_[:, σ])
+         ∇A[i, :, iA] = dP[:, k] .* Si_[:, σ]
+         ΔA[i, iA] = sum(ddP[:, k] .* Si_[:, σ])
       end
-
-      # # a little test for debugging -> this passes now 
-      # _Ai = ACEcore.evalpool(wf.pooling, (P, Si_))
-      # _∂Ai = ForwardDiff.jacobian(X -> ACEcore.evalpool(wf.pooling, (wf.polys(X), Si_)), X)
-      # @show Ai ≈ _Ai
-      # @show ∂Ai ≈ _∂Ai
-
-      # now the `dA` array actually contains something else: 
-      #   dA[k, k'] = ∑_i ∂_i A_k * ∂_i A_k'
-      # ∂Ai = @view dAi[i, :, :]
-      # xdA[i, :, :] = transpose(∂Ai) * ∂Ai
    end
-   return A, dA, ddA 
+   return A, ∇A, ΔA 
 end
 
-function _assemble_AA_∇AA_ΔAA(A, dA, ddA, wf)
+function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    nX = size(A, 1)
    AA = zeros(nX, length(wf.corr))
    ∇AA = zeros(nX, nX, length(wf.corr))
    ΔAA = zeros(nX, length(wf.corr))
 
-   for iAA = 1:wf.corr.num1 
+   @inbounds for iAA = 1:wf.corr.num1 
       AA[:, iAA] .= A[:, iAA] 
-      ∇AA[:, :, iAA] .= dA[:, :, iAA]
-      ΔAA[:, iAA] .= ddA[:, iAA]
+      ∇AA[:, :, iAA] .= ∇A[:, :, iAA]
+      ΔAA[:, iAA] .= ΔA[:, iAA]
    end
 
    lenAA = length(wf.corr)
-   for iAA = wf.corr.num1+1:lenAA 
+   @inbounds for iAA = wf.corr.num1+1:lenAA 
       k1, k2 = wf.corr.nodes[iAA]
-      for i = 1:nX 
+      @simd ivdep for i = 1:nX 
          AA[i, iAA] = AA[i, k1] * AA[i, k2]         
          ΔAA[i, iAA] = ΔAA[i, k1] * AA[i, k2] + AA[i, k1] * ΔAA[i, k2]
       end 
       for j = 1:nX         
-         for i = 1:nX 
+         @simd ivdep for i = 1:nX 
             ΔAA[i, iAA] += 2 * ∇AA[i, j, k1] * ∇AA[i, j, k2]
             ∇AA[i, j, iAA] = ∇AA[i, j, k1] * AA[i, k2] + AA[i, k1] * ∇AA[i, j, k2]
          end
@@ -290,7 +275,7 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf)
    ∇Φi = zeros(nX, nX)
    Φ⁻¹∇Φi = zeros(nX, nX)
    for i = 1:nX 
-      mul!(∇Φi, ∇AA[:, i, :], wf.W)
+      mul!(∇Φi, (@view ∇AA[:, i, :]), wf.W)
       mul!(Φ⁻¹∇Φi, transpose(Φ⁻ᵀ), ∇Φi)
       Δψ -= dot(transpose(Φ⁻¹∇Φi), Φ⁻¹∇Φi)
    end
