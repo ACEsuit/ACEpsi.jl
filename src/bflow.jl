@@ -223,7 +223,7 @@ function laplacian(wf::BFwf, X)
    env = wf.envelope(X)
    ∇env = ForwardDiff.gradient(wf.envelope, X)
    Δenv = tr(ForwardDiff.hessian(wf.envelope, X))
-   # Δψ += Δenv / env - dot(∇env, ∇env) / env^2
+   Δψ += Δenv / env - dot(∇env, ∇env) / env^2
    
    return Δψ
 end 

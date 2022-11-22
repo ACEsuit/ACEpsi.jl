@@ -44,8 +44,12 @@ end
 ##
 
 Nel = 4
+
+trans = x -> atan(x)/π
+envelope = X -> exp(- 0.1 * sum(X.^2))
+
 polys = legendre_basis(6)
-wf = BFwf(Nel, polys; ν=3)
+wf = BFwf(Nel, polys; ν=3, trans=trans, envelope=envelope)
 
 X = 2 * rand(Nel) .- 1
 wf(X)
