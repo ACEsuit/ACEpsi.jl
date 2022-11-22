@@ -321,7 +321,7 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf)
    ∇Φi = zeros(nX, nX)
    Φ⁻¹∇Φi = zeros(nX, nX)
    for i = 1:nX 
-      mul!(∇Φi, (@view ∇AA[:, i, :]), wf.W)
+      mul!(∇Φi, (@view ∇AA[i, :, :]), wf.W)
       mul!(Φ⁻¹∇Φi, transpose(Φ⁻ᵀ), ∇Φi)
       Δψ -= dot(transpose(Φ⁻¹∇Φi), Φ⁻¹∇Φi)
    end
