@@ -1,67 +1,10 @@
 
 using Polynomials4ML, ACEcore, ACEpsi, ACEbase, Printf
-using ACEpsi: BFwf, gradient, evaluate
+using ACEpsi: BFwf, gradient, evaluate, laplacian
 using LinearAlgebra
 
 ##
 
-Nel = 4
-polys = legendre_basis(6)
-wf = BFwf(Nel, polys; ν=3)
-
-X = 2 * rand(Nel) .- 1
-wf(X)
-g = gradient(wf, X)
-
-##
-
-using ACEbase.Testing: fdtest 
-
-fdtest(wf, X -> gradient(wf, X), X)
-
-
-
-##
-
-X = 2 * rand(Nel) .- 1
-ACEpsi.laplacian(wf, X)
-
-## 
-
-
-A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
-
-@info("test ∇A")
-grad_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
-          X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[2], 
-          X)
-
-@info("test ΔA")          
-lap_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
-         X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[3], 
-         X)
-
- 
-##
-
-function f_AA(X)
-   A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
-   AA, ∇AA, ΔAA = ACEpsi._assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
-   return AA, ∇AA, ΔAA
-end
-
-@info("test ∇A")
-grad_test(X -> f_AA(X)[1], X -> f_AA(X)[2], X)
-
-@info("test ΔA")          
-lap_test(X -> f_AA(X)[1], X -> f_AA(X)[3], X)
-
-
-##
-
-lap_test(X -> [wf(X);;], X -> [ACEpsi.laplacian(wf, X);;], X)
-
-## 
 
 function grad_test(f, df, X)
    F = f(X) 
@@ -97,4 +40,63 @@ function lap_test(f, Δf, X)
       @printf(" %.1e | %.2e \n", h, abs(Δfh - Δf0))
    end
 end
+
+##
+
+Nel = 4
+
+trans = x -> atan(x)/π
+envelope = X -> exp(- 0.1 * sum(X.^2))
+
+polys = legendre_basis(6)
+wf = BFwf(Nel, polys; ν=3, trans=trans, envelope=envelope)
+
+X = 2 * rand(Nel) .- 1
+wf(X)
+g = gradient(wf, X)
+laplacian(wf, X)
+
+##
+
+using ACEbase.Testing: fdtest 
+
+fdtest(wf, X -> gradient(wf, X), X)
+
+
+
+##
+
+A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
+
+@info("test ∇A")
+grad_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
+          X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[2], 
+          X)
+
+@info("test ΔA")          
+lap_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
+         X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[3], 
+         X)
+
+ 
+##
+
+function f_AA(X)
+   A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
+   AA, ∇AA, ΔAA = ACEpsi._assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
+   return AA, ∇AA, ΔAA
+end
+
+@info("test ∇A")
+grad_test(X -> f_AA(X)[1], X -> f_AA(X)[2], X)
+
+@info("test ΔA")          
+lap_test(X -> f_AA(X)[1], X -> f_AA(X)[3], X)
+
+
+##
+
+@info("test Δψ")
+lap_test(X -> [wf(X);;], X -> [ACEpsi.laplacian(wf, X);;], X)
+
 
