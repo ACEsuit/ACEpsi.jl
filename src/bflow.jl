@@ -11,6 +11,7 @@ struct BFwf{T, TPOLY}
    pooling::PooledSparseProduct{2}
    corr::SparseSymmProdDAG{T}
    W::Matrix{T}
+   spec::Vector{Vector{Int64}}
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -32,19 +33,19 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
                      ν = 3, T = Float64)
    # 1-particle spec 
    K = length(polys)
-   spec1p = [ (k, σ) for σ in [1, 2] for k in 1:K ]
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K ]  # (1, 2, 3) = (∅, ↑, ↓);
    pooling = PooledSparseProduct(spec1p)
 
    # generate the many-particle spec 
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   admissible = bb -> (length(bb) == 0) || (sum( b[1]-1 for b in bb ) <= totdeg )
+   admissible = bb -> (length(bb) == 0) || (sum(mod(b[1], length(polys))-1 for b in bb ) <= totdeg )
    
    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = admissible,
                         minvv = fill(0, ν), 
                         maxvv = fill(length(spec1p), ν), 
                         ordered = true )
-   
-   spec = [ vv[vv .> 0] for vv in specAA ][2:end]                     
+   #@show specAA
+   spec = [ vv[vv .> 0] for vv in specAA ][2:end]
    corr1 = SparseSymmProd(spec; T = Float64)
    corr = corr1.dag
 
@@ -52,52 +53,78 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q) 
 
-   return BFwf(polys, pooling, corr, W, 
-                  zeros(T, Nel, length(polys)), 
-                  zeros(T, Nel, length(polys)), 
-                  zeros(T, Nel, length(polys)), 
-                  zeros(T, Nel, Nel), 
-                  zeros(T, Nel, Nel),
-                  zeros(T, Nel, length(pooling)), 
-                  zeros(T, Nel, length(pooling)), 
-                  zeros(T, length(pooling)), 
-                  zeros(T, length(pooling)), 
-                  zeros(Bool, Nel, 2),
-                  zeros(T, Nel, length(corr)), 
-                  zeros(T, Nel, 2) )
+   return BFwf(polys, pooling, corr, W, spec,
+                zeros(T, Nel, length(polys)), 
+                zeros(T, Nel, length(polys)), 
+                zeros(T, Nel, length(polys)), 
+                zeros(T, Nel, Nel), 
+                zeros(T, Nel, Nel),
+                zeros(T, Nel, length(pooling)), 
+                zeros(T, Nel, length(pooling)), 
+                zeros(T, length(pooling)), 
+                zeros(T, length(pooling)), 
+                zeros(Bool, Nel, 3),
+                zeros(T, Nel, length(corr)), 
+                zeros(T, Nel, 3) )
 
 end
 
 
-function onehot!(Si, i)
-   Si[:, 1] .= 0 
-   Si[:, 2] .= 1 
+function onehot!(Si, i, Σ)
+   Si .= 0
+   for k = 1:length(Σ)
+      Si[k, spin2num(Σ[k])] = 1
+   end
+   # each current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
    Si[i, 1] = 1 
    Si[i, 2] = 0
+   Si[i, 3] = 0
 end
 
-function evaluate(wf::BFwf, X::AbstractVector)
+function spin2num(σ)
+   if σ == '↑'
+      return 2
+   elseif σ == '↓'
+      return 3
+   elseif σ == '∅'
+      return 1
+   end
+   error("illegal spin char")
+end
+
+function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
+      
    nX = length(X)
-   
    # position embedding 
    P = wf.P 
    evaluate!(P, wf.polys, X)    # nX x dim(polys)
    
-   # one-hot embedding - generalize to ∅, ↑, ↓
+   
    A = wf.A    # zeros(nX, length(wf.pooling)) 
    Ai = wf.Ai  # zeros(length(wf.pooling))
    Si = wf.Si  # zeros(Bool, nX, 2)
+
    for i = 1:nX 
-      onehot!(Si, i)
+      onehot!(Si, i, Σ)
       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
       A[i, :] .= Ai
    end
 
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
-   Φ = wf.Φ 
+   
+   # the only basis to be purified are those with same spin
+   # scan through all corr basis, if they comes from same spin, remove self interation by using basis 
+   # from same spin
+   # first we have to construct coefficent for basis coming from same spin, that is in other words the coefficent
+   # matrix of the original polynomial basis, this will be pass from the argument Pnn
+   # === purification goes here === #
+
+   # === #
+
+   Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W)
    release!(AA)
-   return logabsdet(Φ)[1] 
+   return logabsdet(Φ)[1]
 end
 
 struct ZeroNoEffect end 
@@ -106,7 +133,7 @@ Base.setindex!(A::ZeroNoEffect, args...) = nothing
 Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
 
 
-function gradient(wf::BFwf, X)
+function gradient(wf::BFwf, X, Σ)
    nX = length(X)
 
    # ------ forward pass  ----- 
@@ -117,21 +144,22 @@ function gradient(wf::BFwf, X)
    dP = wf.dP
    Polynomials4ML.evaluate_ed!(P, dP, wf.polys, X)
    
-   # one-hot embedding - TODO: generalize to ∅, ↑, ↓
    # no gradients here - need to somehow "constify" this vector 
    # could use other packages for inspiration ... 
 
    # pooling : need an elegant way to shift this loop into a kernel!
    #           e.g. by passing output indices to the pooling function.
-   A = wf.A     # zeros(nX, length(wf.pooling)) 
-   Ai = wf.Ai   # zeros(length(wf.pooling))
-   Si = wf.Si   # zeros(Bool, nX, 2)
+
+   A = wf.A    # zeros(nX, length(wf.pooling)) 
+   Ai = wf.Ai  # zeros(length(wf.pooling))
+   Si = wf.Si  # zeros(Bool, nX, 2)
+   
    for i = 1:nX 
-      onehot!(Si, i)
+      onehot!(Si, i, Σ)
       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
       A[i, :] .= Ai
    end
-
+   
    # n-correlations 
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
 
@@ -161,9 +189,9 @@ function gradient(wf::BFwf, X)
    ∂P = wf.∂P  # zeros(size(P))
    fill!(∂P, 0)
    ∂Si = wf.∂Si # zeros(size(Si))   # should use ZeroNoEffect here ?!??!
-   Si_ = zeros(nX, 2)
+   Si_ = zeros(nX, 3)
    for i = 1:nX 
-      onehot!(Si_, i)
+      onehot!(Si_, i, Σ)
       # note this line ADDS the pullback into ∂P, not overwrite the content!!
       ∂Ai = @view ∂A[i, :]
       ACEcore._pullback_evalpool!((∂P, ∂Si), ∂Ai, wf.pooling, (P, Si_))
