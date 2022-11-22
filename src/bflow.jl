@@ -3,14 +3,16 @@ using ACEcore, Polynomials4ML
 using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
-using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot 
+using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
+import ForwardDiff
 
-
-struct BFwf{T, TPOLY}
+struct BFwf{T, TT, TPOLY, TE}
+   trans::TT
    polys::TPOLY
    pooling::PooledSparseProduct{2}
    corr::SparseSymmProdDAG{T}
    W::Matrix{T}
+   envelope::TE
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -30,7 +32,9 @@ end
 (Φ::BFwf)(args...) = evaluate(Φ, args...)
 
 function BFwf(Nel::Integer, polys; totdeg = length(polys), 
-                     ν = 3, T = Float64)
+                     ν = 3, T = Float64, 
+                     trans = identity, 
+                     envelope = _ -> 1.0)
    # 1-particle spec 
    K = length(polys)
    spec1p = [ (k, σ) for σ in [1, 2] for k in 1:K ]
@@ -53,7 +57,7 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q) 
 
-   return BFwf(polys, pooling, corr, W, 
+   return BFwf(trans, polys, pooling, corr, W, envelope, 
                   zeros(T, Nel, length(polys)), 
                   zeros(T, Nel, length(polys)), 
                   zeros(T, Nel, length(polys)), 
@@ -84,7 +88,8 @@ function evaluate(wf::BFwf, X::AbstractVector)
    
    # position embedding 
    P = wf.P 
-   evaluate!(P, wf.polys, X)    # nX x dim(polys)
+   Xt = wf.trans.(X)
+   evaluate!(P, wf.polys, Xt)    # nX x dim(polys)
    
    # one-hot embedding - generalize to ∅, ↑, ↓
    A = wf.A    # zeros(nX, length(wf.pooling)) 
@@ -100,7 +105,10 @@ function evaluate(wf::BFwf, X::AbstractVector)
    Φ = wf.Φ 
    mul!(Φ, parent(AA), wf.W)
    release!(AA)
-   return logabsdet(Φ)[1] 
+
+   env = wf.envelope(X)
+
+   return logabsdet(Φ)[1] + log(abs(env))
 end
 
 struct ZeroNoEffect end 
@@ -118,7 +126,14 @@ function gradient(wf::BFwf, X)
    # here we evaluate and differentiate at the same time, which is cheap
    P = wf.P 
    dP = wf.dP
-   Polynomials4ML.evaluate_ed!(P, dP, wf.polys, X)
+   Xt = wf.trans.(X) 
+   Polynomials4ML.evaluate_ed!(P, dP, wf.polys, Xt)
+   ∂Xt = ForwardDiff.derivative.(Ref(x -> wf.trans(x)), X)
+   @inbounds for k = 1:size(dP, 2)
+      @simd ivdep for i = 1:nX
+         dP[i, k] *= ∂Xt[i]
+      end
+   end
    
    # one-hot embedding - TODO: generalize to ∅, ↑, ↓
    # no gradients here - need to somehow "constify" this vector 
@@ -142,8 +157,11 @@ function gradient(wf::BFwf, X)
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W)
 
+   # envelope 
+   env = wf.envelope(X)
+
    # and finally the wave function 
-   ψ = logabsdet(Φ)[1]
+   # ψ = logabsdet(Φ)[1] + log(abs(env))
 
    # ------ backward pass ------
    #∂Φ = ∂ψ / ∂Φ = Φ⁻ᵀ
@@ -183,6 +201,11 @@ function gradient(wf::BFwf, X)
       end
    end
    # g = sum(∂P .* dP, dims = 2)[:]
+
+   # envelope 
+   ∇env = ForwardDiff.gradient(wf.envelope, X)
+   g += ∇env / env 
+
    return g
 end
 
@@ -194,7 +217,15 @@ function laplacian(wf::BFwf, X)
    A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X)
    AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
 
-   return _laplacian_inner(AA, ∇AA, ΔAA, wf)
+   Δψ = _laplacian_inner(AA, ∇AA, ΔAA, wf)
+
+   # envelope 
+   env = wf.envelope(X)
+   ∇env = ForwardDiff.gradient(wf.envelope, X)
+   Δenv = tr(ForwardDiff.hessian(wf.envelope, X))
+   # Δψ += Δenv / env - dot(∇env, ∇env) / env^2
+   
+   return Δψ
 end 
 
 function _assemble_A_∇A_ΔA(wf, X)
@@ -206,7 +237,18 @@ function _assemble_A_∇A_ΔA(wf, X)
    ΔA = zeros(TX, nX, lenA)
    spec_A = wf.pooling.spec
 
-   P, dP, ddP = Polynomials4ML.evaluate_ed2(wf.polys, X)
+   Xt = wf.trans.(X)
+   P, dP, ddP = Polynomials4ML.evaluate_ed2(wf.polys, Xt)
+   dtrans = x -> ForwardDiff.derivative(wf.trans, x)
+   ddtrans = x -> ForwardDiff.derivative(dtrans, x)
+   ∂Xt = dtrans.(X)
+   ∂∂Xt = ddtrans.(X)
+   @inbounds for k = 1:size(dP, 2)
+      @simd ivdep for i = 1:nX
+         dP[i, k], ddP[i, k] = ∂Xt[i] * dP[i, k], ∂∂Xt[i] * dP[i, k] + ∂Xt[i]^2 * ddP[i, k]
+      end
+   end
+
    Si_ = zeros(nX, 2)
    Ai = zeros(length(wf.pooling))
    @inbounds for i = 1:nX # loop over orbital bases (which i becomes ∅)
