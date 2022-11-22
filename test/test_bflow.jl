@@ -92,6 +92,7 @@ lap_test(X -> f_AA(X)[1], X -> f_AA(X)[3], X)
 
 ##
 
+@info("test Δψ")
 lap_test(X -> [wf(X);;], X -> [ACEpsi.laplacian(wf, X);;], X)
 
 

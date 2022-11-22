@@ -269,7 +269,7 @@ end
 function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    nX = size(A, 1)
    AA = zeros(nX, length(wf.corr))
-   ∇AA = wf.∇AA  # zeros(nX, nX, length(wf.corr))
+   ∇AA = zeros(nX, nX, length(wf.corr))   # wf.∇AA  
    ΔAA = zeros(nX, length(wf.corr))
 
    @inbounds for iAA = 1:wf.corr.num1 
