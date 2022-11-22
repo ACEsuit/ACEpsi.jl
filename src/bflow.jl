@@ -24,6 +24,7 @@ struct BFwf{T, TPOLY}
    Si::Matrix{Bool}
    ∂AA::Matrix{T}
    ∂Si::Matrix{T}
+   ∇AA::Array{T, 3}
 end
 
 (Φ::BFwf)(args...) = evaluate(Φ, args...)
@@ -64,7 +65,8 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
                   zeros(T, length(pooling)), 
                   zeros(Bool, Nel, 2),
                   zeros(T, Nel, length(corr)), 
-                  zeros(T, Nel, 2) )
+                  zeros(T, Nel, 2), 
+                  zeros(T, Nel, Nel, length(corr)) )
 
 end
 
@@ -188,9 +190,6 @@ end
 # ------------------ Laplacian implementation 
 
 function laplacian(wf::BFwf, X)
-   
-   # spec_AA = ACEcore.reconstruct_spec(wf.corr)
-   # spec_A = wf.pooling.spec 
 
    A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X)
    AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
@@ -213,11 +212,13 @@ function _assemble_A_∇A_ΔA(wf, X)
    @inbounds for i = 1:nX # loop over orbital bases (which i becomes ∅)
       fill!(Si_, 0)
       onehot!(Si_, i)
-      Ai = ACEcore.evalpool(wf.pooling, (P, Si_))
-      A[i, :] = Ai 
+      ACEcore.evalpool!(Ai, wf.pooling, (P, Si_))
+      @. A[i, :] .= Ai
       for (iA, (k, σ)) in enumerate(spec_A)
-         ∇A[i, :, iA] = dP[:, k] .* Si_[:, σ]
-         ΔA[i, iA] = sum(ddP[:, k] .* Si_[:, σ])
+         for a = 1:nX 
+            ∇A[a, i, iA] = dP[a, k] * Si_[a, σ]
+            ΔA[i, iA] += ddP[a, k] * Si_[a, σ]
+         end
       end
    end
    return A, ∇A, ΔA 
@@ -226,27 +227,30 @@ end
 function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    nX = size(A, 1)
    AA = zeros(nX, length(wf.corr))
-   ∇AA = zeros(nX, nX, length(wf.corr))
+   ∇AA = wf.∇AA  # zeros(nX, nX, length(wf.corr))
    ΔAA = zeros(nX, length(wf.corr))
 
    @inbounds for iAA = 1:wf.corr.num1 
-      AA[:, iAA] .= A[:, iAA] 
-      ∇AA[:, :, iAA] .= ∇A[:, :, iAA]
-      ΔAA[:, iAA] .= ΔA[:, iAA]
+      @. AA[:, iAA] .= A[:, iAA] 
+      @. ∇AA[:, :, iAA] .= ∇A[:, :, iAA]
+      @. ΔAA[:, iAA] .= ΔA[:, iAA]
    end
 
    lenAA = length(wf.corr)
    @inbounds for iAA = wf.corr.num1+1:lenAA 
       k1, k2 = wf.corr.nodes[iAA]
-      @simd ivdep for i = 1:nX 
-         AA[i, iAA] = AA[i, k1] * AA[i, k2]         
-         ΔAA[i, iAA] = ΔAA[i, k1] * AA[i, k2] + AA[i, k1] * ΔAA[i, k2]
-      end 
-      for j = 1:nX         
-         @simd ivdep for i = 1:nX 
-            ΔAA[i, iAA] += 2 * ∇AA[i, j, k1] * ∇AA[i, j, k2]
-            ∇AA[i, j, iAA] = ∇AA[i, j, k1] * AA[i, k2] + AA[i, k1] * ∇AA[i, j, k2]
+      for i = 1:nX 
+         AA_k1 = AA[i, k1]; AA_k2 = AA[i, k2]
+         AA[i, iAA] = AA_k1 * AA_k2 
+         L = ΔAA[i, k1] * AA_k2 
+         L = muladd(ΔAA[i, k2], AA_k1, L)
+         @simd ivdep for a = 1:nX         
+            ∇AA_k1 = ∇AA[a, i, k1]; ∇AA_k2 = ∇AA[a, i, k2]
+            L = muladd(2 * ∇AA_k1, ∇AA_k2, L)
+            g = ∇AA_k1 * AA_k2
+            ∇AA[a, i, iAA] = muladd(∇AA_k2, AA_k1, g)
          end
+         ΔAA[i, iAA] = L         
       end      
    end
    return AA, ∇AA, ΔAA

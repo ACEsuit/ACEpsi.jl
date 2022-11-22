@@ -7,8 +7,8 @@ using BenchmarkTools
 
 ##
 
-Nel = 8
-polys = legendre_basis(10)
+Nel = 10
+polys = legendre_basis(15)
 wf = BFwf(Nel, polys; ν=3)
 
 
@@ -30,3 +30,10 @@ laplacian(wf, X)
 @info("laplacian")
 @btime laplacian($wf, $X)
 
+##
+
+# @profview let wf=wf, X=X
+#    for nrun = 1:50_000 
+#       laplacian(wf, X)
+#    end
+# end

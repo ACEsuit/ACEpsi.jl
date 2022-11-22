@@ -29,23 +29,23 @@ ACEpsi.laplacian(wf, X)
 ## 
 
 
-A, ∇A, ΔA = ACEpsi._assemble_A_dA_ddA(wf, X)
+A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
 
 @info("test ∇A")
-grad_test(X -> ACEpsi._assemble_A_dA_ddA(wf, X)[1], 
-          X -> ACEpsi._assemble_A_dA_ddA(wf, X)[2], 
+grad_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
+          X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[2], 
           X)
 
 @info("test ΔA")          
-lap_test(X -> ACEpsi._assemble_A_dA_ddA(wf, X)[1], 
-         X -> ACEpsi._assemble_A_dA_ddA(wf, X)[3], 
+lap_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
+         X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[3], 
          X)
 
  
 ##
 
 function f_AA(X)
-   A, ∇A, ΔA = ACEpsi._assemble_A_dA_ddA(wf, X)
+   A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
    AA, ∇AA, ΔAA = ACEpsi._assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    return AA, ∇AA, ΔAA
 end
@@ -70,7 +70,7 @@ function grad_test(f, df, X)
    U = randn(nX)
    V = randn(nF) ./ (1:nF).^2
    f0 = U' * F * V
-   ∇f0 = [ U' * ∇F[:, i, :] * V for i = 1:nX ]
+   ∇f0 = [ U' * ∇F[i, :, :] * V for i = 1:nX ]
    EE = Matrix(I, (Nel, Nel))
    for h in 0.1.^(2:10)
       gh = [ (U'*f(X + h * EE[:, i])*V - f0) / h for i = 1:Nel ]
