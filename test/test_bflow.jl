@@ -55,7 +55,7 @@ using Printf
 #using ACEbase.Testing: fdtest 
 
 fdtest(wf, Σ, g, X)
-
+@show "test"
 # ##
 
 # todo: move this to a performance benchmark script 
