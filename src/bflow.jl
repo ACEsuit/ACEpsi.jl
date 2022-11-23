@@ -34,17 +34,18 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    # 1-particle spec 
    K = length(polys)
    spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K ]  # (1, 2, 3) = (∅, ↑, ↓);
+   spec1p = sort(spec1p)
    pooling = PooledSparseProduct(spec1p)
 
    # generate the many-particle spec 
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   admissible = bb -> (length(bb) == 0) || (sum(mod(b[1], length(polys))-1 for b in bb ) <= totdeg )
-   
+   admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg) && checkOrd(bb)   
+
    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = admissible,
                         minvv = fill(0, ν), 
                         maxvv = fill(length(spec1p), ν), 
                         ordered = true )
-   #@show specAA
+   
    spec = [ vv[vv .> 0] for vv in specAA ][2:end]
    corr1 = SparseSymmProd(spec; T = Float64)
    corr = corr1.dag
@@ -92,13 +93,25 @@ function spin2num(σ)
    error("illegal spin char")
 end
 
+function checkOrd(bb)
+   if length(bb) == 1 || length(bb) == 0
+      return true
+   end
+
+   for i = 1:length(bb) - 1
+      if bb[i][2] > bb[i+1][2]
+         return false
+      end
+   end
+   return true
+end
+
 function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
       
    nX = length(X)
    # position embedding 
    P = wf.P 
    evaluate!(P, wf.polys, X)    # nX x dim(polys)
-   
    
    A = wf.A    # zeros(nX, length(wf.pooling)) 
    Ai = wf.Ai  # zeros(length(wf.pooling))
