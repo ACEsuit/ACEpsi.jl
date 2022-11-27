@@ -7,11 +7,11 @@ using LinearAlgebra: qr, I, logabsdet, pinv, mul!
 
 
 struct BFwf{T, TPOLY}
-   polys::TPOLY
-   pooling::PooledSparseProduct{2}
-   corr::SparseSymmProdDAG{T}
-   W::Matrix{T}
-   spec::Vector{Vector{Int64}} # TODO: this needs to be remove
+   polys::TPOLY # polynomial basis used
+   pooling::PooledSparseProduct{2} # pooling operation defined by polys and totdeg
+   corr::SparseSymmProdDAG{T} # correlation order
+   W::Matrix{T} # weight matrix
+   spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -50,7 +50,6 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
    
    corr1 = SparseSymmProd(spec; T = Float64)
-   @show length(corr1)
    corr = corr1.dag   
 
    # initial guess for weights 
@@ -80,7 +79,7 @@ function onehot!(Si, i, Σ)
    for k = 1:length(Σ)
       Si[k, spin2num(Σ[k])] = 1
    end
-   # each current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
+   # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
    Si[i, 1] = 1 
    Si[i, 2] = 0
    Si[i, 3] = 0
@@ -97,7 +96,7 @@ function spin2num(σ)
    elseif σ == '∅'
       return 1
    end
-   error("illegal spin char")
+   error("illegal spin char for spin2num")
 end
 
 """
@@ -125,6 +124,7 @@ function displayspec(spec, spec1p)
    end
    return nicespec
 end
+
 
 function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
       
@@ -154,11 +154,11 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    # === purification goes here === #
    
    # === #
-
    Φ = wf.Φ
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, parent(AA), wf.W) # nX x nX
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
-   return logabsdet(Φ)[1]
+   return logabsdet(Φ)[1] # TODO: add decay function, finally should be in form of (2 * logabsdet(Φ)[1]) + decay
 end
 
 struct ZeroNoEffect end 
@@ -200,6 +200,9 @@ function gradient(wf::BFwf, X, Σ)
    # generalized orbitals 
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W)
+
+   # the resulting matrix should contains two block each comes from each spin
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
 
    # and finally the wave function 
    ψ = logabsdet(Φ)[1]
