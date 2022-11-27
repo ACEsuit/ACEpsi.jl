@@ -39,80 +39,19 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 ##
 const ↑, ↓, ∅ = '↑','↓','∅'
 
-
-Σ = [↑, ↑, ↓, ↓, ↓];
+Σ = [↑, ↑, ↑, ↓, ↓];
 Nel = 5
-polys = chebyshev_basis(10, normalize=false)
-wf = BFwf(Nel, polys; ν=2, totdeg = 10)
+polys = legendre_basis(10)
+wf = BFwf(Nel, polys; ν=4)
 
-using JSON
+X = 2 * rand(Nel) .- 1
+wf(X, Σ)
+g = gradient(wf, X, Σ)
 
+##
 
-# @show dict2
+using LinearAlgebra
+using Printf
+#using ACEbase.Testing: fdtest 
 
-data = JSON.parse(open("/home/jerryho/julia_ws/ACEpsi.jl/test/bftest.json"))
-X = data[1]["X"]
-PP = data[1]["P"]
-@show X
-X = atan.(X)
-@show X
-for i = 1:5
-   wf.W[:, i] = PP[i][2:end]
-end
-@show size(wf.W)
-@show wf(X, Σ)
-@show wf.spec
-spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:length(polys) ]  # (1, 2, 3) = (∅, ↑, ↓);
-
-@show displayspec(wf.spec, spec1p)
-
-
-# =============
-# g = gradient(wf, X, Σ)
-# @show length(wf.spec)
-# @show length(wf.W)
-# ##
-
-# using LinearAlgebra
-# using Printf
-
-# fdtest(wf, Σ, g, X)
-# @show "test"
-# ##
-
-# todo: move this to a performance benchmark script 
-# using BenchmarkTools
-# @btime $wf($X)
-# @btime gradient($wf, $X)
-
-
-
-# check spec
-
-# Σ = [↑, ↑, ↓, ↓, ↓];
-# Nel = 5
-# polys = chebyshev_basis(5, normalize = false)
-# wf = BFwf(Nel, polys; ν=2, totdeg = 5)
-# data = JSON.parse(open("/home/jerryho/julia_ws/ACEpsi.jl/test/check_spec.json"))
-# read_check_spec = data[1]["check_spec"]
-# check_spec = zeros(106, 2)
-# check_spec[:, 1] = read_check_spec[1]
-# check_spec[:, 2] = read_check_spec[2]
-
-# spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:length(polys) ]  # (1, 2, 3) = (∅, ↑, ↓);
-
-# spec = wf.spec
-# for i = 1:length(spec)
-#    @show spec[i], check_spec[i+1, :]
-# end
-# # generate the many-particle spec 
-# spec1p = sort(spec1p)
-# @show spec1p
-
-# for i = 1:length(polys) * 3
-#    @show spec1p[spec[i][1]]
-# end
-
-# for i = length(polys) * 3 + 1 :length(spec)
-#     @show spec1p[spec[i][1]], spec1p[spec[i][2]]
-# end
+fdtest(wf, Σ, g, X)
