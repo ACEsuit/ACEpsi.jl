@@ -1,6 +1,6 @@
 
-using Polynomials4ML, ACEcore, ACEpsi, ACEbase
-using ACEpsi: BFwf, gradient, evaluate
+using Polynomials4ML, ACEcore, ACEbase
+# using ACEpsi: BFwf, gradient, evaluate
 using Printf
 using LinearAlgebra
 
@@ -40,7 +40,7 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 const ↑, ↓, ∅ = '↑','↓','∅'
 
 Σ = [↑, ↑, ↑, ↓, ↓];
-Nel = 10
+Nel = 5
 polys = legendre_basis(10)
 wf = BFwf(Nel, polys; ν=4)
 
@@ -55,13 +55,3 @@ using Printf
 #using ACEbase.Testing: fdtest 
 
 fdtest(wf, Σ, g, X)
-
-# ##
-
-# todo: move this to a performance benchmark script 
-# using BenchmarkTools
-# @btime $wf($X)
-# @btime gradient($wf, $X)
-
-##
-

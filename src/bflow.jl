@@ -7,11 +7,11 @@ using LinearAlgebra: qr, I, logabsdet, pinv, mul!
 
 
 struct BFwf{T, TPOLY}
-   polys::TPOLY
-   pooling::PooledSparseProduct{2}
-   corr::SparseSymmProdDAG{T}
-   W::Matrix{T}
-   spec::Vector{Vector{Int64}}
+   polys::TPOLY # polynomial basis used
+   pooling::PooledSparseProduct{2} # pooling operation defined by polys and totdeg
+   corr::SparseSymmProdDAG{T} # correlation order
+   W::Matrix{T} # weight matrix
+   spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -31,29 +31,30 @@ end
 
 function BFwf(Nel::Integer, polys; totdeg = length(polys), 
                      ν = 3, T = Float64)
+   
    # 1-particle spec 
    K = length(polys)
-   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K ]  # (1, 2, 3) = (∅, ↑, ↓);
-   spec1p = sort(spec1p)
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
+   spec1p = sort(spec1p, by = b -> b[1]) # sorting to prevent gensparse being confused
+   
    pooling = PooledSparseProduct(spec1p)
-
    # generate the many-particle spec 
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg) && checkOrd(bb)   
-
+   admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+   
    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = admissible,
                         minvv = fill(0, ν), 
                         maxvv = fill(length(spec1p), ν), 
-                        ordered = true )
+                        ordered = true)
    
-   spec = [ vv[vv .> 0] for vv in specAA ][2:end]
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+   
    corr1 = SparseSymmProd(spec; T = Float64)
-   corr = corr1.dag
+   corr = corr1.dag   
 
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q) 
-
    return BFwf(polys, pooling, corr, W, spec,
                 zeros(T, Nel, length(polys)), 
                 zeros(T, Nel, length(polys)), 
@@ -70,18 +71,23 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
 
 end
 
-
+"""
+This function return correct Si for pooling operation.
+"""
 function onehot!(Si, i, Σ)
    Si .= 0
    for k = 1:length(Σ)
       Si[k, spin2num(Σ[k])] = 1
    end
-   # each current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
+   # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
    Si[i, 1] = 1 
    Si[i, 2] = 0
    Si[i, 3] = 0
 end
 
+"""
+This function convert spin to corresponding integer value used in spec
+"""
 function spin2num(σ)
    if σ == '↑'
       return 2
@@ -90,21 +96,35 @@ function spin2num(σ)
    elseif σ == '∅'
       return 1
    end
-   error("illegal spin char")
+   error("illegal spin char for spin2num")
 end
 
-function checkOrd(bb)
-   if length(bb) == 1 || length(bb) == 0
-      return true
+"""
+This function convert num to corresponding spin string.
+"""
+function num2spin(σ)
+   if σ == 2
+      return '↑'
+   elseif σ == 3
+      return '↓'
+   elseif σ == 1
+      return '∅'
    end
-
-   for i = 1:length(bb) - 1
-      if bb[i][2] > bb[i+1][2]
-         return false
-      end
-   end
-   return true
+   error("illegal integer value for num2spin")
 end
+
+"""
+This function return a nice version of spec.
+"""
+function displayspec(spec, spec1p)
+   _getnicespec = l -> (l[1], num2spin(l[2]))
+   nicespec = []
+   for k = 1:length(spec)
+      push!(nicespec, _getnicespec.([spec1p[spec[k][j]] for j in length(spec[k])]))
+   end
+   return nicespec
+end
+
 
 function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
       
@@ -131,13 +151,13 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    # first we have to construct coefficent for basis coming from same spin, that is in other words the coefficent
    # matrix of the original polynomial basis, this will be pass from the argument Pnn
    # === purification goes here === #
-
+   
    # === #
-
    Φ = wf.Φ
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, parent(AA), wf.W) # nX x nX
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
-   return logabsdet(Φ)[1]
+   return logabsdet(Φ)[1] # TODO: add decay function, finally should be in form of (2 * logabsdet(Φ)[1]) + decay
 end
 
 struct ZeroNoEffect end 
@@ -179,6 +199,9 @@ function gradient(wf::BFwf, X, Σ)
    # generalized orbitals 
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W)
+
+   # the resulting matrix should contains two block each comes from each spin
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
 
    # and finally the wave function 
    ψ = logabsdet(Φ)[1]
