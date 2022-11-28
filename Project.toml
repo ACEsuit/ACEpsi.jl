@@ -7,14 +7,15 @@ version = "0.0.1"
 ACEbase = "14bae519-eb20-449c-a949-9c58ed33163e"
 ACEcore = "44c1e890-45d1-48ea-94d6-c2ea5b573f71"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
-Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ObjectPools = "658cac36-ff0f-48ad-967c-110375d98c9d"
 Polynomials4ML = "03c4bcba-a943-47e9-bfa1-b1661fc2974f"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [compat]
 BenchmarkTools = "1"
+ForwardDiff = "0.10"
 julia = "1"
 
 [extras]

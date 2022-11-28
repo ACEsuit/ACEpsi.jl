@@ -129,6 +129,8 @@ grad_test2(Fp, dFp, w0)
 
 ##
 
+@info("Test ∇Δψ w.r.t. parameters")
+
 Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X) )
 dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X)[:] )
 
