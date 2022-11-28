@@ -21,59 +21,67 @@ function grad_test(f, df, X)
    end
 end
 
-function lap_test(f, Δf, X)
-   F = f(X) 
-   ΔF = Δf(X)
-   nX = length(X) 
-   n1, nF = size(F)
-   U = randn(n1)
-   V = randn(nF) ./ (1:nF).^2
-   f0 = U' * F * V
-   Δf0 = U' * ΔF * V
-   EE = Matrix(I, (nX, nX))
-   for h in sqrt(0.1).^((2:10))
-      Δfh = 0.0
-      for i = 1:nX
-         Δfh += (U'*f(X + h * EE[:, i])*V - f0) / h^2
-         Δfh += (U'*f(X - h * EE[:, i])*V - f0) / h^2
-      end
-      @printf(" %.1e | %.2e \n", h, abs(Δfh - Δf0))
-   end
-end
+using Polynomials4ML, ACEcore, ACEpsi, ACEbase
+using ACEpsi: BFwf, gradient, evaluate
 
-function grad_test2(f, df, X::AbstractVector)
-   F = f(X) 
-   ∇F = df(X)
-   nX = length(X) 
-   EE = Matrix(I, (nX, nX))
-   for h in 0.1.^(2:10)
-      gh = [ (f(X + h * EE[:, i]) - F) / h for i = 1:nX ]
-      @printf(" %.1e | %.2e \n", h, norm(gh - ∇F, Inf))
-   end
-end
-
+"This function should be removed later to test in a nicer way..."
+function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
+    errors = Float64[]
+    E = F(x, Σ)
+    dE = dF
+    # loop through finite-difference step-lengths
+    verbose && @printf("---------|----------- \n")
+    verbose && @printf("    h    | error \n")
+    verbose && @printf("---------|----------- \n")
+    for p = 2:11
+       h = 0.1^p
+       dEh = copy(dE)
+       for n = 1:length(dE)
+          x[n] += h
+          dEh[n] = (F(x, Σ) - E) / h
+          x[n] -= h
+       end
+       push!(errors, norm(dE - dEh, Inf))
+       verbose && @printf(" %1.1e | %4.2e  \n", h, errors[end])
+    end
+    verbose && @printf("---------|----------- \n")
+    if minimum(errors) <= 1e-3 * maximum(errors)
+       verbose && println("passed")
+       return true
+    else
+       @warn("""It seems the finite-difference test has failed, which indicates
+       that there is an inconsistency between the function and gradient
+       evaluation. Please double-check this manually / visually. (It is
+       also possible that the function being tested is poorly scaled.)""")
+       return false
+    end
+ end
 ##
+const ↑, ↓, ∅ = '↑','↓','∅'
 
-Nel = 4
-
-trans = x -> atan(x)/π
-envelope = X -> exp(- 0.1 * sum(X.^2))
-
-polys = legendre_basis(6)
-wf = BFwf(Nel, polys; ν=3, trans=trans, envelope=envelope)
+Nel = 10
+polys = legendre_basis(10)
+wf = BFwf(Nel, polys; ν=4)
 
 X = 2 * rand(Nel) .- 1
 wf(X)
 g = gradient(wf, X)
-laplacian(wf, X)
 
 ##
 
-using ACEbase.Testing: fdtest 
+using LinearAlgebra
+using Printf
+#using ACEbase.Testing: fdtest 
 
 fdtest(wf, X -> gradient(wf, X), X)
 
 
+# ##
+
+# todo: move this to a performance benchmark script 
+# using BenchmarkTools
+# @btime $wf($X)
+# @btime gradient($wf, $X)
 
 ##
 
