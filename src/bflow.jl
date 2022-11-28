@@ -3,14 +3,16 @@ using ACEcore, Polynomials4ML
 using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
-using LinearAlgebra: qr, I, logabsdet, pinv, mul!
+using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
+import ForwardDiff
 
-
-struct BFwf{T, TPOLY}
-   polys::TPOLY # polynomial basis used
-   pooling::PooledSparseProduct{2} # pooling operation defined by polys and totdeg
-   corr::SparseSymmProdDAG{T} # correlation order
-   W::Matrix{T} # weight matrix
+struct BFwf{T, TT, TPOLY, TE}
+   trans::TT
+   polys::TPOLY
+   pooling::PooledSparseProduct{2}
+   corr::SparseSymmProdDAG{T}
+   W::Matrix{T}
+   envelope::TE
    spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
    # ---------------- Temporaries 
    P::Matrix{T}
@@ -25,13 +27,15 @@ struct BFwf{T, TPOLY}
    Si::Matrix{Bool}
    ∂AA::Matrix{T}
    ∂Si::Matrix{T}
+   ∇AA::Array{T, 3}
 end
 
 (Φ::BFwf)(args...) = evaluate(Φ, args...)
 
 function BFwf(Nel::Integer, polys; totdeg = length(polys), 
-                     ν = 3, T = Float64)
-   
+                     ν = 3, T = Float64, 
+                     trans = identity, 
+                     envelope = _ -> 1.0)
    # 1-particle spec 
    K = length(polys)
    spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
@@ -55,19 +59,21 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q) 
-   return BFwf(polys, pooling, corr, W, spec,
-                zeros(T, Nel, length(polys)), 
-                zeros(T, Nel, length(polys)), 
-                zeros(T, Nel, length(polys)), 
-                zeros(T, Nel, Nel), 
-                zeros(T, Nel, Nel),
-                zeros(T, Nel, length(pooling)), 
-                zeros(T, Nel, length(pooling)), 
-                zeros(T, length(pooling)), 
-                zeros(T, length(pooling)), 
-                zeros(Bool, Nel, 3),
-                zeros(T, Nel, length(corr)), 
-                zeros(T, Nel, 3) )
+
+   return BFwf(trans, polys, pooling, corr, W, envelope, spec,
+                  zeros(T, Nel, length(polys)), 
+                  zeros(T, Nel, length(polys)), 
+                  zeros(T, Nel, length(polys)), 
+                  zeros(T, Nel, Nel), 
+                  zeros(T, Nel, Nel),
+                  zeros(T, Nel, length(pooling)), 
+                  zeros(T, Nel, length(pooling)), 
+                  zeros(T, length(pooling)), 
+                  zeros(T, length(pooling)), 
+                  zeros(Bool, Nel, 3),
+                  zeros(T, Nel, length(corr)), 
+                  zeros(T, Nel, 3), 
+                  zeros(T, Nel, Nel, length(corr)) )
 
 end
 
@@ -131,7 +137,8 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    nX = length(X)
    # position embedding 
    P = wf.P 
-   evaluate!(P, wf.polys, X)    # nX x dim(polys)
+   Xt = wf.trans.(X)
+   evaluate!(P, wf.polys, Xt)    # nX x dim(polys)
    
    A = wf.A    # zeros(nX, length(wf.pooling)) 
    Ai = wf.Ai  # zeros(length(wf.pooling))
@@ -157,7 +164,10 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    mul!(Φ, parent(AA), wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
-   return logabsdet(Φ)[1] # TODO: add decay function, finally should be in form of (2 * logabsdet(Φ)[1]) + decay
+
+   env = wf.envelope(X)
+
+   return 2 * logabsdet(Φ)[1] + 2 * log(abs(env))
 end
 
 struct ZeroNoEffect end 
@@ -175,7 +185,14 @@ function gradient(wf::BFwf, X, Σ)
    # here we evaluate and differentiate at the same time, which is cheap
    P = wf.P 
    dP = wf.dP
-   Polynomials4ML.evaluate_ed!(P, dP, wf.polys, X)
+   Xt = wf.trans.(X) 
+   Polynomials4ML.evaluate_ed!(P, dP, wf.polys, Xt)
+   ∂Xt = ForwardDiff.derivative.(Ref(x -> wf.trans(x)), X)
+   @inbounds for k = 1:size(dP, 2)
+      @simd ivdep for i = 1:nX
+         dP[i, k] *= ∂Xt[i]
+      end
+   end
    
    # no gradients here - need to somehow "constify" this vector 
    # could use other packages for inspiration ... 
@@ -202,9 +219,12 @@ function gradient(wf::BFwf, X, Σ)
 
    # the resulting matrix should contains two block each comes from each spin
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
+   
+   # envelope 
+   env = wf.envelope(X)
 
    # and finally the wave function 
-   ψ = logabsdet(Φ)[1]
+   # ψ = logabsdet(Φ)[1] + log(abs(env))
 
    # ------ backward pass ------
    #∂Φ = ∂ψ / ∂Φ = Φ⁻ᵀ
@@ -244,6 +264,11 @@ function gradient(wf::BFwf, X, Σ)
       end
    end
    # g = sum(∂P .* dP, dims = 2)[:]
+
+   # envelope 
+   ∇env = ForwardDiff.gradient(wf.envelope, X)
+   g += ∇env / env 
+
    return g
 end
 
@@ -251,116 +276,119 @@ end
 # ------------------ Laplacian implementation 
 
 function laplacian(wf::BFwf, X)
+
+   A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X)
+   AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
+
+   Δψ = _laplacian_inner(AA, ∇AA, ΔAA, wf)
+
+   # envelope 
+   env = wf.envelope(X)
+   ∇env = ForwardDiff.gradient(wf.envelope, X)
+   Δenv = tr(ForwardDiff.hessian(wf.envelope, X))
+   Δψ += Δenv / env - dot(∇env, ∇env) / env^2
    
+   return Δψ
 end 
 
-"""
-This will compute the following: 
-* `A` just the normal pooling operation, `A[k] = ∑_i P_k(x_i)`
-* `dA[k, k'] = ∑_i ∂_i P_k * ∂_i P_k'` 
-* `ddA[k] = ∑_i P_k''(x_i) = ΔA[k]`.
-"""
-function _assemble_A_dA_ddA(polys, X)
+function _assemble_A_∇A_ΔA(wf, X)
    TX = eltype(X)
-   A = zeros(TX, length(polys))
-   dA = zeros(TX, length(polys), length(polys))
-   ddA = zeros(TX, length(polys))
-   _assemble_A_dA_ddA!(A, dA, ddA, polys, X)
-   return A, dA, ddA
-end
+   lenA = length(wf.pooling)
+   nX = length(X) 
+   A = zeros(TX, nX, lenA)
+   ∇A = zeros(TX, nX, nX, lenA)
+   ΔA = zeros(TX, nX, lenA)
+   spec_A = wf.pooling.spec
 
-function _assemble_A_dA_ddA!(A, dA, ddA, polys, X)
-   P, dP, ddP = Polynomials4ML.evaluate_ed(polys, X)
-   for i = 1:length(X) 
-      A[:] += P[i, :]
-      dA[:,:] += dP[i,:] * dP[i,:]'
-      ddA[:] += ddP[i,:]
+   Xt = wf.trans.(X)
+   P, dP, ddP = Polynomials4ML.evaluate_ed2(wf.polys, Xt)
+   dtrans = x -> ForwardDiff.derivative(wf.trans, x)
+   ddtrans = x -> ForwardDiff.derivative(dtrans, x)
+   ∂Xt = dtrans.(X)
+   ∂∂Xt = ddtrans.(X)
+   @inbounds for k = 1:size(dP, 2)
+      @simd ivdep for i = 1:nX
+         dP[i, k], ddP[i, k] = ∂Xt[i] * dP[i, k], ∂∂Xt[i] * dP[i, k] + ∂Xt[i]^2 * ddP[i, k]
+      end
    end
-   return nothing 
+
+   Si_ = zeros(nX, 2)
+   Ai = zeros(length(wf.pooling))
+   @inbounds for i = 1:nX # loop over orbital bases (which i becomes ∅)
+      fill!(Si_, 0)
+      onehot!(Si_, i)
+      ACEcore.evalpool!(Ai, wf.pooling, (P, Si_))
+      @. A[i, :] .= Ai
+      for (iA, (k, σ)) in enumerate(spec_A)
+         for a = 1:nX 
+            ∇A[a, i, iA] = dP[a, k] * Si_[a, σ]
+            ΔA[i, iA] += ddP[a, k] * Si_[a, σ]
+         end
+      end
+   end
+   return A, ∇A, ΔA 
+end
+
+function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
+   nX = size(A, 1)
+   AA = zeros(nX, length(wf.corr))
+   ∇AA = zeros(nX, nX, length(wf.corr))   # wf.∇AA  
+   ΔAA = zeros(nX, length(wf.corr))
+
+   @inbounds for iAA = 1:wf.corr.num1 
+      @. AA[:, iAA] .= A[:, iAA] 
+      @. ∇AA[:, :, iAA] .= ∇A[:, :, iAA]
+      @. ΔAA[:, iAA] .= ΔA[:, iAA]
+   end
+
+   lenAA = length(wf.corr)
+   @inbounds for iAA = wf.corr.num1+1:lenAA 
+      k1, k2 = wf.corr.nodes[iAA]
+      for i = 1:nX 
+         AA_k1 = AA[i, k1]; AA_k2 = AA[i, k2]
+         AA[i, iAA] = AA_k1 * AA_k2 
+         L = ΔAA[i, k1] * AA_k2 
+         L = muladd(ΔAA[i, k2], AA_k1, L)
+         @simd ivdep for a = 1:nX         
+            ∇AA_k1 = ∇AA[a, i, k1]; ∇AA_k2 = ∇AA[a, i, k2]
+            L = muladd(2 * ∇AA_k1, ∇AA_k2, L)
+            g = ∇AA_k1 * AA_k2
+            ∇AA[a, i, iAA] = muladd(∇AA_k2, AA_k1, g)
+         end
+         ΔAA[i, iAA] = L         
+      end      
+   end
+   return AA, ∇AA, ΔAA
 end
 
 
-function _laplacian_inner(spec, c, A, dA, ddA)
+function _laplacian_inner(AA, ∇AA, ΔAA, wf)
+
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)
    # where Φᵢ = ∂_{xi} Φ
-   Δ = 0.0
 
+   nX = size(AA, 1)
+   
+   # the wf, and the first layer of derivatives 
+   Φ = wf.Φ 
+   mul!(Φ, parent(AA), wf.W)
+   Φ⁻ᵀ = transpose(pinv(Φ))
 
+   # first contribution to the laplacian
+   ΔΦ = ΔAA * wf.W 
+   Δψ = dot(Φ⁻ᵀ, ΔΦ)
+
+   # the gradient contribution 
+   # TODO: we can rework this into a single BLAS3 call
+   # which will also give us a single back-propagation 
+   ∇Φi = zeros(nX, nX)
+   Φ⁻¹∇Φi = zeros(nX, nX)
+   for i = 1:nX 
+      mul!(∇Φi, (@view ∇AA[i, :, :]), wf.W)
+      mul!(Φ⁻¹∇Φi, transpose(Φ⁻ᵀ), ∇Φi)
+      Δψ -= dot(transpose(Φ⁻¹∇Φi), Φ⁻¹∇Φi)
+   end
+
+   return Δψ
 end
 
-
-# # ------------------ old codes 
-
-# function _assemble_A_dA_ddA(pibasis, cfg)
-#    B1p = pibasis.basis1p 
-#    TX = typeof(cfg[1].x)
-#    A = zeros(TX, length(B1p))
-#    dA = zeros(TX, length(B1p), length(B1p))
-#    ddA = zeros(TX, length(B1p))
-#    _assemble_A_dA_ddA!(A, dA, ddA, B1p, cfg) 
-#    return A, dA, ddA 
-# end
-
-# function _assemble_A_dA_ddA!(A, dA, ddA, B1p, cfg)
-#    # this is a hack because we know a priori what the basis is.  .... 
-#    # P = B1p["Pn"].basis
-#    _deriv(y) = getproperty.(evaluate_d(B1p, y), :x)
-#    _deriv(y, δx) = _deriv(El1dState(y.x+δx, y.σ))
-
-#    for y in cfg
-#       A[:] += evaluate(B1p, y)
-#       dϕ = _deriv(y)
-#       dA[:,:] += dϕ * dϕ'
-#       dϕ_p = _deriv(y,  1e-4)
-#       dϕ_m = _deriv(y, -1e-4)
-#       ddA[:] += (dϕ_p - dϕ_m) / (2*1e-4)
-#    end
-#    return dA, ddA 
-# end
-
-# function _At(A, spec, iAA, t)
-#    iAt = spec.iAA2iA[iAA, t]
-#    return A[iAt], iAt
-# end 
-
-# _prodA(A, spec, iAA) = 
-#       prod( _At(A, spec, iAA, t)[1] for t = 1:spec.orders[iAA];
-#             init = one(eltype(A)) )
-
-# function _laplacian_inner(spec, c, A, dA, ddA)
-#    Δ = 0.0
-#    for iAA = 1:length(spec)
-#       ord = spec.orders[iAA]
-
-#       if ord == 1
-#          ddA1 = ddA[ spec.iAA2iA[iAA, 1] ]
-#          Δ += c[iAA] * ddA1
-#          continue
-#       end
-
-#       if ord == 2 
-#          A1, iA1 = _At(A, spec, iAA, 1)     
-#          A2, iA2 = _At(A, spec, iAA, 2)
-#          Δ += c[iAA] * ( A1 * ddA[iA2] + ddA[iA1] * A2 + 2 * dA[iA1, iA2] )
-#          continue 
-#       end
-
-#       # compute the product basis function 
-#       aa = _prodA(A, spec, iAA)
-
-#       # now compute the back-prop       
-#       for t = 1:ord
-#          At, iAt = _At(A, spec, iAA, t)
-#          AA_t = sign(At) * aa / (abs(At) + eps())
-#          Δ += c[iAA] * AA_t * ddA[iAt]
-
-#          for s = t+1:ord 
-#             As, iAs = _At(A, spec, iAA, s)
-#             AA_ts = sign(As) * AA_t / (abs(As) + eps())
-#             Δ += 2 * c[iAA] * AA_ts * dA[iAt, iAs]
-#          end
-#       end
-#    end
-
-#    return Δ
-# end
