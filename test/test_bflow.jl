@@ -41,6 +41,17 @@ function lap_test(f, Δf, X)
    end
 end
 
+function grad_test2(f, df, X::AbstractVector)
+   F = f(X) 
+   ∇F = df(X)
+   nX = length(X) 
+   EE = Matrix(I, (nX, nX))
+   for h in 0.1.^(2:10)
+      gh = [ (f(X + h * EE[:, i]) - F) / h for i = 1:nX ]
+      @printf(" %.1e | %.2e \n", h, norm(gh - ∇F, Inf))
+   end
+end
+
 ##
 
 Nel = 4
@@ -99,4 +110,27 @@ lap_test(X -> f_AA(X)[1], X -> f_AA(X)[3], X)
 @info("test Δψ")
 lap_test(X -> [wf(X);;], X -> [ACEpsi.laplacian(wf, X);;], X)
 
+
+##
+
+@info("Test ∇ψ w.r.t. parameters")
+
+ACEpsi.gradp_evaluate(wf, X)
+
+
+W0 = copy(wf.W)
+sz0 = size(W0) 
+w0 = W0[:]
+
+Fp = w -> ( wf.W[:] .= w[:]; wf(X) )
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X)[:] )
+
+grad_test2(Fp, dFp, w0)
+
+
+##
+using BenchmarkTools
+@btime ACEpsi.gradp_evaluate($wf, $X)
+
+##
 

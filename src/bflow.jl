@@ -83,9 +83,11 @@ function onehot!(Si, i)
 end
 
 
-function evaluate(wf::BFwf, X::AbstractVector)
+# ------------------- evaluate 
+
+function assemble_A(wf::BFwf, X::AbstractVector)
    nX = length(X)
-   
+
    # position embedding 
    P = wf.P 
    Xt = wf.trans.(X)
@@ -100,7 +102,12 @@ function evaluate(wf::BFwf, X::AbstractVector)
       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
       A[i, :] .= Ai
    end
+   return A 
+end
 
+function evaluate(wf::BFwf, X::AbstractVector)
+   
+   A = assemble_A(wf, X)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
    Φ = wf.Φ 
    mul!(Φ, parent(AA), wf.W)
@@ -110,6 +117,33 @@ function evaluate(wf::BFwf, X::AbstractVector)
 
    return logabsdet(Φ)[1] + log(abs(env))
 end
+
+
+function gradp_evaluate(wf::BFwf, X::AbstractVector)
+   nX = length(X)
+   
+   A = assemble_A(wf, X)
+   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   Φ = wf.Φ 
+   mul!(Φ, parent(AA), wf.W)
+
+   # ψ = log | det( Φ ) |
+   # ∂Φ = ∂ψ/∂Φ = Φ⁻ᵀ
+   ∂Φ = transpose(pinv(Φ))
+
+   # ∂W = ∂ψ / ∂W = ∂Φ * ∂_W( AA * W ) = ∂Φ * AA
+   # ∂Wij = ∑_ab ∂Φab * ∂_Wij( ∑_k AA_ak W_kb )
+   #      = ∑_ab ∂Φab * ∑_k δ_ik δ_bj  AA_ak
+   #      = ∑_a ∂Φaj AA_ai = ∂Φaj' * AA_ai
+   ∇p = transpose(parent(AA)) * ∂Φ
+
+   release!(AA)
+   return ∇p 
+end
+
+
+
+# ----------------------- gradient 
 
 struct ZeroNoEffect end 
 Base.size(::ZeroNoEffect, ::Integer) = Inf
@@ -328,4 +362,5 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf)
 
    return Δψ
 end
+
 
