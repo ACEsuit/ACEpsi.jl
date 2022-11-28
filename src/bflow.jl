@@ -13,6 +13,7 @@ struct BFwf{T, TT, TPOLY, TE}
    corr::SparseSymmProdDAG{T}
    W::Matrix{T}
    envelope::TE
+   spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -37,27 +38,29 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
                      envelope = _ -> 1.0)
    # 1-particle spec 
    K = length(polys)
-   spec1p = [ (k, σ) for σ in [1, 2] for k in 1:K ]
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
+   spec1p = sort(spec1p, by = b -> b[1]) # sorting to prevent gensparse being confused
+   
    pooling = PooledSparseProduct(spec1p)
-
    # generate the many-particle spec 
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   admissible = bb -> (length(bb) == 0) || (sum( b[1]-1 for b in bb ) <= totdeg )
+   admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
    
    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = admissible,
                         minvv = fill(0, ν), 
                         maxvv = fill(length(spec1p), ν), 
-                        ordered = true )
+                        ordered = true)
    
-   spec = [ vv[vv .> 0] for vv in specAA ][2:end]                     
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+   
    corr1 = SparseSymmProd(spec; T = Float64)
-   corr = corr1.dag
+   corr = corr1.dag   
 
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q) 
 
-   return BFwf(trans, polys, pooling, corr, W, envelope, 
+   return BFwf(trans, polys, pooling, corr, W, envelope, spec,
                   zeros(T, Nel, length(polys)), 
                   zeros(T, Nel, length(polys)), 
                   zeros(T, Nel, length(polys)), 
@@ -67,48 +70,104 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
                   zeros(T, Nel, length(pooling)), 
                   zeros(T, length(pooling)), 
                   zeros(T, length(pooling)), 
-                  zeros(Bool, Nel, 2),
+                  zeros(Bool, Nel, 3),
                   zeros(T, Nel, length(corr)), 
-                  zeros(T, Nel, 2), 
+                  zeros(T, Nel, 3), 
                   zeros(T, Nel, Nel, length(corr)) )
 
 end
 
-
-function onehot!(Si, i)
-   Si[:, 1] .= 0 
-   Si[:, 2] .= 1 
+"""
+This function return correct Si for pooling operation.
+"""
+function onehot!(Si, i, Σ)
+   Si .= 0
+   for k = 1:length(Σ)
+      Si[k, spin2num(Σ[k])] = 1
+   end
+   # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
    Si[i, 1] = 1 
    Si[i, 2] = 0
+   Si[i, 3] = 0
+end
+
+"""
+This function convert spin to corresponding integer value used in spec
+"""
+function spin2num(σ)
+   if σ == '↑'
+      return 2
+   elseif σ == '↓'
+      return 3
+   elseif σ == '∅'
+      return 1
+   end
+   error("illegal spin char for spin2num")
+end
+
+"""
+This function convert num to corresponding spin string.
+"""
+function num2spin(σ)
+   if σ == 2
+      return '↑'
+   elseif σ == 3
+      return '↓'
+   elseif σ == 1
+      return '∅'
+   end
+   error("illegal integer value for num2spin")
+end
+
+"""
+This function return a nice version of spec.
+"""
+function displayspec(spec, spec1p)
+   _getnicespec = l -> (l[1], num2spin(l[2]))
+   nicespec = []
+   for k = 1:length(spec)
+      push!(nicespec, _getnicespec.([spec1p[spec[k][j]] for j in length(spec[k])]))
+   end
+   return nicespec
 end
 
 
-function evaluate(wf::BFwf, X::AbstractVector)
+function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
+      
    nX = length(X)
-   
    # position embedding 
    P = wf.P 
    Xt = wf.trans.(X)
    evaluate!(P, wf.polys, Xt)    # nX x dim(polys)
    
-   # one-hot embedding - generalize to ∅, ↑, ↓
    A = wf.A    # zeros(nX, length(wf.pooling)) 
    Ai = wf.Ai  # zeros(length(wf.pooling))
    Si = wf.Si  # zeros(Bool, nX, 2)
+
    for i = 1:nX 
-      onehot!(Si, i)
+      onehot!(Si, i, Σ)
       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
       A[i, :] .= Ai
    end
 
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
-   Φ = wf.Φ 
-   mul!(Φ, parent(AA), wf.W)
+   
+   # the only basis to be purified are those with same spin
+   # scan through all corr basis, if they comes from same spin, remove self interation by using basis 
+   # from same spin
+   # first we have to construct coefficent for basis coming from same spin, that is in other words the coefficent
+   # matrix of the original polynomial basis, this will be pass from the argument Pnn
+   # === purification goes here === #
+   
+   # === #
+   Φ = wf.Φ
+   mul!(Φ, parent(AA), wf.W) # nX x nX
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
 
    env = wf.envelope(X)
 
-   return logabsdet(Φ)[1] + log(abs(env))
+   return 2 * logabsdet(Φ)[1] + 2 * log(abs(env))
 end
 
 struct ZeroNoEffect end 
@@ -117,7 +176,7 @@ Base.setindex!(A::ZeroNoEffect, args...) = nothing
 Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
 
 
-function gradient(wf::BFwf, X)
+function gradient(wf::BFwf, X, Σ)
    nX = length(X)
 
    # ------ forward pass  ----- 
@@ -135,21 +194,22 @@ function gradient(wf::BFwf, X)
       end
    end
    
-   # one-hot embedding - TODO: generalize to ∅, ↑, ↓
    # no gradients here - need to somehow "constify" this vector 
    # could use other packages for inspiration ... 
 
    # pooling : need an elegant way to shift this loop into a kernel!
    #           e.g. by passing output indices to the pooling function.
-   A = wf.A     # zeros(nX, length(wf.pooling)) 
-   Ai = wf.Ai   # zeros(length(wf.pooling))
-   Si = wf.Si   # zeros(Bool, nX, 2)
+
+   A = wf.A    # zeros(nX, length(wf.pooling)) 
+   Ai = wf.Ai  # zeros(length(wf.pooling))
+   Si = wf.Si  # zeros(Bool, nX, 2)
+   
    for i = 1:nX 
-      onehot!(Si, i)
+      onehot!(Si, i, Σ)
       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
       A[i, :] .= Ai
    end
-
+   
    # n-correlations 
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
 
@@ -157,6 +217,9 @@ function gradient(wf::BFwf, X)
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W)
 
+   # the resulting matrix should contains two block each comes from each spin
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
+   
    # envelope 
    env = wf.envelope(X)
 
@@ -182,9 +245,9 @@ function gradient(wf::BFwf, X)
    ∂P = wf.∂P  # zeros(size(P))
    fill!(∂P, 0)
    ∂Si = wf.∂Si # zeros(size(Si))   # should use ZeroNoEffect here ?!??!
-   Si_ = zeros(nX, 2)
+   Si_ = zeros(nX, 3)
    for i = 1:nX 
-      onehot!(Si_, i)
+      onehot!(Si_, i, Σ)
       # note this line ADDS the pullback into ∂P, not overwrite the content!!
       ∂Ai = @view ∂A[i, :]
       ACEcore._pullback_evalpool!((∂P, ∂Si), ∂Ai, wf.pooling, (P, Si_))
