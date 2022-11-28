@@ -364,3 +364,49 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf)
 end
 
 
+# ------------------ gradp of Laplacian  
+
+
+function gradp_laplacian(wf::BFwf, X)
+
+   nX = length(X) 
+
+   A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X)
+   AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
+
+   
+   # the wf, and the first layer of derivatives 
+   Φ = wf.Φ 
+   mul!(Φ, parent(AA), wf.W)
+   Φ⁻¹ = pinv(Φ)
+   Φ⁻ᵀ = transpose(Φ⁻¹)
+
+   # first contribution to the laplacian
+   ΔΦ = ΔAA * wf.W 
+   # Δψ += dot(Φ⁻ᵀ, ΔΦ) ... this leads to the next two terms 
+   ∂ΔΦ = Φ⁻ᵀ
+   ∇Δψ = transpose(ΔAA) * ∂ΔΦ
+   
+   ∂Φ = - Φ⁻ᵀ * transpose(ΔΦ) * Φ⁻ᵀ
+   ∇Δψ += transpose(AA) * ∂Φ
+
+
+   # the gradient contribution 
+   # TODO: we can rework this into a single BLAS3 call
+   # which will also give us a single back-propagation 
+   # ∇Φi = zeros(nX, nX)
+   # Φ⁻¹∇Φi = zeros(nX, nX)
+   for i = 1:nX 
+      ∇Φi = ∇AA[i, :, :] * wf.W
+      ∇Φiᵀ = transpose(∇Φi)
+      # Δψ += - dot( [Φ⁻¹∇Φi]ᵀ, Φ⁻¹∇Φi )
+
+      ∂∇Φi = - 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      ∇Δψ += transpose(∇AA[i, :, :]) * ∂∇Φi
+
+      ∂Φ = 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      ∇Δψ += transpose(AA) * ∂Φ
+   end
+
+   return ∇Δψ
+end 

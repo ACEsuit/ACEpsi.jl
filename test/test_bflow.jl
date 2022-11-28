@@ -127,10 +127,26 @@ dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X)[:] )
 
 grad_test2(Fp, dFp, w0)
 
-
 ##
-using BenchmarkTools
-@btime ACEpsi.gradp_evaluate($wf, $X)
+
+Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X) )
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X)[:] )
+
+grad_test2(Fp, dFp, w0)
+
+# ##
+
+# using BenchmarkTools
+
+# @info("ψ")
+# @btime ACEpsi.evaluate($wf, $X)
+# @info("∇ψ")
+# @btime ACEpsi.gradp_evaluate($wf, $X)
+# @info("Δψ")
+# @btime ACEpsi.laplacian($wf, $X)
+# @info("∇Δψ")
+# @btime ACEpsi.gradp_laplacian($wf, $X)
+
 
 ##
 
