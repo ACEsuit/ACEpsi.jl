@@ -1,5 +1,5 @@
 
-using Polynomials4ML, ACEcore, ACEbase, Printf
+using Polynomials4ML, ACEcore, ACEbase, Printf, ACEpsi 
 using ACEpsi: BFwf, gradient, evaluate, laplacian
 using LinearAlgebra
 
@@ -87,12 +87,13 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 ##
 
 const ↑, ↓, ∅ = '↑','↓','∅'
-Σ = [↑, ↑, ↑, ↓, ↓];
 Nel = 5
-polys = legendre_basis(10)
-wf = BFwf(Nel, polys; ν=4)
+polys = legendre_basis(8)
+wf = BFwf(Nel, polys; ν=3)
 
 X = 2 * rand(Nel) .- 1
+Σ = rand([↑, ↓], Nel)
+
 wf(X, Σ)
 g = gradient(wf, X, Σ)
 
@@ -177,15 +178,32 @@ grad_test2(Fp, dFp, w0)
 
 # using BenchmarkTools
 
+# Nel = 8
+# Σ = rand([↑, ↓], Nel)
+# X = 2 * rand(Nel) .- 1
+
+# polys = legendre_basis(10)
+# wf = BFwf(Nel, polys; ν=4)
+
+
 # @info("ψ")
-# @btime ACEpsi.evaluate($wf, $X)
+# @btime ACEpsi.evaluate($wf, $X, $Σ)
 # @info("∇ψ")
-# @btime ACEpsi.gradp_evaluate($wf, $X)
+# @btime ACEpsi.gradp_evaluate($wf, $X, $Σ)
 # @info("Δψ")
-# @btime ACEpsi.laplacian($wf, $X)
+# @btime ACEpsi.laplacian($wf, $X, $Σ)
 # @info("∇Δψ")
-# @btime ACEpsi.gradp_laplacian($wf, $X)
+# @btime ACEpsi.gradp_laplacian($wf, $X, $Σ)
 
 
-##
+# ##
 
+# @btime ACEpsi.gradp_laplacian($wf, $X, $Σ)
+
+# ##
+
+# @profview let wf=wf, X=X, Σ=Σ
+#    for _ = 1:2_000 
+#       ACEpsi.gradp_laplacian(wf, X, Σ)
+#    end
+# end

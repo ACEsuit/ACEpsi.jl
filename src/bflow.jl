@@ -368,7 +368,7 @@ end
 function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    nX = size(A, 1)
    AA = zeros(nX, length(wf.corr))
-   ∇AA = zeros(nX, nX, length(wf.corr))   # wf.∇AA  
+   ∇AA = wf.∇AA  
    ΔAA = zeros(nX, length(wf.corr))
 
    @inbounds for iAA = 1:wf.corr.num1 
@@ -420,11 +420,11 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf, Σ)
    # the gradient contribution 
    # TODO: we can rework this into a single BLAS3 call
    # which will also give us a single back-propagation 
-   ∇Φi = zeros(nX, nX)
+   # ∇Φi = zeros(nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.W, nX, nX, nX)
    Φ⁻¹∇Φi = zeros(nX, nX)
    for i = 1:nX 
-      mul!(∇Φi, (@view ∇AA[i, :, :]), wf.W)
-      ∇Φi = ∇Φi .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
+      ∇Φi = ∇Φ_all[i, :, :] .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
       mul!(Φ⁻¹∇Φi, transpose(Φ⁻ᵀ), ∇Φi)
       Δψ -= dot(transpose(Φ⁻¹∇Φi), Φ⁻¹∇Φi)
    end
@@ -461,7 +461,7 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    ∇Δψ = transpose(ΔAA) * ∂ΔΦ
    
    ∂Φ = - Φ⁻ᵀ * transpose(ΔΦ) * Φ⁻ᵀ
-   ∇Δψ += transpose(AA) * ∂Φ
+   # ∇Δψ += transpose(AA) * ∂Φ
 
 
    # the gradient contribution 
@@ -469,18 +469,26 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    # which will also give us a single back-propagation 
    # ∇Φi = zeros(nX, nX)
    # Φ⁻¹∇Φi = zeros(nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.W, nX, nX, nX)
+   ∂∇Φ_all = zeros(nX, nX, nX)
+
    for i = 1:nX 
-      ∇Φi = ∇AA[i, :, :] * wf.W
-      ∇Φi = ∇Φi .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
+      ∇Φi = ∇Φ_all[i, :, :] .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
       ∇Φiᵀ = transpose(∇Φi)
       # Δψ += - dot( [Φ⁻¹∇Φi]ᵀ, Φ⁻¹∇Φi )
 
-      ∂∇Φi = - 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
-      ∇Δψ += transpose(∇AA[i, :, :]) * ∂∇Φi
+      # ∂∇Φi = - 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      ∂∇Φ_all[i, :, :] = - 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      # ∇Δψ += transpose(∇AA[i, :, :]) * ∂∇Φi
 
-      ∂Φ = 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
-      ∇Δψ += transpose(AA) * ∂Φ
+      ∂Φ += 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      # ∇Δψ += transpose(AA) * ∂Φ
    end
-   ∇Δψ = ∇Δψ * 2
-   return ∇Δψ
+
+   ∇Δψ += transpose(AA) * ∂Φ
+
+   ∇Δψ += reshape( transpose(reshape(∇AA, nX*nX, :)) * reshape(∂∇Φ_all, nX*nX, nX), 
+                  size(∇Δψ) )
+
+   return 2 * ∇Δψ
 end 
