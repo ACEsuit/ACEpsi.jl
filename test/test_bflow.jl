@@ -1,9 +1,40 @@
 
-using Polynomials4ML, ACEcore, ACEpsi, ACEbase, Printf
+using Polynomials4ML, ACEcore, ACEbase, Printf
 using ACEpsi: BFwf, gradient, evaluate, laplacian
 using LinearAlgebra
 
 ##
+function lap_test(f, Δf, X)
+   F = f(X) 
+   ΔF = Δf(X)
+   nX = length(X) 
+   n1, nF = size(F)
+   U = randn(n1)
+   V = randn(nF) ./ (1:nF).^2
+   f0 = U' * F * V
+   Δf0 = U' * ΔF * V
+   EE = Matrix(I, (nX, nX))
+   for h in sqrt(0.1).^((5:12))
+      Δfh = 0.0
+      for i = 1:nX
+         Δfh += (U'*f(X + h * EE[:, i])*V - f0) / h^2
+         Δfh += (U'*f(X - h * EE[:, i])*V - f0) / h^2
+      end
+      #@show Δfh, Δf0
+      @printf(" %.1e | %.2e \n", h, abs(Δfh - Δf0))
+   end
+end
+
+function grad_test2(f, df, X::AbstractVector)
+   F = f(X) 
+   ∇F = df(X)
+   nX = length(X) 
+   EE = Matrix(I, (nX, nX))
+   for h in 0.1.^(5:12)
+      gh = [ (f(X + h * EE[:, i]) - F) / h for i = 1:nX ]
+      @printf(" %.1e | %.2e \n", h, norm(gh - ∇F, Inf))
+   end
+end
 
 
 function grad_test(f, df, X)
@@ -20,9 +51,6 @@ function grad_test(f, df, X)
       @printf(" %.1e | %.2e \n", h, norm(gh - ∇f0, Inf))
    end
 end
-
-using Polynomials4ML, ACEcore, ACEpsi, ACEbase
-using ACEpsi: BFwf, gradient, evaluate
 
 "This function should be removed later to test in a nicer way..."
 function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
@@ -57,15 +85,16 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
     end
  end
 ##
-const ↑, ↓, ∅ = '↑','↓','∅'
 
-Nel = 10
+const ↑, ↓, ∅ = '↑','↓','∅'
+Σ = [↑, ↑, ↑, ↓, ↓];
+Nel = 5
 polys = legendre_basis(10)
 wf = BFwf(Nel, polys; ν=4)
 
 X = 2 * rand(Nel) .- 1
-wf(X)
-g = gradient(wf, X)
+wf(X, Σ)
+g = gradient(wf, X, Σ)
 
 ##
 
@@ -73,7 +102,7 @@ using LinearAlgebra
 using Printf
 #using ACEbase.Testing: fdtest 
 
-fdtest(wf, X -> gradient(wf, X), X)
+fdtest(wf, Σ, g, X)
 
 
 # ##
@@ -85,53 +114,53 @@ fdtest(wf, X -> gradient(wf, X), X)
 
 ##
 
-A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
+A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X, Σ)
 
 @info("test ∇A")
-grad_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
-          X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[2], 
+grad_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X, Σ)[1], 
+          X -> ACEpsi._assemble_A_∇A_ΔA(wf, X, Σ)[2], 
           X)
 
 @info("test ΔA")          
-lap_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[1], 
-         X -> ACEpsi._assemble_A_∇A_ΔA(wf, X)[3], 
+lap_test(X -> ACEpsi._assemble_A_∇A_ΔA(wf, X, Σ)[1], 
+         X -> ACEpsi._assemble_A_∇A_ΔA(wf, X, Σ)[3], 
          X)
 
  
 ##
 
-function f_AA(X)
-   A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X)
+function f_AA(X, Σ)
+   A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X, Σ)
    AA, ∇AA, ΔAA = ACEpsi._assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    return AA, ∇AA, ΔAA
 end
 
 @info("test ∇A")
-grad_test(X -> f_AA(X)[1], X -> f_AA(X)[2], X)
+grad_test(X -> f_AA(X, Σ)[1], X -> f_AA(X, Σ)[2], X)
 
 @info("test ΔA")          
-lap_test(X -> f_AA(X)[1], X -> f_AA(X)[3], X)
+lap_test(X -> f_AA(X, Σ)[1], X -> f_AA(X, Σ)[3], X)
 
 
 ##
 
 @info("test Δψ")
-lap_test(X -> [wf(X);;], X -> [ACEpsi.laplacian(wf, X);;], X)
+lap_test(X -> [wf(X, Σ);;], X -> [ACEpsi.laplacian(wf, X, Σ);;], X)
 
 
 ##
 
 @info("Test ∇ψ w.r.t. parameters")
 
-ACEpsi.gradp_evaluate(wf, X)
+ACEpsi.gradp_evaluate(wf, X, Σ)
 
 
 W0 = copy(wf.W)
 sz0 = size(W0) 
 w0 = W0[:]
 
-Fp = w -> ( wf.W[:] .= w[:]; wf(X) )
-dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X)[:] )
+Fp = w -> ( wf.W[:] .= w[:]; wf(X, Σ) )
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[:] )
 
 grad_test2(Fp, dFp, w0)
 
@@ -139,8 +168,8 @@ grad_test2(Fp, dFp, w0)
 
 @info("Test ∇Δψ w.r.t. parameters")
 
-Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X) )
-dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X)[:] )
+Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ) )
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[:] )
 
 grad_test2(Fp, dFp, w0)
 
