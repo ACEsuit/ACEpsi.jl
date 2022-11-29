@@ -132,7 +132,7 @@ function displayspec(spec, spec1p)
 end
 
 
-function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
+function assemble_A(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
       
    nX = length(X)
    # position embedding 
@@ -149,7 +149,12 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
       A[i, :] .= Ai
    end
+   return A 
+end
 
+function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
+   nX = length(X)
+   A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
    
    # the only basis to be purified are those with same spin
@@ -166,9 +171,40 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    release!(AA)
 
    env = wf.envelope(X)
+   # return logabsdet(Φ)[1] + log(abs(env))
 
    return 2 * logabsdet(Φ)[1] + 2 * log(abs(env))
 end
+
+
+function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
+   nX = length(X)
+   
+   A = assemble_A(wf, X, Σ)
+   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   Φ = wf.Φ 
+   mul!(Φ, parent(AA), wf.W)
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
+
+
+   # ψ = log | det( Φ ) |
+   # ∂Φ = ∂ψ/∂Φ = Φ⁻ᵀ
+   ∂Φ = transpose(pinv(Φ))
+
+   # ∂W = ∂ψ / ∂W = ∂Φ * ∂_W( AA * W ) = ∂Φ * AA
+   # ∂Wij = ∑_ab ∂Φab * ∂_Wij( ∑_k AA_ak W_kb )
+   #      = ∑_ab ∂Φab * ∑_k δ_ik δ_bj  AA_ak
+   #      = ∑_a ∂Φaj AA_ai = ∂Φaj' * AA_ai
+   ∇p = transpose(parent(AA)) * ∂Φ
+
+   release!(AA)
+   ∇p = ∇p * 2
+   return ∇p 
+end
+
+
+
+# ----------------------- gradient 
 
 struct ZeroNoEffect end 
 Base.size(::ZeroNoEffect, ::Integer) = Inf
@@ -185,7 +221,7 @@ function gradient(wf::BFwf, X, Σ)
    # here we evaluate and differentiate at the same time, which is cheap
    P = wf.P 
    dP = wf.dP
-   Xt = wf.trans.(X) 
+   Xt = wf.trans.(X)
    Polynomials4ML.evaluate_ed!(P, dP, wf.polys, Xt)
    ∂Xt = ForwardDiff.derivative.(Ref(x -> wf.trans(x)), X)
    @inbounds for k = 1:size(dP, 2)
@@ -202,7 +238,7 @@ function gradient(wf::BFwf, X, Σ)
 
    A = wf.A    # zeros(nX, length(wf.pooling)) 
    Ai = wf.Ai  # zeros(length(wf.pooling))
-   Si = wf.Si  # zeros(Bool, nX, 2)
+   Si = wf.Si  # zeros(Bool, nX, 3)
    
    for i = 1:nX 
       onehot!(Si, i, Σ)
@@ -268,30 +304,30 @@ function gradient(wf::BFwf, X, Σ)
    # envelope 
    ∇env = ForwardDiff.gradient(wf.envelope, X)
    g += ∇env / env 
-
+   g = g * 2
    return g
 end
 
 
 # ------------------ Laplacian implementation 
 
-function laplacian(wf::BFwf, X)
+function laplacian(wf::BFwf, X, Σ)
 
-   A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X)
+   A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X, Σ)
    AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
 
-   Δψ = _laplacian_inner(AA, ∇AA, ΔAA, wf)
+   Δψ = _laplacian_inner(AA, ∇AA, ΔAA, wf, Σ)
 
    # envelope 
    env = wf.envelope(X)
    ∇env = ForwardDiff.gradient(wf.envelope, X)
    Δenv = tr(ForwardDiff.hessian(wf.envelope, X))
    Δψ += Δenv / env - dot(∇env, ∇env) / env^2
-   
+   Δψ = Δψ * 2
    return Δψ
 end 
 
-function _assemble_A_∇A_ΔA(wf, X)
+function _assemble_A_∇A_ΔA(wf, X, Σ)
    TX = eltype(X)
    lenA = length(wf.pooling)
    nX = length(X) 
@@ -312,11 +348,11 @@ function _assemble_A_∇A_ΔA(wf, X)
       end
    end
 
-   Si_ = zeros(nX, 2)
+   Si_ = zeros(nX, 3)
    Ai = zeros(length(wf.pooling))
    @inbounds for i = 1:nX # loop over orbital bases (which i becomes ∅)
       fill!(Si_, 0)
-      onehot!(Si_, i)
+      onehot!(Si_, i, Σ)
       ACEcore.evalpool!(Ai, wf.pooling, (P, Si_))
       @. A[i, :] .= Ai
       for (iA, (k, σ)) in enumerate(spec_A)
@@ -332,7 +368,7 @@ end
 function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    nX = size(A, 1)
    AA = zeros(nX, length(wf.corr))
-   ∇AA = zeros(nX, nX, length(wf.corr))   # wf.∇AA  
+   ∇AA = wf.∇AA  
    ΔAA = zeros(nX, length(wf.corr))
 
    @inbounds for iAA = 1:wf.corr.num1 
@@ -362,7 +398,7 @@ function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
 end
 
 
-function _laplacian_inner(AA, ∇AA, ΔAA, wf)
+function _laplacian_inner(AA, ∇AA, ΔAA, wf, Σ)
 
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)
    # where Φᵢ = ∂_{xi} Φ
@@ -372,23 +408,87 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf)
    # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
    mul!(Φ, parent(AA), wf.W)
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    Φ⁻ᵀ = transpose(pinv(Φ))
+   
+   # first contribution to the laplacian
+   ΔΦ = ΔAA * wf.W
+   ΔΦ = ΔΦ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
+
+   Δψ = dot(Φ⁻ᵀ, ΔΦ)
+   
+   # the gradient contribution 
+   # TODO: we can rework this into a single BLAS3 call
+   # which will also give us a single back-propagation 
+   # ∇Φi = zeros(nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.W, nX, nX, nX)
+   Φ⁻¹∇Φi = zeros(nX, nX)
+   for i = 1:nX 
+      ∇Φi = ∇Φ_all[i, :, :] .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
+      mul!(Φ⁻¹∇Φi, transpose(Φ⁻ᵀ), ∇Φi)
+      Δψ -= dot(transpose(Φ⁻¹∇Φi), Φ⁻¹∇Φi)
+   end
+   
+   return Δψ
+end
+
+
+# ------------------ gradp of Laplacian  
+
+
+function gradp_laplacian(wf::BFwf, X, Σ)
+
+   nX = length(X) 
+
+   A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X, Σ)
+   AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
+
+   
+   # the wf, and the first layer of derivatives 
+   Φ = wf.Φ 
+   mul!(Φ, parent(AA), wf.W)
+   Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
+
+   Φ⁻¹ = pinv(Φ)
+   Φ⁻ᵀ = transpose(Φ⁻¹)
 
    # first contribution to the laplacian
-   ΔΦ = ΔAA * wf.W 
-   Δψ = dot(Φ⁻ᵀ, ΔΦ)
+   ΔΦ = ΔAA * wf.W
+   ΔΦ = ΔΦ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
+ 
+   # Δψ += dot(Φ⁻ᵀ, ΔΦ) ... this leads to the next two terms 
+   ∂ΔΦ = Φ⁻ᵀ
+   ∇Δψ = transpose(ΔAA) * ∂ΔΦ
+   
+   ∂Φ = - Φ⁻ᵀ * transpose(ΔΦ) * Φ⁻ᵀ
+   # ∇Δψ += transpose(AA) * ∂Φ
+
 
    # the gradient contribution 
    # TODO: we can rework this into a single BLAS3 call
    # which will also give us a single back-propagation 
-   ∇Φi = zeros(nX, nX)
-   Φ⁻¹∇Φi = zeros(nX, nX)
+   # ∇Φi = zeros(nX, nX)
+   # Φ⁻¹∇Φi = zeros(nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.W, nX, nX, nX)
+   ∂∇Φ_all = zeros(nX, nX, nX)
+
    for i = 1:nX 
-      mul!(∇Φi, (@view ∇AA[i, :, :]), wf.W)
-      mul!(Φ⁻¹∇Φi, transpose(Φ⁻ᵀ), ∇Φi)
-      Δψ -= dot(transpose(Φ⁻¹∇Φi), Φ⁻¹∇Φi)
+      ∇Φi = ∇Φ_all[i, :, :] .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
+      ∇Φiᵀ = transpose(∇Φi)
+      # Δψ += - dot( [Φ⁻¹∇Φi]ᵀ, Φ⁻¹∇Φi )
+
+      # ∂∇Φi = - 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      ∂∇Φ_all[i, :, :] = - 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      # ∇Δψ += transpose(∇AA[i, :, :]) * ∂∇Φi
+
+      ∂Φ += 2 * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ * ∇Φiᵀ * Φ⁻ᵀ
+      # ∇Δψ += transpose(AA) * ∂Φ
    end
 
-   return Δψ
-end
+   ∇Δψ += transpose(AA) * ∂Φ
 
+   ∇Δψ += reshape( transpose(reshape(∇AA, nX*nX, :)) * reshape(∂∇Φ_all, nX*nX, nX), 
+                  size(∇Δψ) )
+
+   return 2 * ∇Δψ
+end 
