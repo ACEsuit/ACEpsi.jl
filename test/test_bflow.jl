@@ -2,8 +2,8 @@
 using Polynomials4ML, ACEcore, ACEbase, Printf, ACEpsi 
 using ACEpsi: BFwf, gradient, evaluate, laplacian
 using LinearAlgebra
-using Random
-Random.seed!(123)
+#using Random
+#Random.seed!(123)
 ##
 function lap_test(f, Δf, X)
    F = f(X) 
@@ -217,6 +217,10 @@ param1 = ACEpsi.get_params(wf1)
 wf2 = ACEpsi.set_params!(wf2, param1)
 @printf(" wf1 - wf2 with parameter wf1: %f \n", abs(wf1(X, Σ) - wf2(X, Σ)))
 
+##
+
+@info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
+include("compare_bflow.jl")
 
 
 
