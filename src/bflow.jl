@@ -35,7 +35,8 @@ end
 function BFwf(Nel::Integer, polys; totdeg = length(polys), 
                      ν = 3, T = Float64, 
                      trans = identity, 
-                     envelope = _ -> 1.0)
+                     #envelope = envelopefcn(x -> x, rand()))
+                     envelope = envelopefcn(x -> sqrt(1 + x^2), 0.5))
    # 1-particle spec 
    K = length(polys)
    spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
@@ -171,8 +172,6 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    release!(AA)
 
    env = wf.envelope(X)
-   # return logabsdet(Φ)[1] + log(abs(env))
-
    return 2 * logabsdet(Φ)[1] + 2 * log(abs(env))
 end
 
@@ -199,7 +198,15 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
 
    release!(AA)
    ∇p = ∇p * 2
-   return ∇p 
+
+
+   # ------ gradient of env (w.r.t. ξ) ----- 
+   # ∂ = ∂/∂ξ
+   # r = ||x||
+   # ∂(2 * logabs(env)) = ∂(2 * log(exp(-ξf(r)))) = ∂(-2ξf(r)) = -f(r)
+   ∇logabsenv = - 2 * wf.envelope.f(norm(X))
+
+   return (∇p, [∇logabsenv]) # TODO: return a named tuple (W = gradp, D = gradient w.r.t parameter of env)
 end
 
 
@@ -322,6 +329,8 @@ function laplacian(wf::BFwf, X, Σ)
    env = wf.envelope(X)
    ∇env = ForwardDiff.gradient(wf.envelope, X)
    Δenv = tr(ForwardDiff.hessian(wf.envelope, X))
+
+   # Δ(ln(env)) = Δenv / env - ∇env ⋅ ∇env / env ^ 2
    Δψ += Δenv / env - dot(∇env, ∇env) / env^2
    Δψ = Δψ * 2
    return Δψ
@@ -438,6 +447,9 @@ end
 
 function gradp_laplacian(wf::BFwf, X, Σ)
 
+
+   # ---- gradp of Laplacian of Ψ ----
+
    nX = length(X) 
 
    A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X, Σ)
@@ -490,5 +502,19 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    ∇Δψ += reshape( transpose(reshape(∇AA, nX*nX, :)) * reshape(∂∇Φ_all, nX*nX, nX), 
                   size(∇Δψ) )
 
-   return 2 * ∇Δψ
+
+   # ---- gradp of Laplacian of env ----
+   # ∂ = ∂/∂ξ  
+   # r = ||x||
+   # ∂(2 * Δ(logabs(env))) = ∂(2 * Δ(-ξf(r)) = -2 * Δf(r)
+   # Δf(r) = (n-1)/r f'(r) + f''(r)
+
+
+   r = norm(X)
+   f(r) = wf.envelope.f(r)
+   df(r) = ForwardDiff.derivative(f, r)
+   ddf(r) = ForwardDiff.derivative(r -> df(r), r)
+   Δf = ddf(r) + (length(X)-1) * df(r)/r
+
+   return (2 * ∇Δψ, [2 * -Δf])
 end 

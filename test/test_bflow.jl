@@ -20,7 +20,6 @@ function lap_test(f, Δf, X)
          Δfh += (U'*f(X + h * EE[:, i])*V - f0) / h^2
          Δfh += (U'*f(X - h * EE[:, i])*V - f0) / h^2
       end
-      #@show Δfh, Δf0
       @printf(" %.1e | %.2e \n", h, abs(Δfh - Δf0))
    end
 end
@@ -28,10 +27,21 @@ end
 function grad_test2(f, df, X::AbstractVector)
    F = f(X) 
    ∇F = df(X)
-   nX = length(X) 
+   nX = length(X)
+   
    EE = Matrix(I, (nX, nX))
-   for h in 0.1.^(5:12)
-      gh = [ (f(X + h * EE[:, i]) - F) / h for i = 1:nX ]
+   h = 0.1 ^ 5
+   for h in 0.1.^(3:12)
+      gh = [ (f(X + h * EE[:, i]) - F) / h for i = 1:nX ]    
+      @printf(" %.1e | %.2e \n", h, norm(gh - ∇F, Inf))
+   end
+end
+
+function grad_test3(f, df, X::Float64)
+   F = f(X) 
+   ∇F = df(X) # return as vector of size 1
+   for h in 0.8.^(1:10)
+      gh = [ (f(X + h) - F) / h]
       @printf(" %.1e | %.2e \n", h, norm(gh - ∇F, Inf))
    end
 end
@@ -157,22 +167,54 @@ ACEpsi.gradp_evaluate(wf, X, Σ)
 
 
 W0 = copy(wf.W)
-sz0 = size(W0) 
 w0 = W0[:]
+Fp = w -> ( wf.W[:] .= w[:]; wf(X, Σ) - 2 * log(abs(wf.envelope(X))))
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[1][:] )
 
-Fp = w -> ( wf.W[:] .= w[:]; wf(X, Σ) )
-dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[:] )
+grad_test2(Fp, dFp, w0)
+
+@info("test ∇env w.r.t. parameter")
+Ξ0 =  copy(wf.envelope.ξ)
+ξ0 =  Ξ0
+
+# Envp = w -> 2 * log(abs(wf.envelope(w)))
+Envp = w -> (wf.envelope.ξ = w; 2 * log(abs(wf.envelope(X))))
+dEnvp = w -> (wf.envelope.ξ = w;  ACEpsi.gradp_evaluate(wf, X, Σ)[2])
+
+grad_test3(Envp, dEnvp, ξ0)
+
+##
+import ForwardDiff
+function lapenv(wf, X, Σ)
+   env = wf.envelope(X)
+   ∇env = ForwardDiff.gradient(wf.envelope, X)
+   Δenv = tr(ForwardDiff.hessian(wf.envelope, X))
+   # Δ(ln(env)) = Δenv / env - ∇env ⋅ ∇env / env ^ 2
+   return  2 * (Δenv / env - dot(∇env, ∇env) / env^2)
+end
+
+@info("Test ∇Δψ w.r.t. parameters")
+
+Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ) - lapenv(wf, X, Σ) )
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
 
 grad_test2(Fp, dFp, w0)
 
 ##
-
 @info("Test ∇Δψ w.r.t. parameters")
 
-Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ) )
-dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[:] )
+Ξ0 =  copy(wf.envelope.ξ)
+ξ0 =  Ξ0
 
-grad_test2(Fp, dFp, w0)
+
+Fp = w -> ( wf.envelope.ξ = w; lapenv(wf, X, Σ) )
+dFp = w -> (wf.envelope.ξ = w; ACEpsi.gradp_laplacian(wf, X, Σ)[2][:] )
+
+grad_test3(Fp, dFp, ξ0)
+
+
+
+
 
 # ##
 

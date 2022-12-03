@@ -1,5 +1,5 @@
 using Polynomials4ML, ACEcore, ACEbase
-# using ACEpsi: BFwf, gradient, evaluate
+using ACEpsi: BFwf, gradient, evaluate, envelopefcn
 using JSON
 using Printf
 using LinearAlgebra
@@ -22,10 +22,9 @@ xx = Float64.(xx)
 Nel = 5
 WW = DiscreteWeights(xx, ww)
 polys = orthpolybasis(10, WW)
-wf = BFwf(Nel, polys; ν=2, totdeg = 10)
-# == 
 
-X = atan.(X) # λ("r → atan(r)")
+wf = BFwf(Nel, polys; ν=2, totdeg = 10, trans = atan, envelope = envelopefcn(x -> sqrt(x^2 + 1), 0.5)) # using default
+# == 
 
 for i = 1:5
    wf.W[:, i] = PP[i][2:end] # the first entry of PP[i] is the extra constant
@@ -35,4 +34,4 @@ end
 
 spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:length(polys) ]  # (1, 2, 3) = (∅, ↑, ↓);
 
-@show displayspec(wf.spec, spec1p)
+# @show displayspec(wf.spec, spec1p)
