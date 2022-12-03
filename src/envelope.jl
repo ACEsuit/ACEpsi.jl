@@ -29,8 +29,16 @@ function set_params!(U::envelopefunc, c::AbstractVector)
     return U
  end
 
- 
-function gradp_env(U::envelopefunc, X::AbstractVector, args...)
-    x = norm(X)
-    return -evaluate(U, X)  * U.f(x)
+function set_params!(U::envelopefunc, c::Matrix)
+    U.ξ = c[1]
+    return U
 end
+
+function get_params(U::envelopefunc)
+    return U.ξ
+end
+ 
+# function gradp_env(U::envelopefunc, X::AbstractVector, args...)
+#     x = norm(X)
+#     return -evaluate(U, X) * U.f(x)
+# end

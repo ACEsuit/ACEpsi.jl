@@ -6,7 +6,7 @@ using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
 import ForwardDiff
 
-struct BFwf{T, TT, TPOLY, TE}
+mutable struct BFwf{T, TT, TPOLY, TE}
    trans::TT
    polys::TPOLY
    pooling::PooledSparseProduct{2}
@@ -206,7 +206,7 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    # ∂(2 * logabs(env)) = ∂(2 * log(exp(-ξf(r)))) = ∂(-2ξf(r)) = -f(r)
    ∇logabsenv = - 2 * wf.envelope.f(norm(X))
 
-   return (∇p, [∇logabsenv]) # TODO: return a named tuple (W = gradp, D = gradient w.r.t parameter of env)
+   return (∇p = ∇p, ∇logabsenv = [∇logabsenv]) # TODO: return a named tuple (W = gradp, D = gradient w.r.t parameter of env)
 end
 
 
@@ -508,13 +508,25 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    # r = ||x||
    # ∂(2 * Δ(logabs(env))) = ∂(2 * Δ(-ξf(r)) = -2 * Δf(r)
    # Δf(r) = (n-1)/r f'(r) + f''(r)
-
-
    r = norm(X)
    f(r) = wf.envelope.f(r)
    df(r) = ForwardDiff.derivative(f, r)
    ddf(r) = ForwardDiff.derivative(r -> df(r), r)
    Δf = ddf(r) + (length(X)-1) * df(r)/r
 
-   return (2 * ∇Δψ, [2 * -Δf])
+   return (∇Δψ = 2 * ∇Δψ, ∇Δlogabsenv = [2 * -Δf])
 end 
+
+
+
+# ----------------- BFwf parameter wraging
+
+function get_params(U::BFwf)
+   return (U.W, U.envelope.ξ)
+end
+
+function set_params!(U::BFwf, para)
+   U.W = para[1]
+   set_params!(U.envelope, para[2])
+   return U
+end

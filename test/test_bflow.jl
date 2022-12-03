@@ -173,11 +173,12 @@ dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[1][:] )
 
 grad_test2(Fp, dFp, w0)
 
+##
+
 @info("test ∇env w.r.t. parameter")
 Ξ0 =  copy(wf.envelope.ξ)
 ξ0 =  Ξ0
 
-# Envp = w -> 2 * log(abs(wf.envelope(w)))
 Envp = w -> (wf.envelope.ξ = w; wf(X, Σ))
 dEnvp = w -> (wf.envelope.ξ = w;  ACEpsi.gradp_evaluate(wf, X, Σ)[2])
 
@@ -193,17 +194,28 @@ dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
 grad_test2(Fp, dFp, w0)
 
 ##
+
 @info("Test ∇Δenv w.r.t. parameters")
 
 Ξ0 =  copy(wf.envelope.ξ)
 ξ0 =  Ξ0
 
 
-
 Fp = w -> ( wf.envelope.ξ = w; ACEpsi.laplacian(wf, X, Σ))
 dFp = w -> (wf.envelope.ξ = w; ACEpsi.gradp_laplacian(wf, X, Σ)[2][:] )
 
 grad_test3(Fp, dFp, ξ0)
+
+##
+
+@info("Test getting/setting parameters")
+
+wf1 = BFwf(Nel, polys; ν=3)
+wf2 = BFwf(Nel, polys; ν=3)
+@printf(" wf1 - wf2: %f \n", abs(wf1(X, Σ) - wf2(X, Σ)))
+param1 = ACEpsi.get_params(wf1)
+wf2 = ACEpsi.set_params!(wf2, param1)
+@printf(" wf1 - wf2 with parameter wf1: %f \n", abs(wf1(X, Σ) - wf2(X, Σ)))
 
 
 
