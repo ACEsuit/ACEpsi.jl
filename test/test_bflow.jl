@@ -113,6 +113,7 @@ using LinearAlgebra
 using Printf
 #using ACEbase.Testing: fdtest 
 
+@info("Fd test of gradient w.r.t. X")
 fdtest(wf, Σ, g, X)
 
 
