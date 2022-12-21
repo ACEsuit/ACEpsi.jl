@@ -29,6 +29,6 @@ for i = 1:5
    wf.W[:, i] = PP[i][2:end] # the first entry of PP[i] is the extra constant
 end
 println("ACESchrodinger.BFwf - ACEpsi.BFwf: ", wf(X, Σ) - refval)
-#spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:length(polys) ]  # (1, 2, 3) = (∅, ↑, ↓);
-
-# @show displayspec(wf.spec, spec1p)
+spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:length(polys) ]  # (1, 2, 3) = (∅, ↑, ↓);
+spec1p = sort(spec1p, by = b->b[1])
+@show displayspec(wf.spec, spec1p)
