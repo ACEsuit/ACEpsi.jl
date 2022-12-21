@@ -35,6 +35,7 @@ end
 function BFwf(Nel::Integer, polys; totdeg = length(polys), 
                      ν = 3, T = Float64, 
                      trans = identity, 
+                     sd_admissible = bb -> (true),
                      #envelope = envelopefcn(x -> x, rand()))
                      envelope = envelopefcn(x -> sqrt(1 + x^2), 0.5))
    # 1-particle spec 
@@ -45,8 +46,8 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    pooling = PooledSparseProduct(spec1p)
    # generate the many-particle spec 
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
-   
+   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+   admissible = bb -> (default_admissible(bb) && sd_admissible(bb))
    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = admissible,
                         minvv = fill(0, ν), 
                         maxvv = fill(length(spec1p), ν), 
