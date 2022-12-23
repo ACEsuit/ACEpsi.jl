@@ -12,10 +12,9 @@ MaxDeg = [16, 5]
 
 test_ad = bb -> (@show bb; @show all([bb[i][1] < MaxDeg[i] for i = 1:length(bb)]); (length(bb) == 0 || all([bb[i][1] <= MaxDeg[length(bb)] for i = 1:length(bb)])))
 wf = BFwf(Nel, polys; ν=2, sd_admissible = test_ad)
-K = length(wf.polys)
-spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]
-spec1p = sort(spec1p,  by = b -> b[1])
-LL = displayspec(wf.spec, spec1p)
+@show length(wf.polys)
+LL = displayspec(wf)
+@show LL
 for i = 1:length(LL)
     @show LL[i]
 end

@@ -124,14 +124,18 @@ function num2spin(σ)
    error("illegal integer value for num2spin")
 end
 
+
 """
-This function return a nice version of spec.
+This function returns a nice version of spec.
 """
-function displayspec(spec, spec1p)
+function displayspec(wf::BFwf)
+   K = length(wf.polys)
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]
+   spec1p = sort(spec1p, by = b -> b[1])
    _getnicespec = l -> (l[1], num2spin(l[2]))
    nicespec = []
-   for k = 1:length(spec)
-      push!(nicespec, _getnicespec.([spec1p[spec[k][j]] for j = 1:length(spec[k])]))
+   for k = 1:length(wf.spec)
+      push!(nicespec, _getnicespec.([spec1p[wf.spec[k][j]] for j = 1:length(wf.spec[k])]))
    end
    return nicespec
 end
