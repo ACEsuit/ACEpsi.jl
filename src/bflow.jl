@@ -35,8 +35,8 @@ end
 function BFwf(Nel::Integer, polys; totdeg = length(polys), 
                      ν = 3, T = Float64, 
                      trans = identity, 
-                     #envelope = envelopefcn(x -> x, rand()))
-                     envelope = envelopefcn(x -> sqrt(1 + x^2), 0.5))
+                     sd_admissible = bb -> (true),
+                     envelope = envelopefcn(x -> sqrt(1 + x^2), rand()))
    # 1-particle spec 
    K = length(polys)
    spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
@@ -45,15 +45,19 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    pooling = PooledSparseProduct(spec1p)
    # generate the many-particle spec 
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
    
-   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = admissible,
+   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
                         minvv = fill(0, ν), 
                         maxvv = fill(length(spec1p), ν), 
                         ordered = true)
    
-   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
    
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+
+   # further restrict
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+
    corr1 = SparseSymmProd(spec; T = Float64)
    corr = corr1.dag   
 
@@ -120,14 +124,18 @@ function num2spin(σ)
    error("illegal integer value for num2spin")
 end
 
+
 """
-This function return a nice version of spec.
+This function returns a nice version of spec.
 """
-function displayspec(spec, spec1p)
+function displayspec(wf::BFwf)
+   K = length(wf.polys)
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]
+   spec1p = sort(spec1p, by = b -> b[1])
    _getnicespec = l -> (l[1], num2spin(l[2]))
    nicespec = []
-   for k = 1:length(spec)
-      push!(nicespec, _getnicespec.([spec1p[spec[k][j]] for j in length(spec[k])]))
+   for k = 1:length(wf.spec)
+      push!(nicespec, _getnicespec.([spec1p[wf.spec[k][j]] for j = 1:length(wf.spec[k])]))
    end
    return nicespec
 end
