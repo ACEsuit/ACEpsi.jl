@@ -220,42 +220,6 @@ wf2 = ACEpsi.set_params!(wf2, param1)
 
 ##
 
-@info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
-include("compare_bflow.jl")
-
-
-
-
-# ##
-
-# using BenchmarkTools
-
-# Nel = 8
-# Σ = rand([↑, ↓], Nel)
-# X = 2 * rand(Nel) .- 1
-
-# polys = legendre_basis(10)
-# wf = BFwf(Nel, polys; ν=4)
-
-
-# @info("ψ")
-# @btime ACEpsi.evaluate($wf, $X, $Σ)
-# @info("∇ψ")
-# @btime ACEpsi.gradp_evaluate($wf, $X, $Σ)
-# @info("Δψ")
-# @btime ACEpsi.laplacian($wf, $X, $Σ)
-# @info("∇Δψ")
-# @btime ACEpsi.gradp_laplacian($wf, $X, $Σ)
-
-
-# ##
-
-# @btime ACEpsi.gradp_laplacian($wf, $X, $Σ)
-
-# ##
-
-# @profview let wf=wf, X=X, Σ=Σ
-#    for _ = 1:2_000 
-#       ACEpsi.gradp_laplacian(wf, X, Σ)
-#    end
-# end
+@warn("removed compac test since json file is missing")
+# @info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
+# include("compare_bflow.jl")
