@@ -38,8 +38,9 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
                      sd_admissible = bb -> (true),
                      envelope = envelopefcn(x -> sqrt(1 + x^2), rand()))
    # 1-particle spec 
-   K = length(polys)
-   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
+   @assert length(polys) >= totdeg
+   
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:totdeg]  # (1, 2, 3) = (∅, ↑, ↓);
    spec1p = sort(spec1p, by = b -> b[1]) # sorting to prevent gensparse being confused
    
    pooling = PooledSparseProduct(spec1p)
