@@ -57,7 +57,7 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
 
    # further restrict
-   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j in eachindex(t)])]
 
    corr1 = SparseSymmProd(spec; T = Float64)
    corr = corr1.dag   
@@ -88,7 +88,7 @@ This function return correct Si for pooling operation.
 """
 function onehot!(Si, i, Σ)
    Si .= 0
-   for k = 1:length(Σ)
+   for k in eachinedx(Σ)
       Si[k, spin2num(Σ[k])] = 1
    end
    # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
