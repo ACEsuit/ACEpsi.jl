@@ -37,9 +37,10 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
                      trans = identity, 
                      sd_admissible = bb -> (true),
                      envelope = envelopefcn(x -> sqrt(1 + x^2), rand()))
-   # 1-particle spec 
-   @assert length(polys) >= totdeg
    
+   @assert length(polys) >= totdeg # otherwise the spec is incorrect for basis of order = 1
+
+   # 1-particle spec  
    spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:totdeg]  # (1, 2, 3) = (∅, ↑, ↓);
    spec1p = sort(spec1p, by = b -> b[1]) # sorting to prevent gensparse being confused
    
@@ -88,7 +89,7 @@ This function return correct Si for pooling operation.
 """
 function onehot!(Si, i, Σ)
    Si .= 0
-   for k in eachinedx(Σ)
+   for k in eachindex(Σ)
       Si[k, spin2num(Σ[k])] = 1
    end
    # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
