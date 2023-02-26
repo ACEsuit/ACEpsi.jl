@@ -3,7 +3,6 @@ using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr
-using ACE
 import ForwardDiff
 import Base.Experimental: @aliasscope
 
