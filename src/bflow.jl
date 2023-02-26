@@ -1,4 +1,3 @@
-
 using ACEcore, Polynomials4ML
 using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
@@ -344,7 +343,7 @@ function laplacian(wf::BFwf, X, Σ)
    return Δψ
 end 
 
-function _assemble_A_∇A_ΔA(wf, X, Σ)
+function _assemble_A_∇A_ΔA(wf::BFwf, X, Σ)
    TX = eltype(X)
    lenA = length(wf.pooling)
    nX = length(X) 
@@ -382,7 +381,7 @@ function _assemble_A_∇A_ΔA(wf, X, Σ)
    return A, ∇A, ΔA 
 end
 
-function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
+function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf::BFwf)
    nX = size(A, 1)
    AA = zeros(nX, length(wf.corr))
    ∇AA = wf.∇AA  
@@ -415,7 +414,7 @@ function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
 end
 
 
-function _laplacian_inner(AA, ∇AA, ΔAA, wf, Σ)
+function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwf, Σ)
 
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)
    # where Φᵢ = ∂_{xi} Φ
@@ -537,4 +536,14 @@ function set_params!(U::BFwf, para)
    U.W = para[1]
    set_params!(U.envelope, para[2])
    return U
+end
+
+function Scaling(U::BFwf, γ::Float64)
+   c = get_params(U)
+   uu = []
+   _spec = U.spec
+   for i = 1:length(_spec)
+      push!(u, sum(_spec[i] .^ 2))
+   end
+   return (uu = γ * uu .* c[1], d = zeros(length(c[2])))
 end
