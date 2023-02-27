@@ -3,7 +3,10 @@ using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
+using Distributions: Uniform
 import ForwardDiff
+using SparseArrays: SparseVector, sparse, spzeros
+
 
 mutable struct BFwf{T, TT, TPOLY, TE}
    trans::TT
@@ -36,8 +39,13 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
                      ν = 3, T = Float64, 
                      trans = identity, 
                      sd_admissible = bb -> (true),
-                     envelope = envelopefcn(x -> sqrt(1 + x^2), rand()))
-   # 1-particle spec 
+                     envelope = envelopefcn(x -> sqrt(1 + x^2), rand()),
+                     purify = false)
+   # # 1-particle spec
+   # if sd_admissible != (bb -> (true)) && purify == true
+   #    @info("adding extra admissible requirement, take care of purification")
+   # end
+
    K = length(polys)
    spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
    spec1p = sort(spec1p, by = b -> b[1]) # sorting to prevent gensparse being confused
@@ -65,8 +73,16 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q) 
+   
+   C = zeros(length(spec), length(spec))
 
-   return BFwf(trans, polys, pooling, corr, W, envelope, spec,
+   if purify == false
+      C = Matrix(1.0I, length(spec), length(spec))
+   else
+      C = Matrix(generalImpure2PureMap(spec, spec1p, polys, ν))
+   end
+
+   return BFwf(trans, polys, pooling, corr, W, envelope, spec, C,
                   zeros(T, Nel, length(polys)), 
                   zeros(T, Nel, length(polys)), 
                   zeros(T, Nel, length(polys)), 
@@ -554,16 +570,52 @@ end
 function _getκσIdx(spec1p, κ, σ)
    for (i, bb) in enumerate(spec1p)
       if (κ, σ) == bb
-         return I
+         return i
       end
    end
    @error("such (κ, σ) not found in spec1p")
 end
 
-function C_kappa_prod_coeffs(wf::BFwf)
+function spec2col(NNi, NN)
+   for k in eachindex(NN)
+       if NN[k] == NNi
+           return k
+       end
+   end
+   # @error("such NNi not found in NN")
+   return nothing
+end
+
+function P_kappa_prod_coeffs(poly, NN, tol = 1e-10)
+   L = 5000
+#  sample_points = chev_nodes(L)
+   NN23b = NN[length.(NN) .<= 2]
+   sample_points = rand(Uniform(-1, 1), L)
+
+   RR = poly(sample_points)
+   
+   qrF = qr(RR)
+   
+   Pnn = Dict{Vector{Int64}, SparseVector{Float64, Int64}}() # key: the index of correpsonding tuple in the NN list; value: SparseVector
+   
+   # solve RR * x - Rnn = 0 for each basis
+   for nn in NN23b
+      Rnn = RR[:, nn[1]]
+      for t = 2:length(nn)
+         Rnn = Rnn .* RR[:, nn[t]] # do product on the basis according to the tuple nn, would be the ground truth target in the least square problem
+      end
+      p_nn = map(p -> (abs(p) < tol ? 0.0 : p), qrF \ Rnn) # for each element p in qrF\Rnn, if p is < tol, set it to 0 for converting to sparse matrix
+      @assert norm(RR * p_nn - Rnn, Inf) < tol
+      Pnn[nn] = sparse(p_nn)
+   end
+   return Pnn
+end
+
+function C_kappa_prod_coeffs(spec, spec1p, poly)
    # construct Pκ coefficients according to maximum degree of spec1p
-   spec = wf.spec
-   spec1p = wf.pooling.spec
+   #spec = wf.spec
+   #spec1p = wf.pooling.spec
+   #poly = wf.polys
 
    poly_max = maximum([bb[1] for bb in spec1p])
    spec1p_poly = [i for i = 1:poly_max]
@@ -581,17 +633,16 @@ function C_kappa_prod_coeffs(wf::BFwf)
    Cnn_all = Dict{Vector{Int64}, SparseVector{Float64, Int64}}()
    for nσ in spec2b
       # get index in terms of spec1p
-      idx1_1p, idx2_1p = spec1p[nlm[1]], spec1p[nlm[2]]
+      idx1_1p, idx2_1p = spec1p[nσ[1]], spec1p[nσ[2]]
       # get the coefficient Pκ from Pnn_all
-      Pκk1k2 = Pnn_all[[idx1_1p[1], indx2_1p[1]]] 
+      Pκk1k2 = Pnn_all[[idx1_1p[1], idx2_1p[1]]] 
       # expand as new coefficients, C_nn should be a vector of length = number of spec1p
       C_nn = zeros(length(spec1p))
       
-      
       # C_nn is non-zero only if σ1 == σ2
       if idx1_1p[2] == idx2_1p[2]
-         for κ = 1:length(Pκk1k2)
-            C_nn[_getκσIdx(spec1p, κ, σ)] = Pκk1k2.nzval[κ]
+         for κ = 1:length(Pκk1k2.nzind)
+            C_nn[_getκσIdx(spec1p, κ, idx1_1p[2])] = Pκk1k2.nzval[κ]
          end
       end
       Cnn_all[nσ] = sparse(C_nn)
@@ -601,12 +652,9 @@ function C_kappa_prod_coeffs(wf::BFwf)
 end
 
 
-function generalImpure2PureMap(wf::BFwf, Remove)
+function generalImpure2PureMap(spec, spec1p, poly, Remove)
 
-   Pnn_all = C_kappa_prod_coeffs(wf)
-   spec = wf.spec
-   spec1p = wf.pooling.spec
-
+   Pnn_all = C_kappa_prod_coeffs(spec, spec1p, poly)
    S = length(spec)
    C = spzeros(S, S) # transformation matrix
    max_ord = maximum(length.(spec))
