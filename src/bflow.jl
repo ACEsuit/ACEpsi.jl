@@ -497,7 +497,7 @@ function gradp_laplacian(wf::BFwf, X, Σ)
  
    # Δψ += dot(Φ⁻ᵀ, ΔΦ) ... this leads to the next two terms 
    ∂ΔΦ = Φ⁻ᵀ
-   ∇Δψ = transpose(ΔAA) * ∂ΔΦ
+   ∇Δψ = transpose(ΔAA * (wf.C)') * ∂ΔΦ
    
    ∂Φ = - Φ⁻ᵀ * transpose(ΔΦ) * Φ⁻ᵀ
    # ∇Δψ += transpose(AA) * ∂Φ
@@ -524,9 +524,9 @@ function gradp_laplacian(wf::BFwf, X, Σ)
       # ∇Δψ += transpose(AA) * ∂Φ
    end
 
-   ∇Δψ += transpose(AA) * ∂Φ
+   ∇Δψ += transpose(AA * (wf.C)') * ∂Φ
 
-   ∇Δψ += reshape( transpose(reshape(∇AA, nX*nX, :)) * reshape(∂∇Φ_all, nX*nX, nX), 
+   ∇Δψ += reshape( transpose(reshape(∇AA, nX*nX, :) * (wf.C)') * reshape(∂∇Φ_all, nX*nX, nX), 
                   size(∇Δψ) )
 
 
