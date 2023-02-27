@@ -13,6 +13,7 @@ mutable struct BFwf{T, TT, TPOLY, TE}
    W::Matrix{T}
    envelope::TE
    spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
+   C::Matrix{T} # purification operator
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -44,7 +45,8 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    pooling = PooledSparseProduct(spec1p)
    # generate the many-particle spec 
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+   # default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) < totdeg)
    
    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
                         minvv = fill(0, ν), 
@@ -140,7 +142,7 @@ function displayspec(wf::BFwf)
 end
 
 
-function assemble_A(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
+function assemble_A(wf::BFwf, X::AbstractVector, Σ)
       
    nX = length(X)
    # position embedding 
@@ -157,7 +159,7 @@ function assemble_A(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
       A[i, :] .= Ai
    end
-   return A 
+   return A
 end
 
 function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
@@ -546,4 +548,116 @@ function Scaling(U::BFwf, γ::Float64)
       push!(u, sum(_spec[i] .^ 2))
    end
    return (uu = γ * uu .* c[1], d = zeros(length(c[2])))
+end
+
+# ----------------- purification
+function _getκσIdx(spec1p, κ, σ)
+   for (i, bb) in enumerate(spec1p)
+      if (κ, σ) == bb
+         return I
+      end
+   end
+   @error("such (κ, σ) not found in spec1p")
+end
+
+function C_kappa_prod_coeffs(wf::BFwf)
+   # construct Pκ coefficients according to maximum degree of spec1p
+   spec = wf.spec
+   spec1p = wf.pooling.spec
+
+   poly_max = maximum([bb[1] for bb in spec1p])
+   spec1p_poly = [i for i = 1:poly_max]
+   tup2b = vv -> [ spec1p_poly[v] for v in vv[vv .> 0]]
+   admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) < poly_max)
+
+   # only product basis up to 2b is needed, use to get Pnn_all
+   NN2b = gensparse(; NU = 2, tup2b = tup2b, admissible = admissible, minvv = fill(0, 2), maxvv = fill(length(spec1p_poly), 2), ordered = true)
+   NN2b = [ vv[vv .> 0] for vv in NN2b if !(isempty(vv[vv .> 0]))]
+
+   Pnn_all = P_kappa_prod_coeffs(poly, NN2b)
+
+   # get coefficient for ϕ according to spec2b
+   spec2b = spec[length.(spec) .== 2]
+   Cnn_all = Dict{Vector{Int64}, SparseVector{Float64, Int64}}()
+   for nσ in spec2b
+      # get index in terms of spec1p
+      idx1_1p, idx2_1p = spec1p[nlm[1]], spec1p[nlm[2]]
+      # get the coefficient Pκ from Pnn_all
+      Pκk1k2 = Pnn_all[[idx1_1p[1], indx2_1p[1]]] 
+      # expand as new coefficients, C_nn should be a vector of length = number of spec1p
+      C_nn = zeros(length(spec1p))
+      
+      
+      # C_nn is non-zero only if σ1 == σ2
+      if idx1_1p[2] == idx2_1p[2]
+         for κ = 1:length(Pκk1k2)
+            C_nn[_getκσIdx(spec1p, κ, σ)] = Pκk1k2.nzval[κ]
+         end
+      end
+      Cnn_all[nσ] = sparse(C_nn)
+      
+   end
+   return Cnn_all
+end
+
+
+function generalImpure2PureMap(wf::BFwf, Remove)
+
+   Pnn_all = C_kappa_prod_coeffs(wf)
+   spec = wf.spec
+   spec1p = wf.pooling.spec
+
+   S = length(spec)
+   C = spzeros(S, S) # transformation matrix
+   max_ord = maximum(length.(spec))
+   spec_len_list = zeros(Int64, max_ord) # a list for storing number of basis of ord <= i, where i is the index of the array
+   for t in spec
+      spec_len_list[length(t)] += 1
+   end
+   
+
+   # corresponding to 2 and 3 body basis
+   for i = 1:sum(spec_len_list[1:2])
+      C[i, i] = 1.0
+   end
+
+
+   # Base case, adjust coefficient for 3 body (ν = 2)
+   for i = spec_len_list[1] + 1:sum(spec_len_list[1:2])
+      pnn = Pnn_all[spec[i]]
+      for k = 1:length(pnn.nzind)
+         C[i, pnn.nzind[k]] -= pnn.nzval[k]
+      end
+   end
+
+
+   # for each order
+   for ν = 3:Remove
+      # for each of basis of order ν
+      for i = sum(spec_len_list[1:ν-1]) + 1:sum(spec_len_list[1:ν])
+         # adjusting coefficent for the term \matcal{A}_{k1...kN} * A_{N+1}
+         # first we get the coefficient corresponding to purified basis of order ν - 1
+         last_ip2pmap = C[spec2col(spec[i][1:end - 1], spec), :]
+         for k = 1:length(last_ip2pmap.nzind) # for each of the coefficient in last_ip2pmap
+            # first we get the corresponing specification correpsonding to (spec of last_ip2pmap[i], spec[end])
+            target_spec = [t for t in spec[last_ip2pmap.nzind[k]]]
+            push!(target_spec, spec[i][end])
+            C[i, spec2col(sort(target_spec), spec)] += last_ip2pmap.nzval[k]
+         end
+
+         # adjusting coefficent for terms Σ^{ν -1}_{β = 1} P^{κ} \mathcal{A}
+         P_κ_list  = [Pnn_all[[spec[i][j], spec[i][ν]]] for j = 1:ν - 1]
+         for (idx, P_κ) in enumerate(P_κ_list)
+            for k = 1:length(P_κ.nzind) # for each kappa, P_κ.nzind[k] == κ in the sum
+               # first we get the coefficient corresponding to the \mathcal{A}
+               pureA_spec = [spec[i][r] for r = 1:ν-1 if r != idx] # r!=idx since κ runs through the 'idx' the coordinate
+               push!(pureA_spec, P_κ.nzind[k]) # add κ into the sum
+               last_ip2pmap = C[spec2col(sort(pureA_spec), spec), :]
+               C[i, :] -= P_κ.nzval[k] .* last_ip2pmap
+            end
+         end
+      end
+   end
+
+   return C
 end
