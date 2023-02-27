@@ -5,7 +5,7 @@ using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
 using Distributions: Uniform
 import ForwardDiff
-using SparseArrays: SparseVector, sparse, spzeros
+using SparseArrays: SparseVector, sparse, spzeros, SparseMatrixCSC
 
 
 mutable struct BFwf{T, TT, TPOLY, TE}
@@ -16,7 +16,7 @@ mutable struct BFwf{T, TT, TPOLY, TE}
    W::Matrix{T}
    envelope::TE
    spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
-   C::Matrix{T} # purification operator
+   C::SparseMatrixCSC{T} # purification operator
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -77,9 +77,9 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    C = zeros(length(spec), length(spec))
 
    if purify == false
-      C = Matrix(1.0I, length(spec), length(spec))
+      C = sparse(Matrix(1.0I, length(spec), length(spec)))
    else
-      C = Matrix(generalImpure2PureMap(spec, spec1p, polys, ν))
+      C = generalImpure2PureMap(spec, spec1p, polys, ν)
    end
 
    return BFwf(trans, polys, pooling, corr, W, envelope, spec, C,
@@ -183,16 +183,10 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
    
-   # the only basis to be purified are those with same spin
-   # scan through all corr basis, if they comes from same spin, remove self interation by using basis 
-   # from same spin
-   # first we have to construct coefficent for basis coming from same spin, that is in other words the coefficent
-   # matrix of the original polynomial basis, this will be pass from the argument Pnn
-   # === purification goes here === #
-   
-   # === #
+   # purify the product basis
+   # AA = AA * (wf.C)'
    Φ = wf.Φ
-   mul!(Φ, parent(AA), wf.W) # nX x nX
+   mul!(Φ, parent(AA), (wf.C)' * wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
 
@@ -206,8 +200,11 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   
    Φ = wf.Φ 
-   mul!(Φ, parent(AA), wf.W)
+
+   mul!(Φ, parent(AA) * (wf.C)', wf.W)
+   # mul!(Φ, parent(AA), (wf.C)' * wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
 
@@ -219,7 +216,9 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    # ∂Wij = ∑_ab ∂Φab * ∂_Wij( ∑_k AA_ak W_kb )
    #      = ∑_ab ∂Φab * ∑_k δ_ik δ_bj  AA_ak
    #      = ∑_a ∂Φaj AA_ai = ∂Φaj' * AA_ai
-   ∇p = transpose(parent(AA)) * ∂Φ
+   ∇p = transpose(parent(AA) * (wf.C)') * ∂Φ
+   
+   # ∇p = wf.C * (transpose(parent(AA)) * ∂Φ)
 
    release!(AA)
    ∇p = ∇p * 2
@@ -280,9 +279,12 @@ function gradient(wf::BFwf, X, Σ)
    
    # n-correlations 
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   AA = AA * (wf.C)'
 
    # generalized orbitals 
    Φ = wf.Φ
+   @assert (parent(AA) == AA)
+
    mul!(Φ, parent(AA), wf.W)
 
    # the resulting matrix should contains two block each comes from each spin
@@ -299,12 +301,12 @@ function gradient(wf::BFwf, X, Σ)
    ∂Φ = transpose(pinv(Φ))
 
    # ∂AA = ∂ψ/∂AA = ∂ψ/∂Φ * ∂Φ/∂AA = ∂Φ * wf.W'
-   ∂AA = wf.∂AA 
-   mul!(∂AA, ∂Φ, transpose(wf.W))
+   ∂AA = wf.∂AA
+   mul!(∂AA, ∂Φ, transpose(transpose(wf.C) * wf.W))
 
    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
    ∂A = wf.∂A   # zeros(size(A))
-   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA))
+   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA) * inv(Matrix(wf.C)'))
    release!(AA)
 
    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 
@@ -441,12 +443,12 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwf, Σ)
    
    # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, parent(AA) * (wf.C)', wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    Φ⁻ᵀ = transpose(pinv(Φ))
    
    # first contribution to the laplacian
-   ΔΦ = ΔAA * wf.W
+   ΔΦ = ΔAA * (wf.C)' * wf.W
    ΔΦ = ΔΦ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
    Δψ = dot(Φ⁻ᵀ, ΔΦ)
@@ -455,7 +457,7 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwf, Σ)
    # TODO: we can rework this into a single BLAS3 call
    # which will also give us a single back-propagation 
    # ∇Φi = zeros(nX, nX)
-   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.W, nX, nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * (wf.C)' * wf.W, nX, nX, nX)
    Φ⁻¹∇Φi = zeros(nX, nX)
    for i = 1:nX 
       ∇Φi = ∇Φ_all[i, :, :] .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
@@ -483,14 +485,14 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    
    # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, parent(AA) * (wf.C)', wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
    Φ⁻¹ = pinv(Φ)
    Φ⁻ᵀ = transpose(Φ⁻¹)
 
    # first contribution to the laplacian
-   ΔΦ = ΔAA * wf.W
+   ΔΦ = ΔAA * (wf.C)' * wf.W
    ΔΦ = ΔΦ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
  
    # Δψ += dot(Φ⁻ᵀ, ΔΦ) ... this leads to the next two terms 
@@ -506,7 +508,7 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    # which will also give us a single back-propagation 
    # ∇Φi = zeros(nX, nX)
    # Φ⁻¹∇Φi = zeros(nX, nX)
-   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.W, nX, nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * (wf.C)' * wf.W, nX, nX, nX)
    ∂∇Φ_all = zeros(nX, nX, nX)
 
    for i = 1:nX 

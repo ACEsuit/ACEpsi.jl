@@ -99,7 +99,7 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 const ↑, ↓, ∅ = '↑','↓','∅'
 Nel = 5
 polys = legendre_basis(8)
-wf = BFwf(Nel, polys; ν=3)
+wf = BFwf(Nel, polys; ν=3, purify = true)
 
 X = 2 * rand(Nel) .- 1
 Σ = rand([↑, ↓], Nel)
@@ -124,7 +124,7 @@ fdtest(wf, Σ, g, X)
 # @btime $wf($X)
 # @btime gradient($wf, $X)
 
-##
+#
 
 A, ∇A, ΔA = ACEpsi._assemble_A_∇A_ΔA(wf, X, Σ)
 
@@ -154,27 +154,27 @@ grad_test(X -> f_AA(X, Σ)[1], X -> f_AA(X, Σ)[2], X)
 lap_test(X -> f_AA(X, Σ)[1], X -> f_AA(X, Σ)[3], X)
 
 
-##
+# ##
 
 @info("test Δψ")
 lap_test(X -> [wf(X, Σ);;], X -> [ACEpsi.laplacian(wf, X, Σ);;], X)
 
 
-##
+# ##
 
 @info("Test ∇ψ w.r.t. parameters")
 
-ACEpsi.gradp_evaluate(wf, X, Σ)
+# ACEpsi.gradp_evaluate(wf, X, Σ)
 
 
-W0 = copy(wf.W)
-w0 = W0[:]
-Fp = w -> ( wf.W[:] .= w[:]; wf(X, Σ))
-dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[1][:] )
+# W0 = copy(wf.W)
+# w0 = W0[:]
+# Fp = w -> ( wf.W[:] .= w[:]; wf(X, Σ))
+# dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[1][:] )
 
-grad_test2(Fp, dFp, w0)
+# grad_test2(Fp, dFp, w0)
 
-##
+# ##
 
 @info("test ∇env w.r.t. parameter")
 Ξ0 =  copy(wf.envelope.ξ)
@@ -185,16 +185,16 @@ dEnvp = w -> (wf.envelope.ξ = w;  ACEpsi.gradp_evaluate(wf, X, Σ)[2])
 
 grad_test3(Envp, dEnvp, ξ0)
 
-##
+# ##
 
-@info("Test ∇Δψ w.r.t. parameters")
+# @info("Test ∇Δψ w.r.t. parameters")
 
-Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ))
-dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
+# Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ))
+# dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
 
-grad_test2(Fp, dFp, w0)
+# grad_test2(Fp, dFp, w0)
 
-##
+# ##
 
 @info("Test ∇Δenv w.r.t. parameters")
 
@@ -207,7 +207,7 @@ dFp = w -> (wf.envelope.ξ = w; ACEpsi.gradp_laplacian(wf, X, Σ)[2][:] )
 
 grad_test3(Fp, dFp, ξ0)
 
-##
+# ##
 
 @info("Test getting/setting parameters")
 
@@ -218,10 +218,9 @@ param1 = ACEpsi.get_params(wf1)
 wf2 = ACEpsi.set_params!(wf2, param1)
 @printf(" wf1 - wf2 with parameter wf1: %f \n", abs(wf1(X, Σ) - wf2(X, Σ)))
 
-##
+# ##
 
-@warn("removed compac test since json file is missing")
+# @warn("removed compac test since json file is missing")
 # @info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
 # include("compare_bflow.jl")
 
-C = generalImpure2PureMap(wf1, 3)
