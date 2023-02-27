@@ -1,6 +1,6 @@
 
 using Polynomials4ML, ACEcore, ACEbase, Printf, ACEpsi 
-using ACEpsi: BFwf, gradient, evaluate, laplacian
+using ACEpsi: BFwf, gradient, evaluate, laplacian, envelopefcn
 using LinearAlgebra
 #using Random
 #Random.seed!(123)
@@ -167,12 +167,12 @@ lap_test(X -> [wf(X, Σ);;], X -> [ACEpsi.laplacian(wf, X, Σ);;], X)
 # ACEpsi.gradp_evaluate(wf, X, Σ)
 
 
-# W0 = copy(wf.W)
-# w0 = W0[:]
-# Fp = w -> ( wf.W[:] .= w[:]; wf(X, Σ))
-# dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[1][:] )
+W0 = copy(wf.W)
+w0 = W0[:]
+Fp = w -> ( wf.W[:] .= w[:]; wf(X, Σ))
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_evaluate(wf, X, Σ)[1][:] )
 
-# grad_test2(Fp, dFp, w0)
+grad_test2(Fp, dFp, w0)
 
 # ##
 
@@ -187,12 +187,12 @@ grad_test3(Envp, dEnvp, ξ0)
 
 # ##
 
-# @info("Test ∇Δψ w.r.t. parameters")
+@info("Test ∇Δψ w.r.t. parameters")
 
-# Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ))
-# dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
+Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ))
+dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
 
-# grad_test2(Fp, dFp, w0)
+grad_test2(Fp, dFp, w0)
 
 # ##
 
