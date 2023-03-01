@@ -38,17 +38,18 @@ mutable struct BFwfs{T, TT, TPOLY, TE}
    Tb::Matrix{T}
 end
 
-(Φ::BFwf)(args...) = evaluate(Φ, args...)
+(Φ::BFwfs)(args...) = evaluate(Φ, args...)
 
 const ↑ = '↑'
 const ↓ = '↓'
 const Ø = 'Ø'
 
-function BFwf(Nel::Integer, polys, envelope::Function; totdeg = length(polys),
+function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T, envelope::Function; totdeg = length(polys),
                      ν = 3, T = Float64,
                      pos = [0.0],tpos = [0,0],
                      trans = identity,
                      sd_admissible = bb -> (true))
+   
    @assert length(trans) == length(tpos)
    # 1-particle spec
    K = length(polys)
@@ -102,65 +103,7 @@ function BFwf(Nel::Integer, polys, envelope::Function; totdeg = length(polys),
 end
 
 
-"""
-This function return correct Si for pooling operation.
-"""
-function onehot!(Si, i, Σ)
-   Si .= 0
-   for k = 1:length(Σ)
-      Si[k, spin2num(Σ[k])] = 1
-   end
-   # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
-   Si[i, 1] = 1
-   Si[i, 2] = 0
-   Si[i, 3] = 0
-end
-
-"""
-This function convert spin to corresponding integer value used in spec
-"""
-function spin2num(σ)
-   if σ == '↑'
-      return 2
-   elseif σ == '↓'
-      return 3
-   elseif σ == '∅'
-      return 1
-   end
-   error("illegal spin char for spin2num")
-end
-
-"""
-This function convert num to corresponding spin string.
-"""
-function num2spin(σ)
-   if σ == 2
-      return '↑'
-   elseif σ == 3
-      return '↓'
-   elseif σ == 1
-      return '∅'
-   end
-   error("illegal integer value for num2spin")
-end
-
-
-"""
-This function returns a nice version of spec.
-"""
-function displayspec(wf::BFwfs)
-   K = length(wf.polys)
-   spec1p = [ (k, σ, m) for σ in [1, 2, 3] for k in 1:K for m = 1:length(wf.trans)]  # (1, 2, 3) = (∅, ↑, ↓);
-   spec1p = sort(spec1p, by = b -> b[1])
-   _getnicespec = l -> (l[1], num2spin(l[2]),l[3])
-   nicespec = []
-   for k = 1:length(wf.spec)
-      push!(nicespec, _getnicespec.([spec1p[wf.spec[k][j]] for j = 1:length(wf.spec[k])]))
-   end
-   return nicespec
-end
-
-function assemble_A(wf::BFwfs, X::AbstractVector, Σ, Pnn=nothing)
+function assemble_A(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
    # position embedding
    P = wf.P # P = [P(trans[1]); P(trans[2]); ...; P(trans[M])]
@@ -184,6 +127,7 @@ function assemble_A(wf::BFwfs, X::AbstractVector, Σ, Pnn=nothing)
    return A
 end
 
+
 function evalpool!(A, basis::PooledSparseProduct{3}, BB, NP)
    nX = size(BB[1], 1)
    @assert all(B->size(B, 1) == nX, BB)
@@ -203,6 +147,7 @@ function evalpool!(A, basis::PooledSparseProduct{3}, BB, NP)
    return nothing
 end
 
+
 @inline function BB_prod(ϕ::NTuple{3}, BB, j)
    reduce(Base.FastMath.mul_fast, ntuple(Val(3)) do i
       @inline
@@ -210,7 +155,8 @@ end
    end)
 end
 
-function evaluate(wf::BFwfs, X::AbstractVector, Σ, Pnn=nothing)
+
+function evaluate(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)
@@ -222,6 +168,7 @@ function evaluate(wf::BFwfs, X::AbstractVector, Σ, Pnn=nothing)
    return 2 * logabsdet(Φ)[1]
 end
 
+
 function envelope(pos, Ta, Tb, f, X::Float64, i::Int)
    M = length(pos)
    a = zero(eltype(X))
@@ -231,17 +178,20 @@ function envelope(pos, Ta, Tb, f, X::Float64, i::Int)
    return a
 end
 
+
 function _BB(pos, Ta, Tb, f, X)
    nX = length(X)
    return [envelope(pos, Ta, Tb, f, X[j], i) for j = 1:nX, i = 1:nX]
 end
+
 
 function Φ!(_Φ, pos, Ta, Tb, f, X)
    Φ = _Φ .* _BB(pos, Ta, Tb, f, X)
    return logabsdet(Φ)[1]
 end
 
-function gradp_evaluate(wf::BFwfs, X::AbstractVector, Σ)
+
+function gradp_evaluate(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    #  =================== evaluate Φ=============================  #
    nX = length(X) # 电子数
    BB = _BB(wf.pos, wf.Ta, wf.Tb, wf.envelope, X)
@@ -277,12 +227,7 @@ end
 
 # ----------------------- gradient
 
-struct ZeroNoEffect end
-Base.size(::ZeroNoEffect, ::Integer) = Inf
-Base.setindex!(A::ZeroNoEffect, args...) = nothing
-Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
-
-function gradient(wf::BFwfs, X, Σ)
+function gradient(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
    # ------ forward pass  -----
 
@@ -441,7 +386,7 @@ end
 
 # ------------------ Laplacian implementation
 
-function laplacian(wf::BFwfs, X, Σ)
+function laplacian(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X, Σ)
    AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
 
@@ -450,7 +395,7 @@ function laplacian(wf::BFwfs, X, Σ)
    return Δψ
 end
 
-function _assemble_A_∇A_ΔA(wf::BFwfs, X, Σ)
+function _assemble_A_∇A_ΔA(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    TX = eltype(X)
    lenA = length(wf.pooling)
    nX = length(X)
@@ -554,7 +499,7 @@ function Δenv(pos, Ta, Tb, f, X::Float64, i::Int)
    return a
 end
 
-function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwfs, X, Σ)
+function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
 
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)
    # where Φᵢ = ∂_{xi} Φ
@@ -612,4 +557,14 @@ function set_params!(U::BFwfs, para::Tuple{Matrix{Float64}, Matrix{Float64}, Mat
    U.Ta = para[2]
    U.Tb = para[3]
    return U
+end
+
+function Scaling(U::BFwfs, γ::Float64)
+   c = get_params(U)
+   uu = []
+   _spec = U.spec
+   for i = 1:length(_spec)
+      push!(u, sum(_spec[i] .^ 2))
+   end
+   return (uu = γ * uu .* c[1], d = zeros(length(c[2])))
 end

@@ -31,7 +31,7 @@ end
 
 (Φ::BFwf)(args...) = evaluate(Φ, args...)
 
-function BFwf(Nel::Integer, polys; totdeg = length(polys), 
+function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T; totdeg = length(polys), 
                      ν = 3, T = Float64, 
                      trans = identity, 
                      sd_admissible = bb -> (true),
@@ -84,7 +84,7 @@ end
 """
 This function return correct Si for pooling operation.
 """
-function onehot!(Si, i, Σ)
+function onehot!(Si::Matrix, i::Integer, Σ::Vector{Char})
    Si .= 0
    for k = 1:length(Σ)
       Si[k, spin2num(Σ[k])] = 1
@@ -98,7 +98,7 @@ end
 """
 This function convert spin to corresponding integer value used in spec
 """
-function spin2num(σ)
+function spin2num(σ::Char)
    if σ == '↑'
       return 2
    elseif σ == '↓'
@@ -112,7 +112,7 @@ end
 """
 This function convert num to corresponding spin string.
 """
-function num2spin(σ)
+function num2spin(σ::Integer)
    if σ == 2
       return '↑'
    elseif σ == 3
@@ -140,7 +140,7 @@ function displayspec(wf::BFwf)
 end
 
 
-function assemble_A(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
+function assemble_A(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
       
    nX = length(X)
    # position embedding 
@@ -160,19 +160,10 @@ function assemble_A(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    return A 
 end
 
-function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
+function evaluate(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
-   
-   # the only basis to be purified are those with same spin
-   # scan through all corr basis, if they comes from same spin, remove self interation by using basis 
-   # from same spin
-   # first we have to construct coefficent for basis coming from same spin, that is in other words the coefficent
-   # matrix of the original polynomial basis, this will be pass from the argument Pnn
-   # === purification goes here === #
-   
-   # === #
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
@@ -183,7 +174,7 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
 end
 
 
-function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
+function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
    
    A = assemble_A(wf, X, Σ)
@@ -226,7 +217,7 @@ Base.setindex!(A::ZeroNoEffect, args...) = nothing
 Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
 
 
-function gradient(wf::BFwf, X, Σ)
+function gradient(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
 
    # ------ forward pass  ----- 
@@ -325,7 +316,7 @@ end
 
 # ------------------ Laplacian implementation 
 
-function laplacian(wf::BFwf, X, Σ)
+function laplacian(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
 
    A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X, Σ)
    AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
@@ -343,7 +334,7 @@ function laplacian(wf::BFwf, X, Σ)
    return Δψ
 end 
 
-function _assemble_A_∇A_ΔA(wf::BFwf, X, Σ)
+function _assemble_A_∇A_ΔA(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
    TX = eltype(X)
    lenA = length(wf.pooling)
    nX = length(X) 
@@ -452,7 +443,7 @@ end
 # ------------------ gradp of Laplacian  
 
 
-function gradp_laplacian(wf::BFwf, X, Σ)
+function gradp_laplacian(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
 
 
    # ---- gradp of Laplacian of Ψ ----
@@ -532,7 +523,7 @@ function get_params(U::BFwf)
    return (U.W, U.envelope.ξ)
 end
 
-function set_params!(U::BFwf, para)
+function set_params!(U::BFwf, para::Tuple{Matrix{Float64}, Any})
    U.W = para[1]
    set_params!(U.envelope, para[2])
    return U
