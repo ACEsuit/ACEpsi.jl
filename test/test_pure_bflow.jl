@@ -164,7 +164,7 @@ lap_test(X -> [wf(X, Σ);;], X -> [ACEpsi.laplacian(wf, X, Σ);;], X)
 
 @info("Test ∇ψ w.r.t. parameters")
 
-# ACEpsi.gradp_evaluate(wf, X, Σ)
+ACEpsi.gradp_evaluate(wf, X, Σ)
 
 
 W0 = copy(wf.W)

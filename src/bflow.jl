@@ -279,13 +279,12 @@ function gradient(wf::BFwf, X, Σ)
    
    # n-correlations 
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
-   AA = AA * (wf.C)'
+   AA_p = AA * transpose(wf.C)
 
    # generalized orbitals 
    Φ = wf.Φ
-   @assert (parent(AA) == AA)
 
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, parent(AA_p), wf.W)
 
    # the resulting matrix should contains two block each comes from each spin
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
@@ -306,7 +305,7 @@ function gradient(wf::BFwf, X, Σ)
 
    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
    ∂A = wf.∂A   # zeros(size(A))
-   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA) * inv(Matrix(wf.C)'))
+   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA))
    release!(AA)
 
    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 

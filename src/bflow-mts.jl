@@ -38,7 +38,7 @@ mutable struct BFwfs{T, TT, TPOLY, TE}
    Tb::Matrix{T}
 end
 
-(Φ::BFwf)(args...) = evaluate(Φ, args...)
+(Φ::BFwfs)(args...) = evaluate(Φ, args...)
 
 const ↑ = '↑'
 const ↓ = '↓'
@@ -101,64 +101,6 @@ function BFwf(Nel::Integer, polys, envelope::Function; totdeg = length(polys),
                   )
 end
 
-
-"""
-This function return correct Si for pooling operation.
-"""
-function onehot!(Si, i, Σ)
-   Si .= 0
-   for k = 1:length(Σ)
-      Si[k, spin2num(Σ[k])] = 1
-   end
-   # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
-   Si[i, 1] = 1
-   Si[i, 2] = 0
-   Si[i, 3] = 0
-end
-
-"""
-This function convert spin to corresponding integer value used in spec
-"""
-function spin2num(σ)
-   if σ == '↑'
-      return 2
-   elseif σ == '↓'
-      return 3
-   elseif σ == '∅'
-      return 1
-   end
-   error("illegal spin char for spin2num")
-end
-
-"""
-This function convert num to corresponding spin string.
-"""
-function num2spin(σ)
-   if σ == 2
-      return '↑'
-   elseif σ == 3
-      return '↓'
-   elseif σ == 1
-      return '∅'
-   end
-   error("illegal integer value for num2spin")
-end
-
-
-"""
-This function returns a nice version of spec.
-"""
-function displayspec(wf::BFwfs)
-   K = length(wf.polys)
-   spec1p = [ (k, σ, m) for σ in [1, 2, 3] for k in 1:K for m = 1:length(wf.trans)]  # (1, 2, 3) = (∅, ↑, ↓);
-   spec1p = sort(spec1p, by = b -> b[1])
-   _getnicespec = l -> (l[1], num2spin(l[2]),l[3])
-   nicespec = []
-   for k = 1:length(wf.spec)
-      push!(nicespec, _getnicespec.([spec1p[wf.spec[k][j]] for j = 1:length(wf.spec[k])]))
-   end
-   return nicespec
-end
 
 function assemble_A(wf::BFwfs, X::AbstractVector, Σ, Pnn=nothing)
    nX = length(X)
@@ -243,7 +185,7 @@ end
 
 function gradp_evaluate(wf::BFwfs, X::AbstractVector, Σ)
    #  =================== evaluate Φ=============================  #
-   nX = length(X) # 电子数
+   nX = length(X) # number of electrons
    BB = _BB(wf.pos, wf.Ta, wf.Tb, wf.envelope, X)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
@@ -277,10 +219,10 @@ end
 
 # ----------------------- gradient
 
-struct ZeroNoEffect end
-Base.size(::ZeroNoEffect, ::Integer) = Inf
-Base.setindex!(A::ZeroNoEffect, args...) = nothing
-Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
+# struct ZeroNoEffect end
+# Base.size(::ZeroNoEffect, ::Integer) = Inf
+# Base.setindex!(A::ZeroNoEffect, args...) = nothing
+# Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
 
 function gradient(wf::BFwfs, X, Σ)
    nX = length(X)
