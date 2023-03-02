@@ -9,15 +9,15 @@ using SparseArrays: SparseVector, sparse, spzeros, SparseMatrixCSC
 
 
 mutable struct BFwf{T, TT, TPOLY, TE}
-   trans::TT
-   polys::TPOLY
-   pooling::PooledSparseProduct{2}
-   corr::SparseSymmProdDAG{T}
-   W::Matrix{T}
-   envelope::TE
+   trans::TT # transformation function
+   polys::TPOLY # polynomial basis from Polynomials4ML
+   pooling::PooledSparseProduct{2} # pooling operator for evaluating A basis
+   corr::SparseSymmProdDAG{T} # for evaluating product basis (AA basis) from A basis
+   W::Matrix{T} # Weigth matrix, should be of size nX × number of basis
+   envelope::TE # envelope function
    spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
    C::SparseMatrixCSC{T} # purification operator
-   # ---------------- Temporaries 
+   # ---------------- Temporaries
    P::Matrix{T}
    ∂P::Matrix{T}
    dP::Matrix{T}
