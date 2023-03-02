@@ -79,7 +79,7 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    if purify == false
       C = sparse(Matrix(1.0I, length(spec), length(spec)))
    else
-      C = generalImpure2PureMap(spec, spec1p, polys, ν)
+      C = sparse(transpose(generalImpure2PureMap(spec, spec1p, polys, ν)))
    end
 
    return BFwf(trans, polys, pooling, corr, W, envelope, spec, C,
@@ -184,9 +184,9 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
    
    # purify the product basis
-   # AA = AA * (wf.C)'
+   # AA = AA * wf.C
    Φ = wf.Φ
-   mul!(Φ, parent(AA), (wf.C)' * wf.W) # nX x nX
+   mul!(Φ, parent(AA), wf.C * wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
 
@@ -203,8 +203,8 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    
    Φ = wf.Φ 
 
-   mul!(Φ, parent(AA) * (wf.C)', wf.W)
-   # mul!(Φ, parent(AA), (wf.C)' * wf.W)
+   mul!(Φ, parent(AA) * wf.C, wf.W)
+   # mul!(Φ, parent(AA), wf.C * wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
 
@@ -216,7 +216,7 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    # ∂Wij = ∑_ab ∂Φab * ∂_Wij( ∑_k AA_ak W_kb )
    #      = ∑_ab ∂Φab * ∑_k δ_ik δ_bj  AA_ak
    #      = ∑_a ∂Φaj AA_ai = ∂Φaj' * AA_ai
-   ∇p = transpose(parent(AA) * (wf.C)') * ∂Φ
+   ∇p = transpose(parent(AA) * wf.C) * ∂Φ
    
    # ∇p = wf.C * (transpose(parent(AA)) * ∂Φ)
 
@@ -442,12 +442,12 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwf, Σ)
    
    # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
-   mul!(Φ, parent(AA) * (wf.C)', wf.W)
+   mul!(Φ, parent(AA) * wf.C, wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    Φ⁻ᵀ = transpose(pinv(Φ))
    
    # first contribution to the laplacian
-   ΔΦ = ΔAA * (wf.C)' * wf.W
+   ΔΦ = ΔAA * wf.C * wf.W
    ΔΦ = ΔΦ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
    Δψ = dot(Φ⁻ᵀ, ΔΦ)
@@ -456,7 +456,7 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwf, Σ)
    # TODO: we can rework this into a single BLAS3 call
    # which will also give us a single back-propagation 
    # ∇Φi = zeros(nX, nX)
-   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * (wf.C)' * wf.W, nX, nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.C * wf.W, nX, nX, nX)
    Φ⁻¹∇Φi = zeros(nX, nX)
    for i = 1:nX 
       ∇Φi = ∇Φ_all[i, :, :] .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
@@ -484,19 +484,19 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    
    # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
-   mul!(Φ, parent(AA) * (wf.C)', wf.W)
+   mul!(Φ, parent(AA) * wf.C, wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
    Φ⁻¹ = pinv(Φ)
    Φ⁻ᵀ = transpose(Φ⁻¹)
 
    # first contribution to the laplacian
-   ΔΦ = ΔAA * (wf.C)' * wf.W
+   ΔΦ = ΔAA * wf.C * wf.W
    ΔΦ = ΔΦ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
  
    # Δψ += dot(Φ⁻ᵀ, ΔΦ) ... this leads to the next two terms 
    ∂ΔΦ = Φ⁻ᵀ
-   ∇Δψ = transpose(ΔAA * (wf.C)') * ∂ΔΦ
+   ∇Δψ = transpose(ΔAA * wf.C) * ∂ΔΦ
    
    ∂Φ = - Φ⁻ᵀ * transpose(ΔΦ) * Φ⁻ᵀ
    # ∇Δψ += transpose(AA) * ∂Φ
@@ -507,7 +507,7 @@ function gradp_laplacian(wf::BFwf, X, Σ)
    # which will also give us a single back-propagation 
    # ∇Φi = zeros(nX, nX)
    # Φ⁻¹∇Φi = zeros(nX, nX)
-   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * (wf.C)' * wf.W, nX, nX, nX)
+   ∇Φ_all = reshape(reshape(∇AA, nX*nX, :) * wf.C * wf.W, nX, nX, nX)
    ∂∇Φ_all = zeros(nX, nX, nX)
 
    for i = 1:nX 
@@ -523,9 +523,9 @@ function gradp_laplacian(wf::BFwf, X, Σ)
       # ∇Δψ += transpose(AA) * ∂Φ
    end
 
-   ∇Δψ += transpose(AA * (wf.C)') * ∂Φ
+   ∇Δψ += transpose(AA * wf.C) * ∂Φ
 
-   ∇Δψ += reshape( transpose(reshape(∇AA, nX*nX, :) * (wf.C)') * reshape(∂∇Φ_all, nX*nX, nX), 
+   ∇Δψ += reshape( transpose(reshape(∇AA, nX*nX, :) * wf.C) * reshape(∂∇Φ_all, nX*nX, nX), 
                   size(∇Δψ) )
 
 

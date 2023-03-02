@@ -219,6 +219,6 @@ wf2 = ACEpsi.set_params!(wf2, param1)
 
 ##
 
-@warn("removed compac test since json file is missing")
+# @warn("removed compac test since json file is missing")
 # @info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
 # include("compare_bflow.jl")
