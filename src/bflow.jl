@@ -655,6 +655,10 @@ end
 
 function generalImpure2PureMap(spec, spec1p, poly, Remove)
 
+   if Remove <= 1
+      return C = sparse(Matrix(1.0I, length(spec), length(spec)))
+   end
+   
    Pnn_all = C_kappa_prod_coeffs(spec, spec1p, poly)
    S = length(spec)
    C = spzeros(S, S) # transformation matrix
