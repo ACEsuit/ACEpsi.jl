@@ -7,28 +7,30 @@ using BenchmarkTools
 
 ##
 
-Nel = 10
-polys = legendre_basis(15)
-wf = BFwf(Nel, polys; ν=3)
+const ↑, ↓, ∅ = '↑','↓','∅'
+Nel = 5
+polys = legendre_basis(8)
+wf = BFwf(Nel, polys; ν=3, purify = true)
 
 
 ##
 
 X = 2 * rand(Nel) .- 1
-wf(X)
-gradient(wf, X)
-laplacian(wf, X)
+Σ = rand([↑, ↓], Nel)
+wf(X, Σ)
+gradient(wf, X, Σ)
+laplacian(wf, X, Σ)
 
 ## 
 
 @info("evaluate")
-@btime $wf($X)
+@btime wf($X, Σ)
 
 @info("gradient")
-@btime gradient($wf, $X)
+@btime gradient($wf, $X, $Σ)
 
 @info("laplacian")
-@btime laplacian($wf, $X)
+@btime laplacian($wf, $X, $Σ)
 
 ##
 
