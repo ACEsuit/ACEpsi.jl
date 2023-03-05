@@ -2,8 +2,8 @@
 using Polynomials4ML, ACEcore, ACEbase, Printf, ACEpsi 
 using ACEpsi: BFwf, gradient, evaluate, laplacian
 using LinearAlgebra
-#using Random
-#Random.seed!(123)
+using ACE: λ
+
 ##
 function lap_test(f, Δf, X)
    F = f(X) 
@@ -97,15 +97,26 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 ##
 
 const ↑, ↓, ∅ = '↑','↓','∅'
-Nel = 5
-polys = legendre_basis(8)
-wf = BFwf(Nel, polys; ν=3)
 
-X = 2 * rand(Nel) .- 1
-Σ = rand([↑, ↓], Nel)
+N = 8
+Σ = vcat(rand([↑],Int(ceil(N/2))),rand([↓],N - Int(ceil(N/2))))
 
-wf(X, Σ)
-g = gradient(wf, X, Σ)
+pos = [-70.,-50.,-30.,-10.,10.,30.,50.,70.]
+trans = [λ("r -> atan(r+70.0)"),λ("r -> atan(r+50.0)"),λ("r -> atan(r+30.0)"),λ("r -> atan(r+10.0)"),λ("r -> atan(r-10.0)"),λ("r -> atan(r-30.0)"),λ("r -> atan(r-50.0)"),λ("r -> atan(r-70.0)")]
+tpos = reduce(vcat,pos)
+pos = reduce(vcat,pos)
+M = length(pos)
+MaxDeg = [6, 6, 6]
+
+polys = Polynomials4ML.legendre_basis(maximum(MaxDeg))
+wf = BFwf(N, polys, x -> sqrt(1+x^2); pos = pos, tpos = tpos, ν=length(MaxDeg[1]), totdeg = maximum(MaxDeg), trans = trans,sd_admissible = bb -> (length(bb) == 0 || all([bb[i][1] <= MaxDeg[length(bb)] for i = 1:length(bb)])))
+
+X = rand(N)
+evaluate(U,X,Σ)
+g = gradient(U,X,Σ)
+
+
+
 
 ##
 
@@ -115,14 +126,6 @@ using Printf
 
 @info("Fd test of gradient w.r.t. X")
 fdtest(wf, Σ, g, X)
-
-
-# ##
-
-# todo: move this to a performance benchmark script 
-# using BenchmarkTools
-# @btime $wf($X)
-# @btime gradient($wf, $X)
 
 ##
 
@@ -176,50 +179,50 @@ grad_test2(Fp, dFp, w0)
 
 ##
 
-@info("test ∇env w.r.t. parameter")
-Ξ0 =  copy(wf.envelope.ξ)
-ξ0 =  Ξ0
+# BFwfs has no seperate env implementated
+# @info("test ∇env w.r.t. parameter")
+# Ξ0 =  copy(wf.envelope.ξ)
+# ξ0 =  Ξ0
 
-Envp = w -> (wf.envelope.ξ = w; wf(X, Σ))
-dEnvp = w -> (wf.envelope.ξ = w;  ACEpsi.gradp_evaluate(wf, X, Σ)[2])
+# Envp = w -> (wf.envelope.ξ = w; wf(X, Σ))
+# dEnvp = w -> (wf.envelope.ξ = w;  ACEpsi.gradp_evaluate(wf, X, Σ)[2])
 
-grad_test3(Envp, dEnvp, ξ0)
-
-##
-
-@info("Test ∇Δψ w.r.t. parameters")
-
-Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ))
-dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
-
-grad_test2(Fp, dFp, w0)
+# grad_test3(Envp, dEnvp, ξ0)
 
 ##
 
-@info("Test ∇Δenv w.r.t. parameters")
+# BFwfs has no gradp_laplacian implementated
+# @info("Test ∇Δψ w.r.t. parameters")
 
-Ξ0 =  copy(wf.envelope.ξ)
-ξ0 =  Ξ0
+# Fp = w -> ( wf.W[:] .= w[:]; ACEpsi.laplacian(wf, X, Σ))
+# dFp = w -> ( wf.W[:] .= w[:]; ACEpsi.gradp_laplacian(wf, X, Σ)[1][:] )
+
+# grad_test2(Fp, dFp, w0)
+
+##
+
+# BFwfs has no seperate env implementated
+# @info("Test ∇Δenv w.r.t. parameters")
+
+# Ξ0 =  copy(wf.envelope.ξ)
+# ξ0 =  Ξ0
 
 
-Fp = w -> ( wf.envelope.ξ = w; ACEpsi.laplacian(wf, X, Σ))
-dFp = w -> (wf.envelope.ξ = w; ACEpsi.gradp_laplacian(wf, X, Σ)[2][:] )
+# Fp = w -> ( wf.envelope.ξ = w; ACEpsi.laplacian(wf, X, Σ))
+# dFp = w -> (wf.envelope.ξ = w; ACEpsi.gradp_laplacian(wf, X, Σ)[2][:] )
 
-grad_test3(Fp, dFp, ξ0)
+# grad_test3(Fp, dFp, ξ0)
 
 ##
 
 @info("Test getting/setting parameters")
 
-wf1 = BFwf(Nel, polys; ν=3)
-wf2 = BFwf(Nel, polys; ν=3)
+
+wf1 = BFwf(N, polys, x -> sqrt(1+x^2); pos = pos, tpos = tpos, ν=length(MaxDeg[1]), totdeg = maximum(MaxDeg), trans = trans,sd_admissible = bb -> (length(bb) == 0 || all([bb[i][1] <= MaxDeg[length(bb)] for i = 1:length(bb)])))
+wf2 = BFwf(N, polys, x -> sqrt(1+x^2); pos = pos, tpos = tpos, ν=length(MaxDeg[1]), totdeg = maximum(MaxDeg), trans = trans,sd_admissible = bb -> (length(bb) == 0 || all([bb[i][1] <= MaxDeg[length(bb)] for i = 1:length(bb)])))
 @printf(" wf1 - wf2: %f \n", abs(wf1(X, Σ) - wf2(X, Σ)))
 param1 = ACEpsi.get_params(wf1)
 wf2 = ACEpsi.set_params!(wf2, param1)
 @printf(" wf1 - wf2 with parameter wf1: %f \n", abs(wf1(X, Σ) - wf2(X, Σ)))
 
 ##
-
-#@warn("removed compac test since json file is missing")
-# @info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
-# include("compare_bflow.jl")

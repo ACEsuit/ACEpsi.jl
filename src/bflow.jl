@@ -139,7 +139,9 @@ function displayspec(wf::BFwf)
    return nicespec
 end
 
-
+"""
+Construct the A basis (basis after pooling)
+"""
 function assemble_A(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
       
    nX = length(X)
@@ -334,6 +336,9 @@ function laplacian(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
    return Δψ
 end 
 
+"""
+Construct A, ∇A, ΔA for evaluating laplacian
+"""
 function _assemble_A_∇A_ΔA(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
    TX = eltype(X)
    lenA = length(wf.pooling)
@@ -372,6 +377,9 @@ function _assemble_A_∇A_ΔA(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
    return A, ∇A, ΔA 
 end
 
+"""
+Construct AA, ∇AA, ΔAA for evaluating laplacian
+"""
 function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf::BFwf)
    nX = size(A, 1)
    AA = zeros(nX, length(wf.corr))
@@ -404,7 +412,9 @@ function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf::BFwf)
    return AA, ∇AA, ΔAA
 end
 
-
+"""
+Evaluate laplacian from AA, ∇AA, ΔAA
+"""
 function _laplacian_inner(AA, ∇AA, ΔAA, wf::BFwf, Σ)
 
    # Δψ = Φ⁻ᵀ : ΔΦ - ∑ᵢ (Φ⁻ᵀ * Φᵢ)ᵀ : (Φ⁻ᵀ * Φᵢ)

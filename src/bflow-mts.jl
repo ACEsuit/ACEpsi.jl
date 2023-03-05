@@ -163,7 +163,7 @@ function evaluate(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    BB = _BB(wf.pos, wf.Ta, wf.Tb, wf.envelope, X)
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W) # Φ = AA * W, nX x nX
-   Φ =  Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] .* BB # the resulting matrix should contains two block each comes from each spin
+   Φ =  Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] .* BB
    release!(AA)
    return 2 * logabsdet(Φ)[1]
 end
@@ -193,7 +193,7 @@ end
 
 function gradp_evaluate(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    #  =================== evaluate Φ=============================  #
-   nX = length(X) # 电子数
+   nX = length(X) # number of electrons
    BB = _BB(wf.pos, wf.Ta, wf.Tb, wf.envelope, X)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
