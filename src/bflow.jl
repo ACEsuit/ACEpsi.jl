@@ -57,9 +57,11 @@ function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T; totdeg = length(polys),
    # further restrict
    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
 
+   
    corr1 = SparseSymmProd(spec; T = Float64)
-   corr = corr1.dag   
-
+   corr = corr1.dag
+   corr = SparseSymmProdDAG{Float64}(corr.nodes[corr1.proj],corr.num1,length(corr.nodes[corr1.proj]),corr.projection,corr.pool_AA,corr.bpool_AA)
+   
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q) 
@@ -374,7 +376,7 @@ function _assemble_A_∇A_ΔA(wf::BFwf, X::AbstractVector, Σ::Vector{Char})
          end
       end
    end
-   return A, ∇A, ΔA 
+   return A, ∇A, ΔA
 end
 
 """
