@@ -74,7 +74,8 @@ function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T, envelope::Function; totdeg
 
    corr1 = SparseSymmProd(spec; T = Float64)
    corr = corr1.dag
-
+   corr = SparseSymmProdDAG{Float64}(corr.nodes[corr1.proj],corr.num1,length(corr.nodes[corr1.proj]),corr.projection,corr.pool_AA,corr.bpool_AA)
+   
    # initial guess for weights
    Q, _ = qr(randn(T, length(corr), Nel))
    W = Matrix(Q)
