@@ -74,10 +74,9 @@ function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T, envelope::Function; totdeg
 
    corr1 = SparseSymmProd(spec; T = Float64)
    corr = corr1.dag
-   corr = SparseSymmProdDAG{Float64}(corr.nodes[corr1.proj],corr.num1,length(corr.nodes[corr1.proj]),corr.projection,corr.pool_AA,corr.bpool_AA)
-   
+ 
    # initial guess for weights
-   Q, _ = qr(randn(T, length(corr), Nel))
+   Q, _ = qr(randn(T, length(corr1), Nel))
    W = Matrix(Q)
 
    return BFwfs(pos, tpos, trans, polys, pooling, corr, W, envelope, spec,
@@ -91,7 +90,7 @@ function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T, envelope::Function; totdeg
                   zeros(T, length(pooling)),
                   zeros(T, length(pooling)),
                   zeros(Bool, Nel, 3),
-                  zeros(T, Nel, length(corr)),
+                  zeros(T, Nel, length(corr1)),
                   zeros(T, Nel, 3),
                   zeros(T, Nel, Nel, length(corr)),
                   ones(T, Nel, length(trans)),
@@ -103,6 +102,17 @@ function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T, envelope::Function; totdeg
                   )
 end
 
+function displayspec(wf::BFwfs)
+   K = length(wf.polys)
+   spec1p = [ (k, σ, m) for σ in [1, 2, 3] for k in 1:K for m in 1:M]  # (1, 2, 3) = (∅, ↑, ↓);
+   spec1p = sort(spec1p, by = b -> b[1])
+   _getnicespec = l -> (l[1], ACEpsi.num2spin(l[2]),l[3])
+   nicespec = []
+   for k = 1:length(wf.spec)
+      push!(nicespec, _getnicespec.([spec1p[wf.spec[k][j]] for j = 1:length(wf.spec[k])]))
+   end
+   return nicespec
+end
 
 function assemble_A(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
@@ -156,11 +166,10 @@ end
    end)
 end
 
-
 function evaluate(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    nX = length(X)
    A = assemble_A(wf, X, Σ)
-   AA = ACEcore.evaluate(wf.corr, A)
+   AA = ACEcore.evaluate(wf.corr, A)[:,wf.corr.projection]
    BB = _BB(wf.pos, wf.Ta, wf.Tb, wf.envelope, X)
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W) # Φ = AA * W, nX x nX
@@ -197,7 +206,7 @@ function gradp_evaluate(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    nX = length(X) # number of electrons
    BB = _BB(wf.pos, wf.Ta, wf.Tb, wf.envelope, X)
    A = assemble_A(wf, X, Σ)
-   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   AA = ACEcore.evaluate(wf.corr, A)[:,wf.corr.projection]  # nX x length(wf.corr)
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W)
    _Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
@@ -276,7 +285,8 @@ function gradient(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
    end
 
    # n-correlations
-   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   DD = ACEcore.evaluate(wf.corr, A)
+   AA = DD[:,wf.corr.projection]  # nX x length(wf.corr)
    #  =================== evaluate =============================== #
    # generalized orbitals
    BB = _BB(wf.pos, wf.Ta, wf.Tb, wf.envelope, X)
@@ -304,8 +314,11 @@ function gradient(wf::BFwfs, X::AbstractVector, Σ::Vector{Char})
 
    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
    ∂A = wf.∂A   # zeros(size(A))
-   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA))
+   ∂DD = zeros(size(∂AA,1),length(wf.corr))
+   ∂DD[:,wf.corr.projection] = ∂AA
+   ACEcore.pullback_arg!(∂A, ∂DD, wf.corr, parent(DD))
    release!(AA)
+   release!(DD)
 
    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback
    # but need to do some work here since multiple
@@ -483,7 +496,7 @@ function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf::BFwfs)
          ΔAA[i, iAA] = L
       end
    end
-   return AA, ∇AA, ΔAA
+   return AA[:,wf.corr.projection], ∇AA[:,:,wf.corr.projection], ΔAA[:,wf.corr.projection]
 end
 
 function Δenv(pos, Ta, Tb, f, X::Float64, i::Int)
