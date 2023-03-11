@@ -71,15 +71,23 @@ function BFwf(Nel::Integer, polys; totdeg = length(polys),
    corr = corr1.dag   
 
    # initial guess for weights 
-   Q, _ = qr(randn(T, length(corr), Nel))
+   Q, _ = qr(randn(T, length(corr1), Nel))
    W = Matrix(Q) 
    
-   C = zeros(length(spec), length(spec))
-
+   
+   nodes = [collect(t) for t in corr.nodes]
+   spec4C = [ vv[vv .> 0] for vv in nodes if !(isempty(vv[vv .> 0]))]
+   Proj = spzeros(length(spec4C), length(spec))
+   for i = 1:length(spec4C)
+      if spec2col(spec4C[i], spec) != nothing
+         Proj[i, spec2col(spec4C[i], spec)] = 1.0
+      end
+   end
+   
    if purify == false
-      C = sparse(Matrix(1.0I, length(spec), length(spec)))
+      C = Proj
    else
-      C = sparse(transpose(generalImpure2PureMap(spec, spec1p, polys, ν)))
+      C = sparse(transpose(generalImpure2PureMap(spec4C, spec1p, polys, ν))) * Proj
    end
 
    return BFwf(trans, polys, pooling, corr, W, envelope, spec, C,
@@ -186,7 +194,8 @@ function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    # purify the product basis
    # AA = AA * wf.C
    Φ = wf.Φ
-   mul!(Φ, parent(AA), wf.C * wf.W) # nX x nX
+
+   mul!(Φ, (parent(AA) * wf.C), wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
 
@@ -201,9 +210,9 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
    
-   Φ = wf.Φ 
+   Φ = wf.Φ
 
-   mul!(Φ, parent(AA) * wf.C, wf.W)
+   mul!(Φ, (parent(AA) * wf.C), wf.W) # nX x nX
    # mul!(Φ, parent(AA), wf.C * wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
@@ -216,7 +225,7 @@ function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    # ∂Wij = ∑_ab ∂Φab * ∂_Wij( ∑_k AA_ak W_kb )
    #      = ∑_ab ∂Φab * ∑_k δ_ik δ_bj  AA_ak
    #      = ∑_a ∂Φaj AA_ai = ∂Φaj' * AA_ai
-   ∇p = transpose(parent(AA) * wf.C) * ∂Φ
+   ∇p = transpose((parent(AA) * wf.C)) * ∂Φ
    
    # ∇p = wf.C * (transpose(parent(AA)) * ∂Φ)
 
@@ -278,13 +287,15 @@ function gradient(wf::BFwf, X, Σ)
    end
    
    # n-correlations 
-   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   BB = ACEcore.evaluate(wf.corr, A)
+   AA = BB * wf.C
+   
    # AA_p = AA * wf.C
 
    # generalized orbitals 
    Φ = wf.Φ
 
-   mul!(Φ, parent(AA), wf.C * wf.W)
+   mul!(Φ, parent(AA), wf.W) # nX x nX
 
    # the resulting matrix should contains two block each comes from each spin
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
@@ -305,7 +316,7 @@ function gradient(wf::BFwf, X, Σ)
 
    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
    ∂A = wf.∂A   # zeros(size(A))
-   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA))
+   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(BB))
    release!(AA)
 
    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 
