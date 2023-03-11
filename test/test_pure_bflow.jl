@@ -98,11 +98,11 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 
 const ↑, ↓, ∅ = '↑','↓','∅'
 N = Nel = 8
-ord = 2
-Deg = [16,16]
+ord = 3
+Deg = [16,16, 16]
 trans = x -> 2 / pi * atan(x)
 polys = Polynomials4ML.legendre_basis(maximum(Deg)+ord)
-sd_admissible = bb -> (all([length(bb) == ord]) && ( all([sum([bb[i][1] .!= 1 for i = 1:length(bb)]) == 0]) || all([sum([bb[i][1] for i = 1:length(bb)]) <= Deg[sum([bb[i][1] .!= 1 for i = 1:length(bb)]) == 0 ? 1 : sum([bb[i][1] .!= 1 for i = 1:length(bb)])]+ord])))
+sd_admissible = bb -> (all([length(bb) == ord]) && ( all([sum([bb[i][1] .!= 1 for i = 1:length(bb)]) == 0]) || all([sum([bb[i][1] - 1 for i = 1:length(bb)]) < Deg[sum([bb[i][1] .!= 1 for i = 1:length(bb)]) == 0 ? 1 : sum([bb[i][1] .!= 1 for i = 1:length(bb)])]+ord])))
 envelope = ACEpsi.envelopefcn(x -> sqrt(x^2 + 1), 1.)
 wf = ACEpsi.BFwf(N, polys; ν = ord, totdeg = maximum(Deg), trans = trans, envelope = envelope, sd_admissible = sd_admissible, purify = true)
 
