@@ -3,6 +3,6 @@ module ACEpsi
 include("bflow.jl")
 include("envelope.jl")
 
-include("embeddings/rnlexample.jl")
+include("atomicorbitals/atomicorbitals.jl")
 
 end

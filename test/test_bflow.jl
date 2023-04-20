@@ -1,6 +1,6 @@
 
 using Polynomials4ML, ACEcore, ACEbase, Printf, ACEpsi 
-using ACEpsi: BFwf, gradient, evaluate, laplacian
+using ACEpsi: BFwf1, gradient, laplacian
 using LinearAlgebra
 #using Random
 #Random.seed!(123)
@@ -99,7 +99,7 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 const ↑, ↓, ∅ = '↑','↓','∅'
 Nel = 5
 polys = legendre_basis(8)
-wf = BFwf(Nel, polys; ν=3)
+wf = BFwf1(Nel, polys; ν=3)
 
 X = 2 * rand(Nel) .- 1
 Σ = rand([↑, ↓], Nel)
@@ -211,8 +211,8 @@ grad_test3(Fp, dFp, ξ0)
 
 @info("Test getting/setting parameters")
 
-wf1 = BFwf(Nel, polys; ν=3)
-wf2 = BFwf(Nel, polys; ν=3)
+wf1 = BFwf1(Nel, polys; ν=3)
+wf2 = BFwf1(Nel, polys; ν=3)
 @printf(" wf1 - wf2: %f \n", abs(wf1(X, Σ) - wf2(X, Σ)))
 param1 = ACEpsi.get_params(wf1)
 wf2 = ACEpsi.set_params!(wf2, param1)
@@ -220,6 +220,6 @@ wf2 = ACEpsi.set_params!(wf2, param1)
 
 ##
 
-@warn("removed compac test since json file is missing")
+@warn("removed compat test since json file is missing")
 # @info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
 # include("compare_bflow.jl")

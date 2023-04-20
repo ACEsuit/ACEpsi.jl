@@ -1,4 +1,5 @@
 using Polynomials4ML, ForwardDiff
+import Polynomials4ML: evaluate, evaluate_ed, evaluate_ed2
 
 const NLM{T} = NamedTuple{(:n, :l, :m), Tuple{T, T, T}}
 const NL{T} = NamedTuple{(:n, :l), Tuple{T, T}}
@@ -6,6 +7,13 @@ const NL{T} = NamedTuple{(:n, :l), Tuple{T, T}}
 struct RnlExample{TP, TI}
    Pn::TP
    spec::Vector{NL{TI}}
+end
+
+function RnlExample(totaldegree::Integer)
+   bPn = legendre_basis(totaldegree+1)
+   maxn = length(bPn)
+   spec = [ (n=n, l=l) for n = 1:maxn for l = 0:(totaldegree-n+1)]
+   return RnlExample(bPn, spec)
 end
 
 Base.length(basis::RnlExample) = length(basis.spec)
