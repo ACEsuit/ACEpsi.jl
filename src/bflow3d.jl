@@ -6,81 +6,13 @@ using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
 import ForwardDiff
 
-mutable struct BFwf1{T, TT, TPOLY, TE}
-   trans::TT
-   polys::TPOLY
-   pooling::PooledSparseProduct{2}
-   corr::SparseSymmProdDAG{T}
-   W::Matrix{T}
-   envelope::TE
-   spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
-   # ---------------- Temporaries 
-   P::Matrix{T}
-   ∂P::Matrix{T}
-   dP::Matrix{T}
-   Φ::Matrix{T} 
-   ∂Φ::Matrix{T}
-   A::Matrix{T}
-   ∂A::Matrix{T}
-   Ai::Vector{T} 
-   ∂Ai::Vector{T}
-   Si::Matrix{Bool}
-   ∂AA::Matrix{T}
-   ∂Si::Matrix{T}
-   ∇AA::Array{T, 3}
+# ----------------------------------------
+mutable struct RnlYlmEmbedding 
+   bRnl::TR 
+   bYlm::TY 
+   pooling::PooledSparseProduct{3}
 end
 
-(Φ::BFwf1)(args...) = evaluate(Φ, args...)
-
-function BFwf1(Nel::Integer, polys; totdeg = length(polys), 
-                     ν = 3, T = Float64, 
-                     trans = identity, 
-                     sd_admissible = bb -> (true),
-                     envelope = envelopefcn(x -> sqrt(1 + x^2), rand()))
-   # 1-particle spec 
-   K = length(polys)
-   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
-   spec1p = sort(spec1p, by = b -> b[1]) # sorting to prevent gensparse being confused
-   
-   pooling = PooledSparseProduct(spec1p)
-   # generate the many-particle spec 
-   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
-   
-   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
-                        minvv = fill(0, ν), 
-                        maxvv = fill(length(spec1p), ν), 
-                        ordered = true)
-   
-   
-   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
-
-   # further restrict
-   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
-
-   corr1 = SparseSymmProd(spec; T = Float64)
-   corr = corr1.dag   
-
-   # initial guess for weights 
-   Q, _ = qr(randn(T, length(corr), Nel))
-   W = Matrix(Q) 
-
-   return BFwf1(trans, polys, pooling, corr, W, envelope, spec,
-                  zeros(T, Nel, length(polys)), 
-                  zeros(T, Nel, length(polys)), 
-                  zeros(T, Nel, length(polys)), 
-                  zeros(T, Nel, Nel), 
-                  zeros(T, Nel, Nel),
-                  zeros(T, Nel, length(pooling)), 
-                  zeros(T, Nel, length(pooling)), 
-                  zeros(T, length(pooling)), 
-                  zeros(T, length(pooling)), 
-                  zeros(Bool, Nel, 3),
-                  zeros(T, Nel, length(corr)), 
-                  zeros(T, Nel, 3), 
-                  zeros(T, Nel, Nel, length(corr)) )
-
-end
 
 """
 This function return correct Si for pooling operation.
@@ -124,24 +56,7 @@ function num2spin(σ)
    error("illegal integer value for num2spin")
 end
 
-
-"""
-This function returns a nice version of spec.
-"""
-function displayspec(wf::BFwf1)
-   K = length(wf.polys)
-   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]
-   spec1p = sort(spec1p, by = b -> b[1])
-   _getnicespec = l -> (l[1], num2spin(l[2]))
-   nicespec = []
-   for k = 1:length(wf.spec)
-      push!(nicespec, _getnicespec.([spec1p[wf.spec[k][j]] for j = 1:length(wf.spec[k])]))
-   end
-   return nicespec
-end
-
-
-function assemble_A(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
+function assemble_A(bA::RnlYlmEmbedding, X::AbstractVector, Σ)
       
    nX = length(X)
    # position embedding 
@@ -161,7 +76,104 @@ function assemble_A(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
    return A 
 end
 
-function evaluate(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
+
+
+# ----------------------------------------
+
+
+mutable struct BFwf{T, TT, TPOLY, TE}
+   embedding::TA 
+   corr::SparseSymmProdDAG{T}
+   W::Matrix{T}
+   envelope::TE
+   spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
+   # ---------------- Temporaries 
+   P::Matrix{T}
+   ∂P::Matrix{T}
+   dP::Matrix{T}
+   Φ::Matrix{T} 
+   ∂Φ::Matrix{T}
+   A::Matrix{T}
+   ∂A::Matrix{T}
+   Ai::Vector{T} 
+   ∂Ai::Vector{T}
+   Si::Matrix{Bool}
+   ∂AA::Matrix{T}
+   ∂Si::Matrix{T}
+   ∇AA::Array{T, 3}
+end
+
+(Φ::BFwf)(args...) = evaluate(Φ, args...)
+
+function BFwf(Nel::Integer, polys; totdeg = length(polys), 
+                     ν = 3, T = Float64, 
+                     trans = identity, 
+                     sd_admissible = bb -> (true),
+                     envelope = envelopefcn(x -> sqrt(1 + x^2), rand()))
+   # 1-particle spec 
+   K = length(polys)
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]  # (1, 2, 3) = (∅, ↑, ↓);
+   spec1p = sort(spec1p, by = b -> b[1]) # sorting to prevent gensparse being confused
+   
+   pooling = PooledSparseProduct(spec1p)
+   # generate the many-particle spec 
+   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+   
+   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
+                        minvv = fill(0, ν), 
+                        maxvv = fill(length(spec1p), ν), 
+                        ordered = true)
+   
+   
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+
+   # further restrict
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+
+   corr1 = SparseSymmProd(spec; T = Float64)
+   corr = corr1.dag   
+
+   # initial guess for weights 
+   Q, _ = qr(randn(T, length(corr), Nel))
+   W = Matrix(Q) 
+
+   return BFwf(trans, polys, pooling, corr, W, envelope, spec,
+                  zeros(T, Nel, length(polys)), 
+                  zeros(T, Nel, length(polys)), 
+                  zeros(T, Nel, length(polys)), 
+                  zeros(T, Nel, Nel), 
+                  zeros(T, Nel, Nel),
+                  zeros(T, Nel, length(pooling)), 
+                  zeros(T, Nel, length(pooling)), 
+                  zeros(T, length(pooling)), 
+                  zeros(T, length(pooling)), 
+                  zeros(Bool, Nel, 3),
+                  zeros(T, Nel, length(corr)), 
+                  zeros(T, Nel, 3), 
+                  zeros(T, Nel, Nel, length(corr)) )
+
+end
+
+
+"""
+This function returns a nice version of spec.
+"""
+function displayspec(wf::BFwf)
+   K = length(wf.polys)
+   spec1p = [ (k, σ) for σ in [1, 2, 3] for k in 1:K]
+   spec1p = sort(spec1p, by = b -> b[1])
+   _getnicespec = l -> (l[1], num2spin(l[2]))
+   nicespec = []
+   for k = 1:length(wf.spec)
+      push!(nicespec, _getnicespec.([spec1p[wf.spec[k][j]] for j = 1:length(wf.spec[k])]))
+   end
+   return nicespec
+end
+
+
+
+function evaluate(wf::BFwf, X::AbstractVector, Σ, Pnn=nothing)
    nX = length(X)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
@@ -184,7 +196,7 @@ function evaluate(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
 end
 
 
-function gradp_evaluate(wf::BFwf1, X::AbstractVector, Σ)
+function gradp_evaluate(wf::BFwf, X::AbstractVector, Σ)
    nX = length(X)
    
    A = assemble_A(wf, X, Σ)
@@ -227,7 +239,7 @@ Base.setindex!(A::ZeroNoEffect, args...) = nothing
 Base.getindex(A::ZeroNoEffect, args...) = Bool(0)
 
 
-function gradient(wf::BFwf1, X, Σ)
+function gradient(wf::BFwf, X, Σ)
    nX = length(X)
 
    # ------ forward pass  ----- 
@@ -326,7 +338,7 @@ end
 
 # ------------------ Laplacian implementation 
 
-function laplacian(wf::BFwf1, X, Σ)
+function laplacian(wf::BFwf, X, Σ)
 
    A, ∇A, ΔA = _assemble_A_∇A_ΔA(wf, X, Σ)
    AA, ∇AA, ΔAA = _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
@@ -453,7 +465,7 @@ end
 # ------------------ gradp of Laplacian  
 
 
-function gradp_laplacian(wf::BFwf1, X, Σ)
+function gradp_laplacian(wf::BFwf, X, Σ)
 
 
    # ---- gradp of Laplacian of Ψ ----
@@ -527,13 +539,13 @@ end
 
 
 
-# ----------------- BFwf1 parameter wraging
+# ----------------- BFwf parameter wraging
 
-function get_params(U::BFwf1)
+function get_params(U::BFwf)
    return (U.W, U.envelope.ξ)
 end
 
-function set_params!(U::BFwf1, para)
+function set_params!(U::BFwf, para)
    U.W = para[1]
    set_params!(U.envelope, para[2])
    return U
