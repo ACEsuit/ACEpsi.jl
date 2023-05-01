@@ -1,12 +1,12 @@
 
-using ACEpsi: ↑, ↓, spins, extspins, Spin, spin2idx, idx2spin
+using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 import Polynomials4ML
 using StaticArrays
 using LinearAlgebra: norm 
 
 struct Nuc{T}
    rr::SVector{3, T}
-   charge::T 
+   charge::T   # should this be an integer? 
 end 
 
 
@@ -54,7 +54,7 @@ function AtomicOrbitalsBasis(bRnl, bYlm, spec1::Vector{NTRNL1},
 
    # spec = NTRNLIS[]
    basis = AtomicOrbitalsBasis(bRnl, bYlm, spec1, spec1idx, eltype(nuclei)[])
-   # set_nuclei!(basis, nuclei)
+   set_nuclei!(basis, nuclei)
    return basis 
 end
 
@@ -101,36 +101,29 @@ end
 
 function set_nuclei!(basis::AtomicOrbitalsBasis, nuclei::AbstractVector{<: Nuc})
    basis.nuclei = copy(collect(nuclei))
-   Nnuc = length(basis.nuclei)
-
-   spec = NTRNLIS[] 
-   for b in basis.spec1, I = 1:Nnuc, s in extspins()
-      push!(spec, (I = I, s=s, b...))
-   end
-
-   basis.spec = spec
-
-   # bA = _build_pooling(spec1, Nnuc)
-   # basis.bA = bA 
    return nothing 
 end
 
 
-# ------------ Evaluation kernels 
+function get_spec(basis::AtomicOrbitalsBasis) 
+   spec = NTRNLIS[]
+   Nnuc = length(basis.nuclei)
 
-"""
-This function return correct Si for pooling operation.
-"""
-function onehot_spin!(Si, i, Σ)
-   Si .= 0
-   for k = 1:length(Σ)
-      Si[k, spin2num(Σ[k])] = 1
+   spec = Array{NTRNLIS, 3}(undef, (3, Nnuc, length(basis.spec1)))
+
+   for (k, nlm) in enumerate(basis.spec1)
+      for I = 1:Nnuc 
+         for (is, s) in enumerate(extspins())
+            spec[is, I, k] = (I = I, s=s, nlm...)
+         end
+      end
    end
-   # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
-   Si[i, 1] = 1 
-   Si[i, 2] = 0
-   Si[i, 3] = 0
+
+   return spec 
 end
+
+
+# ------------ Evaluation kernels 
 
 
 function proto_evaluate(basis::AtomicOrbitalsBasis, 
@@ -140,7 +133,8 @@ function proto_evaluate(basis::AtomicOrbitalsBasis,
    Nnuc = length(nuc)
    Nel = length(X)
    Nnlm = length(basis.spec1)
-   VT = promote_type(eltype(nuc[1].rr), eltype(X[1]))
+   T = promote_type(eltype(nuc[1].rr), eltype(X[1]))
+   VT = SVector{3, T}
    @show VT
    
    # create all the shifted configurations 
@@ -153,8 +147,8 @@ function proto_evaluate(basis::AtomicOrbitalsBasis,
    end
 
    # evaluate the radial and angular components on all the shifted particles 
-   Rnl = reshape(evaluate(basis.bRnl, xx[:]), (Nnuc, Nel))
-   Ylm = reshape(evaluate(basis.bYlm, XX[:]), (Nnuc, Nel))
+   Rnl = reshape(evaluate(basis.bRnl, xx[:]), (Nnuc, Nel, length(basis.bRnl)))
+   Ylm = reshape(evaluate(basis.bYlm, XX[:]), (Nnuc, Nel, length(basis.bYlm)))
 
    # evaluate all the atomic orbitals as ϕ_nlm = Rnl * Ylm 
    TA = promote_type(eltype(Rnl), eltype(Ylm))
@@ -171,7 +165,7 @@ function proto_evaluate(basis::AtomicOrbitalsBasis,
    Aall = zeros(TA, (2, Nnuc, Nnlm))
    for k = 1:Nnlm
       for i = 1:Nel 
-         iσ = spin2num(Σ[i])
+         iσ = spin2idx(Σ[i])
          for I = 1:Nnuc 
             Aall[iσ, I, k] += ϕnlm[I, i, k]
          end

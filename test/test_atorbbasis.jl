@@ -15,6 +15,8 @@ bAnlm = AtomicOrbitalsBasis(bRnl, bYlm;
                             totaldegree = totdeg, 
                             nuclei = nuclei )
 
+spec = ACEpsi.AtomicOrbitals.get_spec(bAnlm)
+
 ##
 
 Nel = 5
