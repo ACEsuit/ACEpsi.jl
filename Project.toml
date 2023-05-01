@@ -13,17 +13,17 @@ LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ObjectPools = "658cac36-ff0f-48ad-967c-110375d98c9d"
 Polynomials4ML = "03c4bcba-a943-47e9-bfa1-b1661fc2974f"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
+ACEbase = "0.2"
 ACEcore = "0.0.1"
 BenchmarkTools = "1"
 ForwardDiff = "0.10"
-ObjectPools = "0.0.2"
-Polynomials4ML = "0.0.2"
-julia = "1"
 JSON = "0.21"
-ACEbase = "0.2"
-
+ObjectPools = "0.0.2"
+Polynomials4ML = "0.0.6"
+julia = "1"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

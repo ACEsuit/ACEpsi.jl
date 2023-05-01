@@ -1,5 +1,6 @@
 using Polynomials4ML, ForwardDiff
-import Polynomials4ML: evaluate, evaluate_ed, evaluate_ed2
+import Polynomials4ML: evaluate, evaluate_ed, evaluate_ed2, 
+                       natural_indices
 
 const NLM{T} = NamedTuple{(:n, :l, :m), Tuple{T, T, T}}
 const NL{T} = NamedTuple{(:n, :l), Tuple{T, T}}
@@ -18,6 +19,10 @@ end
 
 Base.length(basis::RnlExample) = length(basis.spec)
 
+natural_indices(basis::RnlExample) = copy(basis.spec)
+
+degree(basis::RnlExample, i::Integer) = degree(basis, spec[i])
+degree(basis::RnlExample, b::NamedTuple) = b.n + b.l 
 
 # -------- Evaluation Code 
 
@@ -43,14 +48,14 @@ function evaluate(basis::RnlExample, R::AbstractVector)
    for l = 1:maxL 
       # @simd ivdep 
       for j = 1:nR 
-         rL[j, l+1] = R[j] * rL[j, l] 
+         rL[j, l+1] = R[j] * rL[j, l]  # r^l
       end
    end
 
    for (i, b) in enumerate(basis.spec)
       # @simd ivdep 
       for j = 1:nR
-         Rnl[j, i] = Pn[j, b.n] * rL[j, b.l+1]
+         Rnl[j, i] = Pn[j, b.n] * rL[j, b.l+1] # r^l * P_n -> degree l+n
       end
    end
 

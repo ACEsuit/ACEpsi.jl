@@ -1,5 +1,11 @@
 module ACEpsi
 
+const Spin = Char 
+const ↑ = '↑'
+const ↓ = '↓'
+spins = [↑, ↓]
+export ↑, ↓
+
 include("bflow.jl")
 include("envelope.jl")
 

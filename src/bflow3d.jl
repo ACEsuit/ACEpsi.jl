@@ -7,15 +7,13 @@ using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr
 import ForwardDiff
 
 # ----------------------------------------
-mutable struct RnlYlmEmbedding 
-   bRnl::TR 
-   bYlm::TY 
-   pooling::PooledSparseProduct{3}
-end
+
+
+
 
 
 """
-This function return correct Si for pooling operation.
+This function returns correct Si for pooling operation.
 """
 function onehot!(Si, i, Σ)
    Si .= 0
@@ -27,6 +25,7 @@ function onehot!(Si, i, Σ)
    Si[i, 2] = 0
    Si[i, 3] = 0
 end
+
 
 """
 This function convert spin to corresponding integer value used in spec
