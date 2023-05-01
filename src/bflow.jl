@@ -96,33 +96,6 @@ function onehot!(Si, i, Σ)
    Si[i, 3] = 0
 end
 
-"""
-This function convert spin to corresponding integer value used in spec
-"""
-function spin2num(σ)
-   if σ == '↑'
-      return 2
-   elseif σ == '↓'
-      return 3
-   elseif σ == '∅'
-      return 1
-   end
-   error("illegal spin char for spin2num")
-end
-
-"""
-This function convert num to corresponding spin string.
-"""
-function num2spin(σ)
-   if σ == 2
-      return '↑'
-   elseif σ == 3
-      return '↓'
-   elseif σ == 1
-      return '∅'
-   end
-   error("illegal integer value for num2spin")
-end
 
 
 """

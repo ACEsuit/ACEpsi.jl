@@ -1,6 +1,8 @@
 
-using ACEpsi: ↑, ↓, spins, Spin
+using ACEpsi: ↑, ↓, spins, extspins, Spin, spin2idx, idx2spin
+import Polynomials4ML
 using StaticArrays
+using LinearAlgebra: norm 
 
 struct Nuc{T}
    rr::SVector{3, T}
@@ -14,23 +16,45 @@ end
 #   k | 1 1 1  2 2 2  2 2 2
 #
 
-const NTRNL1 = NamedTuple{(:n, :l, :m, :s), Tuple{Int, Int, Int, Spin}}
-const NTRNLI = NamedTuple{(:I, :n, :l, :m, :s), Tuple{Int, Int, Int, Int, Spin}}
+const NTRNL1 = NamedTuple{(:n, :l, :m), Tuple{Int, Int, Int}}
+const NTRNLIS = NamedTuple{(:I, :s, :n, :l, :m), Tuple{Int, Spin, Int, Int, Int}}
 
 mutable struct AtomicOrbitalsBasis{TR, TY, T}
    bRnl::TR
    bYlm::TY
-   spec1::Vector{NTRNL1}
-   spec::Vector{NTRNLI}
-   nuclei::Vector{Nuc{T}} 
-   # pooling::PooledSparseProduct{3}
+   # ------- specification of the atomic orbitals Rnl * Ylm
+   spec1::Vector{NTRNL1}                # human readable spec
+   spec1idx::Vector{Tuple{Int, Int}}    # indices into Rnl, Ylm 
+   nuclei::Vector{Nuc{T}}               # nuclei (defines the shifted orbitals)
+   # ------- specification of the pooling operations A_{sInlm}
+   # spec::Vector{NTRNLIS}                # human readable spec, definition is 
+                                        # implicit in iteration protocol. 
+end
+
+
+function _invmap(a::AbstractVector)
+   inva = Dict{eltype(a), Int}()
+   for i = 1:length(a) 
+      inva[a[i]] = i 
+   end
+   return inva 
 end
 
 function AtomicOrbitalsBasis(bRnl, bYlm, spec1::Vector{NTRNL1}, 
                              nuclei::Vector{<: Nuc}) 
-   spec = NTRNLI[]
-   basis = AtomicOrbitalsBasis(bRnl, bYlm, spec1, spec, eltype(nuclei)[])
-   set_nuclei!(basis, nuclei)
+
+   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1)) 
+   spec_Rnl = bRnl.spec; inv_Rnl = _invmap(spec_Rnl)
+   spec_Ylm = Polynomials4ML.natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
+
+   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
+   for (i, b) in enumerate(spec1)
+      spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
+   end
+
+   # spec = NTRNLIS[]
+   basis = AtomicOrbitalsBasis(bRnl, bYlm, spec1, spec1idx, eltype(nuclei)[])
+   # set_nuclei!(basis, nuclei)
    return basis 
 end
 
@@ -68,9 +92,7 @@ function make_nlms_spec(bRnl, bYlm;
          continue 
       end
       if admissible(br, by) 
-         for s in spins 
-            push!(spec1, (n=br.n, l = br.l, m = by.m, s = s))
-         end
+         push!(spec1, (n=br.n, l = br.l, m = by.m))
       end
    end
    return spec1 
@@ -81,9 +103,9 @@ function set_nuclei!(basis::AtomicOrbitalsBasis, nuclei::AbstractVector{<: Nuc})
    basis.nuclei = copy(collect(nuclei))
    Nnuc = length(basis.nuclei)
 
-   spec = NTRNLI[] 
-   for b in basis.spec1, I = 1:Nnuc 
-      push!(spec, (I = I, b...))
+   spec = NTRNLIS[] 
+   for b in basis.spec1, I = 1:Nnuc, s in extspins()
+      push!(spec, (I = I, s=s, b...))
    end
 
    basis.spec = spec
@@ -111,17 +133,79 @@ function onehot_spin!(Si, i, Σ)
 end
 
 
-# function evaluate(basis::AtomicOrbitalsBasis, 
-#                   X::AbstractVector{<: AbstractVector}, 
-#                   Σ)
-#    nuc = basis.nuclei 
-#    Nnuc = length(nuc)
-#    Nel = length(X)
-#    VT = promote_type(eltype(nuc), eltype(X))
+function proto_evaluate(basis::AtomicOrbitalsBasis, 
+                        X::AbstractVector{<: AbstractVector}, 
+                        Σ)
+   nuc = basis.nuclei 
+   Nnuc = length(nuc)
+   Nel = length(X)
+   Nnlm = length(basis.spec1)
+   VT = promote_type(eltype(nuc[1].rr), eltype(X[1]))
+   @show VT
    
-#    # create all the shifted configurations 
-#    XX = zeros(VT, Nel)
-#    Rnl = 
-   
-# end
+   # create all the shifted configurations 
+   # this MUST be done in the format (I, i)
+   XX = zeros(VT, (Nnuc, Nel))
+   xx = zeros(eltype(VT), (Nnuc, Nel))
+   for I = 1:Nnuc, i = 1:Nel
+      XX[I, i] = X[i] - nuc[I].rr
+      xx[I, i] = norm(XX[I, i])
+   end
+
+   # evaluate the radial and angular components on all the shifted particles 
+   Rnl = reshape(evaluate(basis.bRnl, xx[:]), (Nnuc, Nel))
+   Ylm = reshape(evaluate(basis.bYlm, XX[:]), (Nnuc, Nel))
+
+   # evaluate all the atomic orbitals as ϕ_nlm = Rnl * Ylm 
+   TA = promote_type(eltype(Rnl), eltype(Ylm))
+   @show TA 
+   ϕnlm = zeros(TA, (Nnuc, Nel, Nnlm))
+   for (k, (iR, iY)) in enumerate(basis.spec1idx)
+      for i = 1:Nel, I = 1:Nnuc
+         ϕnlm[I, i, k] = Rnl[I, i, iR] * Ylm[I, i, iY]
+      end
+   end
+
+   # evaluate the pooling operation
+   #                spin  I    k = (nlm) 
+   Aall = zeros(TA, (2, Nnuc, Nnlm))
+   for k = 1:Nnlm
+      for i = 1:Nel 
+         iσ = spin2num(Σ[i])
+         for I = 1:Nnuc 
+            Aall[iσ, I, k] += ϕnlm[I, i, k]
+         end
+      end
+   end
+
+   # now correct the pooling Aall and write into A^(i)
+   # with do it with i leading so that the N-correlations can 
+   # be parallelized over i 
+   #
+   # A[i, :] = A-basis for electron i, with channels, s, I, k=nlm 
+   # A[i, ∅, I, k] = ϕnlm[I, i, k]
+   # for σ = ↑ or ↓ we have 
+   # A[i, σ, I, k] = ∑_{j ≂̸ i : Σ[j] == σ}  ϕnlm[I, j, k]
+   #               = ∑_{j : Σ[j] == σ}  ϕnlm[I, j, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
+   #
+   @assert spin2idx(↑) == 1
+   @assert spin2idx(↓) == 2
+   @assert spin2idx(∅) == 3
+   A = zeros(TA, ((Nel, 3, Nnuc, Nnlm)))
+   for k = 1:Nnlm 
+      for I = 1:Nnuc 
+         for i = 1:Nel             
+            A[i, 3, I, k] = ϕnlm[I, i, k]
+         end
+         for iσ = 1:2 
+            σ = idx2spin(iσ)
+            for i = 1:Nel 
+               A[i, iσ, I, k] = Aall[iσ, I, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
+            end
+         end
+      end
+   end
+
+   return A 
+end
 

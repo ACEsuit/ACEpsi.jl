@@ -1,7 +1,7 @@
 
 using ACEpsi, Polynomials4ML, StaticArrays
 using Polynomials4ML: natural_indices, degree
-using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc
+using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, proto_evaluate
 
 
 ##
@@ -15,3 +15,10 @@ bAnlm = AtomicOrbitalsBasis(bRnl, bYlm;
                             totaldegree = totdeg, 
                             nuclei = nuclei )
 
+##
+
+Nel = 5
+X = randn(SVector{3, Float64}, Nel)
+Σ = rand(spins(), Nel)
+
+proto_evaluate(bAnlm, X, Σ)
