@@ -182,6 +182,10 @@ function proto_evaluate(basis::AtomicOrbitalsBasis,
    # A[i, σ, I, k] = ∑_{j ≂̸ i : Σ[j] == σ}  ϕnlm[I, j, k]
    #               = ∑_{j : Σ[j] == σ}  ϕnlm[I, j, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
    #
+   #
+   # TODO: discuss - this could be stored much more efficiently as a 
+   #       lazy array. Could that have advantages? 
+   #
    @assert spin2idx(↑) == 1
    @assert spin2idx(↓) == 2
    @assert spin2idx(∅) == 3
