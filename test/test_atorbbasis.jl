@@ -26,7 +26,7 @@ prodbasis = ProductBasis(spec1, bRnl, bYlm)
 aobasis = AtomicOrbitalsBasis(prodbasis, nuclei)
 pooling = BackflowPooling(aobasis)
 
-# we can also construct in this way... To be discuss which one we want / keep both
+# we can also construct in this way which wraps the definition of product basis inside
 aobasis2 = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdegree, nuclei = nuclei, )
 
 @info("Checking two type of construction are same")
@@ -35,6 +35,7 @@ for ntest = 1:30
    local Σ = rand(spins(), Nel)
    print_tf(@test evaluate(aobasis, X, Σ) ≈ evaluate(aobasis2, X, Σ))
 end
+
 println()
 
 @info("Test evaluate ProductBasis")

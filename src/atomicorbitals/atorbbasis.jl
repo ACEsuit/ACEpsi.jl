@@ -21,28 +21,6 @@ end
 const NTRNL1 = NamedTuple{(:n, :l, :m), Tuple{Int, Int, Int}}
 const NTRNLIS = NamedTuple{(:I, :s, :n, :l, :m), Tuple{Int, Spin, Int, Int, Int}}
 
-mutable struct ProductBasis{NB, TR, TY}
-   sparsebasis::SparseProduct{NB}
-   spec1::Vector{NTRNL1}
-   bRnl::TR
-   bYlm::TY
-end
-
-
-function ProductBasis(spec1, bRnl, bYlm)
-   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1)) 
-   spec_Rnl = bRnl.spec; inv_Rnl = _invmap(spec_Rnl)
-   spec_Ylm = Polynomials4ML.natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
-
-   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
-   for (i, b) in enumerate(spec1)
-      spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
-   end
-   sparsebasis = SparseProduct(spec1idx)
-   return ProductBasis(sparsebasis, spec1, bRnl, bYlm)
-end
-
-
 """
 This constructs the specification of all the atomic orbitals for one
 nucleus. 
@@ -73,6 +51,38 @@ function make_nlms_spec(bRnl, bYlm;
 end
 
 
+# Jerry: This is just a specific case of a general ProductBasis, this should go to Polynomials4ML later with a general implementation
+# I will do that after reconfiming this is what we want
+mutable struct ProductBasis{NB, TR, TY}
+   spec1::Vector{NTRNL1}
+   bRnl::TR
+   bYlm::TY
+   # ---- evaluation kernel from Polynomials4ML ---- 
+   sparsebasis::SparseProduct{NB}
+end
+
+function _invmap(a::AbstractVector)
+   inva = Dict{eltype(a), Int}()
+   for i = 1:length(a) 
+      inva[a[i]] = i 
+   end
+   return inva 
+end
+
+function ProductBasis(spec1, bRnl, bYlm)
+   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1)) 
+   spec_Rnl = bRnl.spec; inv_Rnl = _invmap(spec_Rnl)
+   spec_Ylm = Polynomials4ML.natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
+
+   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
+   for (i, b) in enumerate(spec1)
+      spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
+   end
+   sparsebasis = SparseProduct(spec1idx)
+   return ProductBasis(sparsebasis, spec1, bRnl, bYlm)
+end
+
+
 function evaluate(basis::ProductBasis, X::AbstractVector{<: AbstractVector}, Σ)
    Nel = length(X)
    T = promote_type(eltype(X[1]))
@@ -99,95 +109,6 @@ mutable struct AtomicOrbitalsBasis{NB, T}
    nuclei::Vector{Nuc{T}}  # nuclei (defines the shifted orbitals)
 end
 
-function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
-   nuc = basis.nuclei 
-   Nnuc = length(nuc)
-   Nel = size(X, 1)
-   T = promote_type(eltype(X[1]))
-   VT = SVector{3, T}
-   
-   XX = zeros(VT, (Nnuc, Nel))
-   
-   for I = 1:Nnuc, i = 1:Nel
-      XX[I, i] = X[i] - nuc[I].rr
-   end
-
-   Nnlm = length(basis.prodbasis.sparsebasis.spec) 
-   
-   ϕnlm = zeros(T, (Nnuc, Nel, Nnlm))
-
-   for I = 1:Nnuc 
-      ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:], Σ)
-   end
-
-
-
-
-   return ϕnlm
-   # evaluate the pooling operation
-   #                spin  I    k = (nlm) 
-
-   
-   # Aall = zeros(T, (2, Nnuc, Nnlm))
-   # for k = 1:Nnlm
-   #    for i = 1:Nel 
-   #       iσ = spin2idx(Σ[i])
-   #       for I = 1:Nnuc 
-   #          Aall[iσ, I, k] += ϕnlm[I, i, k]
-   #       end
-   #    end
-   # end
-
-   # now correct the pooling Aall and write into A^(i)
-   # with do it with i leading so that the N-correlations can 
-   # be parallelized over i 
-   #
-   # A[i, :] = A-basis for electron i, with channels, s, I, k=nlm 
-   # A[i, ∅, I, k] = ϕnlm[I, i, k]
-   # for σ = ↑ or ↓ we have 
-   # A[i, σ, I, k] = ∑_{j ≂̸ i : Σ[j] == σ}  ϕnlm[I, j, k]
-   #               = ∑_{j : Σ[j] == σ}  ϕnlm[I, j, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
-   #
-   #
-   # TODO: discuss - this could be stored much more efficiently as a 
-   #       lazy array. Could that have advantages? 
-   #
-
-   # @assert spin2idx(↑) == 1
-   # @assert spin2idx(↓) == 2
-   # @assert spin2idx(∅) == 3
-   # A = zeros(T, ((Nel, 3, Nnuc, Nnlm)))
-   # for k = 1:Nnlm 
-   #    for I = 1:Nnuc 
-   #       for i = 1:Nel             
-   #          A[i, 3, I, k] = ϕnlm[I, i, k]
-   #       end
-   #       for iσ = 1:2 
-   #          σ = idx2spin(iσ)
-   #          for i = 1:Nel 
-   #             A[i, iσ, I, k] = Aall[iσ, I, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
-   #          end
-   #       end
-   #    end
-   # end
-
-   # return A 
-end
-
-
-
-
-
-
-
-function _invmap(a::AbstractVector)
-   inva = Dict{eltype(a), Int}()
-   for i = 1:length(a) 
-      inva[a[i]] = i 
-   end
-   return inva 
-end
-
 
 function AtomicOrbitalsBasis(bRnl, bYlm; 
                totaldegree=3, 
@@ -200,6 +121,30 @@ function AtomicOrbitalsBasis(bRnl, bYlm;
 end
 
 
+function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
+   nuc = basis.nuclei 
+   Nnuc = length(nuc)
+   Nel = size(X, 1)
+   T = promote_type(eltype(X[1]))
+   VT = SVector{3, T}
+   XX = zeros(VT, (Nnuc, Nel))
+   
+   # trans
+   for I = 1:Nnuc, i = 1:Nel
+      XX[I, i] = X[i] - nuc[I].rr
+   end
+
+   Nnlm = length(basis.prodbasis.sparsebasis.spec) 
+   ϕnlm = zeros(T, (Nnuc, Nel, Nnlm))
+
+   for I = 1:Nnuc
+      ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:], Σ)
+   end
+
+   return ϕnlm
+end
+
+# ------------ utils for AtomicOrbitalsBasis ------------
 function set_nuclei!(basis::AtomicOrbitalsBasis, nuclei::AbstractVector{<: Nuc})
    basis.nuclei = copy(collect(nuclei))
    return nothing 
