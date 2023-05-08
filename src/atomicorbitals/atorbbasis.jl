@@ -1,6 +1,8 @@
+import Polynomials4ML: evaluate
 
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
-import Polynomials4ML
+using Polynomials4ML: SparseProduct
+
 using StaticArrays
 using LinearAlgebra: norm 
 
@@ -58,7 +60,6 @@ function evaluate(basis::ProductBasis, X::AbstractVector{<: AbstractVector}, Σ)
    Nel = length(X)
    T = promote_type(eltype(X[1]))
    VT = SVector{3, T}
-   @show VT
    
    # create all the shifted configurations 
    xx = zeros(eltype(VT), Nel)
@@ -84,7 +85,9 @@ end
 function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
    nuc = basis.nuclei 
    Nnuc = length(nuc)
-   
+   Nel = size(X, 1)
+   T = promote_type(eltype(X[1]))
+   VT = SVector{3, T}
    
    XX = zeros(VT, (Nnuc, Nel))
    
@@ -93,8 +96,8 @@ function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVecto
    end
 
    Nnlm = length(basis.prodbasis.sparsebasis.spec) 
-
-   ϕnlm = zeros(TA, (Nnuc, Nel, Nnlm))
+   
+   ϕnlm = zeros(T, (Nnuc, Nel, Nnlm))
 
    for I = 1:Nnuc 
       ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:], Σ)
@@ -102,7 +105,7 @@ function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVecto
 
    # evaluate the pooling operation
    #                spin  I    k = (nlm) 
-   Aall = zeros(TA, (2, Nnuc, Nnlm))
+   Aall = zeros(T, (2, Nnuc, Nnlm))
    for k = 1:Nnlm
       for i = 1:Nel 
          iσ = spin2idx(Σ[i])
@@ -129,7 +132,7 @@ function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVecto
    @assert spin2idx(↑) == 1
    @assert spin2idx(↓) == 2
    @assert spin2idx(∅) == 3
-   A = zeros(TA, ((Nel, 3, Nnuc, Nnlm)))
+   A = zeros(T, ((Nel, 3, Nnuc, Nnlm)))
    for k = 1:Nnlm 
       for I = 1:Nnuc 
          for i = 1:Nel             
@@ -161,13 +164,6 @@ function _invmap(a::AbstractVector)
    return inva 
 end
 
-function _invmap(a::AbstractVector)
-   inva = Dict{eltype(a), Int}()
-   for i = 1:length(a) 
-      inva[a[i]] = i 
-   end
-   return inva 
-end
 
 """
 
