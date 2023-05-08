@@ -9,7 +9,6 @@ struct Nuc{T}
    charge::T   # should this be an integer? 
 end 
 
-
 #
 # Ordering of the embedding 
 # nuc | 1 2 3  1 2 3  1 2 3
@@ -19,55 +18,11 @@ end
 const NTRNL1 = NamedTuple{(:n, :l, :m), Tuple{Int, Int, Int}}
 const NTRNLIS = NamedTuple{(:I, :s, :n, :l, :m), Tuple{Int, Spin, Int, Int, Int}}
 
-mutable struct AtomicOrbitalsBasis{TR, TY, T}
+mutable struct ProductBasis{NB, TR, TY}
+   sparsebasis::SparseProduct{NB}
    bRnl::TR
    bYlm::TY
-   # ------- specification of the atomic orbitals Rnl * Ylm
-   spec1::Vector{NTRNL1}                # human readable spec
-   spec1idx::Vector{Tuple{Int, Int}}    # indices into Rnl, Ylm 
-   nuclei::Vector{Nuc{T}}               # nuclei (defines the shifted orbitals)
-   # ------- specification of the pooling operations A_{sInlm}
-   # spec::Vector{NTRNLIS}                # human readable spec, definition is 
-                                        # implicit in iteration protocol. 
 end
-
-
-function _invmap(a::AbstractVector)
-   inva = Dict{eltype(a), Int}()
-   for i = 1:length(a) 
-      inva[a[i]] = i 
-   end
-   return inva 
-end
-
-function AtomicOrbitalsBasis(bRnl, bYlm, spec1::Vector{NTRNL1}, 
-                             nuclei::Vector{<: Nuc}) 
-
-   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1)) 
-   spec_Rnl = bRnl.spec; inv_Rnl = _invmap(spec_Rnl)
-   spec_Ylm = Polynomials4ML.natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
-
-   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
-   for (i, b) in enumerate(spec1)
-      spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
-   end
-
-   # spec = NTRNLIS[]
-   basis = AtomicOrbitalsBasis(bRnl, bYlm, spec1, spec1idx, eltype(nuclei)[])
-   set_nuclei!(basis, nuclei)
-   return basis 
-end
-
-
-function AtomicOrbitalsBasis(bRnl, bYlm; 
-               totaldegree=3, 
-               nuclei = Nuc{Float64}[], 
-               )
-   spec1 = make_nlms_spec(bRnl, bYlm; 
-                          totaldegree = totaldegree) 
-   return AtomicOrbitalsBasis(bRnl, bYlm, spec1, nuclei)
-end
-
 
 """
 This constructs the specification of all the atomic orbitals for one
@@ -99,65 +54,50 @@ function make_nlms_spec(bRnl, bYlm;
 end
 
 
-function set_nuclei!(basis::AtomicOrbitalsBasis, nuclei::AbstractVector{<: Nuc})
-   basis.nuclei = copy(collect(nuclei))
-   return nothing 
-end
-
-
-function get_spec(basis::AtomicOrbitalsBasis) 
-   spec = NTRNLIS[]
-   Nnuc = length(basis.nuclei)
-
-   spec = Array{NTRNLIS, 3}(undef, (3, Nnuc, length(basis.spec1)))
-
-   for (k, nlm) in enumerate(basis.spec1)
-      for I = 1:Nnuc 
-         for (is, s) in enumerate(extspins())
-            spec[is, I, k] = (I = I, s=s, nlm...)
-         end
-      end
-   end
-
-   return spec 
-end
-
-
-# ------------ Evaluation kernels 
-
-
-function proto_evaluate(basis::AtomicOrbitalsBasis, 
-                        X::AbstractVector{<: AbstractVector}, 
-                        Σ)
-   nuc = basis.nuclei 
-   Nnuc = length(nuc)
+function evaluate(basis::ProductBasis, X::AbstractVector{<: AbstractVector}, Σ)
    Nel = length(X)
-   Nnlm = length(basis.spec1)
-   T = promote_type(eltype(nuc[1].rr), eltype(X[1]))
+   T = promote_type(eltype(X[1]))
    VT = SVector{3, T}
    @show VT
    
    # create all the shifted configurations 
-   # this MUST be done in the format (I, i)
-   XX = zeros(VT, (Nnuc, Nel))
-   xx = zeros(eltype(VT), (Nnuc, Nel))
-   for I = 1:Nnuc, i = 1:Nel
-      XX[I, i] = X[i] - nuc[I].rr
-      xx[I, i] = norm(XX[I, i])
+   xx = zeros(eltype(VT), Nel)
+   for i = 1:Nel
+      xx[i] = norm(X[i])
    end
 
    # evaluate the radial and angular components on all the shifted particles 
-   Rnl = reshape(evaluate(basis.bRnl, xx[:]), (Nnuc, Nel, length(basis.bRnl)))
-   Ylm = reshape(evaluate(basis.bYlm, XX[:]), (Nnuc, Nel, length(basis.bYlm)))
+   Rnl = reshape(evaluate(basis.bRnl, xx[:]), (Nel, length(basis.bRnl)))
+   Ylm = reshape(evaluate(basis.bYlm, X[:]), (Nel, length(basis.bYlm)))
 
    # evaluate all the atomic orbitals as ϕ_nlm = Rnl * Ylm 
-   TA = promote_type(eltype(Rnl), eltype(Ylm))
-   @show TA 
+   ϕnlm = evaluate(basis.sparsebasis, (Rnl, Ylm))
+
+   return ϕnlm
+end
+
+mutable struct AtomicOrbitalsBasis{NB, T}
+   prodbasis::ProductBasis{NB}
+   nuclei::Vector{Nuc{T}}  # nuclei (defines the shifted orbitals)
+end
+
+function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
+   nuc = basis.nuclei 
+   Nnuc = length(nuc)
+   
+   
+   XX = zeros(VT, (Nnuc, Nel))
+   
+   for I = 1:Nnuc, i = 1:Nel
+      XX[I, i] = X[i] - nuc[I].rr
+   end
+
+   Nnlm = length(basis.prodbasis.sparsebasis.spec) 
+
    ϕnlm = zeros(TA, (Nnuc, Nel, Nnlm))
-   for (k, (iR, iY)) in enumerate(basis.spec1idx)
-      for i = 1:Nel, I = 1:Nnuc
-         ϕnlm[I, i, k] = Rnl[I, i, iR] * Ylm[I, i, iY]
-      end
+
+   for I = 1:Nnuc 
+      ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:], Σ)
    end
 
    # evaluate the pooling operation
@@ -207,3 +147,67 @@ function proto_evaluate(basis::AtomicOrbitalsBasis,
    return A 
 end
 
+
+
+
+
+
+
+function _invmap(a::AbstractVector)
+   inva = Dict{eltype(a), Int}()
+   for i = 1:length(a) 
+      inva[a[i]] = i 
+   end
+   return inva 
+end
+
+function _invmap(a::AbstractVector)
+   inva = Dict{eltype(a), Int}()
+   for i = 1:length(a) 
+      inva[a[i]] = i 
+   end
+   return inva 
+end
+
+"""
+
+function AtomicOrbitalsBasis(bRnl, bYlm; 
+               totaldegree=3, 
+               nuclei = Nuc{Float64}[], 
+               )
+   spec1 = make_nlms_spec(bRnl, bYlm; 
+                          totaldegree = totaldegree) 
+   return AtomicOrbitalsBasis(bRnl, bYlm, spec1, nuclei)
+end
+
+
+
+
+function set_nuclei!(basis::AtomicOrbitalsBasis, nuclei::AbstractVector{<: Nuc})
+   basis.nuclei = copy(collect(nuclei))
+   return nothing 
+end
+
+
+function get_spec(basis::AtomicOrbitalsBasis) 
+   spec = NTRNLIS[]
+   Nnuc = length(basis.nuclei)
+
+   spec = Array{NTRNLIS, 3}(undef, (3, Nnuc, length(basis.spec1)))
+
+   for (k, nlm) in enumerate(basis.spec1)
+      for I = 1:Nnuc 
+         for (is, s) in enumerate(extspins())
+            spec[is, I, k] = (I = I, s=s, nlm...)
+         end
+      end
+   end
+
+   return spec 
+end
+
+
+# ------------ Evaluation kernels 
+
+
+"""

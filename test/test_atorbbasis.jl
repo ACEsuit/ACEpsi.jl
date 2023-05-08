@@ -1,29 +1,55 @@
 
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
-using Polynomials4ML: natural_indices, degree
+using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, proto_evaluate
 using Polynomials4ML.Testing: print_tf 
-
-##
 
 totdeg = 3
 bRnl = ACEpsi.AtomicOrbitals.RnlExample(totdeg)
 bYlm = RYlmBasis(totdeg)
 nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
 
-bAnlm = AtomicOrbitalsBasis(bRnl, bYlm; 
-                            totaldegree = totdeg, 
-                            nuclei = nuclei )
+totaldegree = 4
+spec1 = make_nlms_spec(bRnl, bYlm; totaldegree = totaldegree) 
+spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1)) 
+spec_Rnl = bRnl.spec; inv_Rnl = _invmap(spec_Rnl)
+spec_Ylm = Polynomials4ML.natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
 
-spec = ACEpsi.AtomicOrbitals.get_spec(bAnlm)
-
-##
+spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
+for (i, b) in enumerate(spec1)
+   spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
+end
+sparsebasis = SparseProduct(spec1idx)
+prodbasis = ProductBasis(sparsebasis,bRnl,bYlm)
 
 Nel = 5
 X = randn(SVector{3, Float64}, Nel)
 Σ = rand(spins(), Nel)
 
-A = proto_evaluate(bAnlm, X, Σ)
+ϕnlm = evaluate(prodbasis, X, Σ)
+
+bAnlm = AtomicOrbitalsBasis(prodbasis, nuclei)
+A = evaluate(bAnlm, X, Σ)
+
+
+"""
+
+
+
+
+
+
+
+
+
+## not test
+spec = ACEpsi.AtomicOrbitals.get_spec(bAnlm)
+
+##
+
+
+
+
 
 
 ## test the Evaluation: 
@@ -63,3 +89,4 @@ println()
 
 ## 
 
+"""
