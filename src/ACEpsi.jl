@@ -11,4 +11,6 @@ include("envelope.jl")
 include("atomicorbitals/atomicorbitals.jl")
 # include("bflow3d.jl")
 
+include("backflowpooling.jl")
+
 end

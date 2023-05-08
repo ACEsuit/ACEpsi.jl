@@ -3,6 +3,7 @@ import Polynomials4ML: evaluate
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 using Polynomials4ML: SparseProduct
 
+using Polynomials4ML
 using StaticArrays
 using LinearAlgebra: norm 
 
@@ -22,9 +23,25 @@ const NTRNLIS = NamedTuple{(:I, :s, :n, :l, :m), Tuple{Int, Spin, Int, Int, Int}
 
 mutable struct ProductBasis{NB, TR, TY}
    sparsebasis::SparseProduct{NB}
+   spec1::Vector{NTRNL1}
    bRnl::TR
    bYlm::TY
 end
+
+
+function ProductBasis(spec1, bRnl, bYlm)
+   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1)) 
+   spec_Rnl = bRnl.spec; inv_Rnl = _invmap(spec_Rnl)
+   spec_Ylm = Polynomials4ML.natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
+
+   spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
+   for (i, b) in enumerate(spec1)
+      spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
+   end
+   sparsebasis = SparseProduct(spec1idx)
+   return ProductBasis(sparsebasis, spec1, bRnl, bYlm)
+end
+
 
 """
 This constructs the specification of all the atomic orbitals for one
@@ -103,17 +120,23 @@ function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVecto
       ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:], Σ)
    end
 
+
+
+
+   return ϕnlm
    # evaluate the pooling operation
    #                spin  I    k = (nlm) 
-   Aall = zeros(T, (2, Nnuc, Nnlm))
-   for k = 1:Nnlm
-      for i = 1:Nel 
-         iσ = spin2idx(Σ[i])
-         for I = 1:Nnuc 
-            Aall[iσ, I, k] += ϕnlm[I, i, k]
-         end
-      end
-   end
+
+   
+   # Aall = zeros(T, (2, Nnuc, Nnlm))
+   # for k = 1:Nnlm
+   #    for i = 1:Nel 
+   #       iσ = spin2idx(Σ[i])
+   #       for I = 1:Nnuc 
+   #          Aall[iσ, I, k] += ϕnlm[I, i, k]
+   #       end
+   #    end
+   # end
 
    # now correct the pooling Aall and write into A^(i)
    # with do it with i leading so that the N-correlations can 
@@ -129,25 +152,26 @@ function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVecto
    # TODO: discuss - this could be stored much more efficiently as a 
    #       lazy array. Could that have advantages? 
    #
-   @assert spin2idx(↑) == 1
-   @assert spin2idx(↓) == 2
-   @assert spin2idx(∅) == 3
-   A = zeros(T, ((Nel, 3, Nnuc, Nnlm)))
-   for k = 1:Nnlm 
-      for I = 1:Nnuc 
-         for i = 1:Nel             
-            A[i, 3, I, k] = ϕnlm[I, i, k]
-         end
-         for iσ = 1:2 
-            σ = idx2spin(iσ)
-            for i = 1:Nel 
-               A[i, iσ, I, k] = Aall[iσ, I, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
-            end
-         end
-      end
-   end
 
-   return A 
+   # @assert spin2idx(↑) == 1
+   # @assert spin2idx(↓) == 2
+   # @assert spin2idx(∅) == 3
+   # A = zeros(T, ((Nel, 3, Nnuc, Nnlm)))
+   # for k = 1:Nnlm 
+   #    for I = 1:Nnuc 
+   #       for i = 1:Nel             
+   #          A[i, 3, I, k] = ϕnlm[I, i, k]
+   #       end
+   #       for iσ = 1:2 
+   #          σ = idx2spin(iσ)
+   #          for i = 1:Nel 
+   #             A[i, iσ, I, k] = Aall[iσ, I, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
+   #          end
+   #       end
+   #    end
+   # end
+
+   # return A 
 end
 
 
@@ -165,18 +189,15 @@ function _invmap(a::AbstractVector)
 end
 
 
-"""
-
 function AtomicOrbitalsBasis(bRnl, bYlm; 
                totaldegree=3, 
                nuclei = Nuc{Float64}[], 
                )
    spec1 = make_nlms_spec(bRnl, bYlm; 
-                          totaldegree = totaldegree) 
-   return AtomicOrbitalsBasis(bRnl, bYlm, spec1, nuclei)
+                          totaldegree = totaldegree)
+   prodbasis = ProductBasis(spec1, bRnl, bYlm)
+   return AtomicOrbitalsBasis(prodbasis, nuclei)
 end
-
-
 
 
 function set_nuclei!(basis::AtomicOrbitalsBasis, nuclei::AbstractVector{<: Nuc})
@@ -189,9 +210,9 @@ function get_spec(basis::AtomicOrbitalsBasis)
    spec = NTRNLIS[]
    Nnuc = length(basis.nuclei)
 
-   spec = Array{NTRNLIS, 3}(undef, (3, Nnuc, length(basis.spec1)))
+   spec = Array{NTRNLIS, 3}(undef, (3, Nnuc, length(basis.prodbasis.spec1)))
 
-   for (k, nlm) in enumerate(basis.spec1)
+   for (k, nlm) in enumerate(basis.prodbasis.spec1)
       for I = 1:Nnuc 
          for (is, s) in enumerate(extspins())
             spec[is, I, k] = (I = I, s=s, nlm...)
@@ -206,4 +227,3 @@ end
 # ------------ Evaluation kernels 
 
 
-"""
