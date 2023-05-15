@@ -111,5 +111,6 @@ chain_ps, chain_st = LuxCore.setup(MersenneTwister(1234), tryChain)
 chain_st = (aobasis = (Σ = Σ, ), pooling = (Σ = Σ, ))
 # try Chain is as expected
 print_tf(@test tryChain(X, chain_ps, chain_st)[1] ≈ A)
+
 println()
 

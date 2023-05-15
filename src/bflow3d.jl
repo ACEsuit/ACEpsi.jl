@@ -8,7 +8,7 @@ import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec
 
 using LuxCore: AbstractExplicitLayer
-using Lux: Dense, Chain
+using Lux: Dense, Chain, WrappedFunction
 # ----------------------------------------
 
 
@@ -84,25 +84,6 @@ end
 
 (l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
 
-# TODO: maybe in here we can do fast-reshape with stride array?
-struct ReshapeLayer <: AbstractExplicitLayer end
-
-@inline function (f::ReshapeLayer)(x::AbstractArray{T, N}, ps, st::NamedTuple) where {T, N}
-   # (nX, 3, length(nuclei), length(spec1p)) -> (nX, 3 * length(nuclei) * length(spec1p)) each row go over the spin channel first, then nuclei, then spec1p
-   return reshape(x, (size(x, 1), prod(size(x)[2:end]))), st
-end
-
-struct TransposeLayer <: AbstractExplicitLayer end
-
-@inline function (f::TransposeLayer)(x::AbstractArray{T, N}, ps, st::NamedTuple) where {T, N}
-   return transpose(x), st
-end
-
-struct logabsdetLayer <: AbstractExplicitLayer end
-
-@inline function (f::logabsdetLayer)(Φ::AbstractArray{T, N}, ps, st::NamedTuple) where {T, N}
-   return 2 * logabsdet(Φ)[1], st
-end
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
@@ -143,10 +124,12 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
    corr_layer = ACEcore.lux(corr1)
 
-   # TODO: confirm what is the envelope and add trainable basis
+   # TODO: confirm what is the envelope and add trainable basis after bA
    # A Note here is that the the initial state of the chain must contain st.Σ in some layers... 
-   # to be discuss whether we should put it in X directly since we do not differentiate w.r.t Σ and it is not trainable too
-   return Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = ReshapeLayer(), bAA = corr_layer, transpose = TransposeLayer(), Linear1 = Dense(length(corr1), Nel), Mask = MaskLayer(Nel), logabsdet = logabsdetLayer())
+   # to be discuss whether we should put it in X directly since it is not trainable and is the same throughout the training
+   reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
+   logabsdet_func = x -> 2 * logabsdet(x)[1]
+   return Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, transpose = WrappedFunction(transpose), Linear1 = Dense(length(corr1), Nel), Mask = MaskLayer(Nel), logabsdet = WrappedFunction(logabsdet_func))
 end
 
 

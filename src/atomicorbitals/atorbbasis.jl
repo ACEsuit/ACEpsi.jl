@@ -152,7 +152,7 @@ end
 # ------------ utils for AtomicOrbitalsBasis ------------
 function set_nuclei!(basis::AtomicOrbitalsBasis, nuclei::AbstractVector{<: Nuc})
    basis.nuclei = copy(collect(nuclei))
-   return nothing 
+   return nothing
 end
 
 
