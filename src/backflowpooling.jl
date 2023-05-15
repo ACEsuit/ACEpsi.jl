@@ -1,8 +1,12 @@
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis
+using LuxCore: AbstractExplicitLayer
+using Random: AbstractRNG
 
 mutable struct BackflowPooling
    basis::AtomicOrbitalsBasis
 end
+
+(pooling::BackflowPooling)(args...) = evaluate(pooling, args...)
 
 function evaluate(pooling::BackflowPooling, ϕnlm, Σ)
    basis = pooling.basis
@@ -63,7 +67,28 @@ end
 
 
 
+# --------------------- connect with Lux 
+
+struct BackflowPoolingLayer <: AbstractExplicitLayer 
+   basis::BackflowPooling
+end
+
+lux(basis::BackflowPooling) = BackflowPoolingLayer(basis)
+
+initialparameters(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxparams(rng, l.basis)
+
+initialstates(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxstate(rng, l.basis)
 
 
+# This should be removed later and replace by ObejctPools
+(l::BackflowPoolingLayer)(ϕnlm, ps, st) = 
+      evaluate(l.basis, ϕnlm, st.Σ), st
 
+# ----- ObejctPools
+# (l::BackflowPoolingLayer)(args...) = evaluate(l, args...)
 
+# function evaluate(l::BackflowPoolingLayer, ϕnlm_Σ::SINGLE, ps, st)
+#    B = acquire!(st.cache, :B, (length(l.basis), ), _valtype(l.basis, x))
+#    evaluate!(parent(B), l.basis, ϕnlm_Σ[1], ϕnlm_Σ[2])
+#    return B 
+# end 

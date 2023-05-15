@@ -2,6 +2,8 @@ import Polynomials4ML: evaluate
 
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 using Polynomials4ML: SparseProduct
+using LuxCore: AbstractExplicitLayer
+using Random: AbstractRNG
 
 using Polynomials4ML
 using StaticArrays
@@ -61,6 +63,8 @@ mutable struct ProductBasis{NB, TR, TY}
    sparsebasis::SparseProduct{NB}
 end
 
+(PB::ProductBasis)(args...) = evaluate(PB, args...)
+
 function _invmap(a::AbstractVector)
    inva = Dict{eltype(a), Int}()
    for i = 1:length(a) 
@@ -79,17 +83,16 @@ function ProductBasis(spec1, bRnl, bYlm)
       spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
    end
    sparsebasis = SparseProduct(spec1idx)
-   return ProductBasis(sparsebasis, spec1, bRnl, bYlm)
+   return ProductBasis(spec1, bRnl, bYlm, sparsebasis)
 end
 
 
 function evaluate(basis::ProductBasis, X::AbstractVector{<: AbstractVector}, Σ)
    Nel = length(X)
    T = promote_type(eltype(X[1]))
-   VT = SVector{3, T}
    
-   # create all the shifted configurations 
-   xx = zeros(eltype(VT), Nel)
+   # create all the shifted configurations
+   xx = zeros(eltype(T), Nel)
    for i = 1:Nel
       xx[i] = norm(X[i])
    end
@@ -108,6 +111,8 @@ mutable struct AtomicOrbitalsBasis{NB, T}
    prodbasis::ProductBasis{NB}
    nuclei::Vector{Nuc{T}}  # nuclei (defines the shifted orbitals)
 end
+
+(aobasis::AtomicOrbitalsBasis)(args...) = evaluate(aobasis, args...)
 
 
 function AtomicOrbitalsBasis(bRnl, bYlm; 
@@ -172,3 +177,36 @@ end
 # ------------ Evaluation kernels 
 
 
+# ------------ connect with Lux
+struct AtomicOrbitalsBasisLayer{TB} <: AbstractExplicitLayer
+   basis::TB
+   meta::Dict{String, Any}
+end
+
+Base.length(l::AtomicOrbitalsBasisLayer) = length(l.basis)
+
+lux(basis::AtomicOrbitalsBasis) = AtomicOrbitalsBasisLayer(basis, Dict{String, Any}())
+
+initialparameters(rng::AbstractRNG, l::AtomicOrbitalsBasisLayer) = _init_luxparams(rng, l.basis)
+
+initialstates(rng::AbstractRNG, l::AtomicOrbitalsBasisLayer) = _init_luxstate(rng, l.basis)
+
+(l::AtomicOrbitalsBasisLayer)(X, ps, st) = 
+      evaluate(l.basis, X, st.Σ), st
+
+
+
+# ----- ObejctPools
+# (l::AtomicOrbitalsBasisLayer)(args...) = evaluate(l, args...)
+
+# function evaluate(l::AtomicOrbitalsBasisLayer, x::SINGLE, ps, st)
+#    B = acquire!(st.cache, :B, (length(l.basis), ), _valtype(l.basis, x))
+#    evaluate!(parent(B), l.basis, x)
+#    return B 
+# end 
+
+# function evaluate(l::AtomicOrbitalsBasisLayer, X::AbstractArray{<: SINGLE}, ps, st)
+#    B = acquire!(st.cache[:Bbatch], (length(l.basis), length(X)), _valtype(l.basis, X[1]))
+#    evaluate!(parent(B), l.basis, X)
+#    return B 
+# end

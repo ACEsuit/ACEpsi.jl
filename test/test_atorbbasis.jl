@@ -1,9 +1,10 @@
-
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
 using ACEpsi: BackflowPooling
 using Polynomials4ML.Testing: print_tf 
+using LuxCore
+using Random
 
 # test configs
 Rnldegree = 4
@@ -39,13 +40,13 @@ end
 println()
 
 @info("Test evaluate ProductBasis")
-ϕnlm = evaluate(prodbasis, X, Σ)
+ϕnlm = prodbasis(X, Σ)
 
 @info("Test evaluate AtomicOrbitalsBasis")
-bϕnlm = evaluate(aobasis, X, Σ)
+bϕnlm = aobasis(X, Σ)
 
 @info("Test BackflowPooling")
-A = ACEpsi.evaluate(pooling, bϕnlm, Σ)
+A = pooling(bϕnlm, Σ)
 
 println()
 
@@ -89,4 +90,26 @@ end
 println()
 
 # 
+
+@info("---------- Lux tests ----------")
+aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)
+pooling_layer = ACEpsi.lux(pooling)
+
+# set up null states
+ps, st = LuxCore.setup(MersenneTwister(1234), aobasis_layer)
+st1 = (Σ = Σ, )
+
+@info("Checking layers working fine seperately")
+print_tf(@test aobasis_layer(X, ps, st1)[1] ≈ bϕnlm)
+print_tf(@test pooling_layer(bϕnlm, ps, st1)[1] ≈ A)
+println()
+
+@info("Checking Chain towards A basis")
+using Lux: Chain
+tryChain = Chain(; aobasis = aobasis_layer, pooling = pooling_layer)
+chain_ps, chain_st = LuxCore.setup(MersenneTwister(1234), tryChain)
+chain_st = (aobasis = (Σ = Σ, ), pooling = (Σ = Σ, ))
+# try Chain is as expected
+print_tf(@test tryChain(X, chain_ps, chain_st)[1] ≈ A)
+println()
 
