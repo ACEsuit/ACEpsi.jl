@@ -1,7 +1,7 @@
 import Polynomials4ML: evaluate
 
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
-using Polynomials4ML: SparseProduct
+using Polynomials4ML: SparseProduct, ProductBasis
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
 
@@ -53,18 +53,6 @@ function make_nlms_spec(bRnl, bYlm;
 end
 
 
-# Jerry: This is just a specific case of a general ProductBasis, this should go to Polynomials4ML later with a general implementation
-# I will do that after reconfiming this is what we want
-mutable struct ProductBasis{NB, TR, TY}
-   spec1::Vector{NTRNL1}
-   bRnl::TR
-   bYlm::TY
-   # ---- evaluation kernel from Polynomials4ML ---- 
-   sparsebasis::SparseProduct{NB}
-end
-
-(PB::ProductBasis)(args...) = evaluate(PB, args...)
-
 function _invmap(a::AbstractVector)
    inva = Dict{eltype(a), Int}()
    for i = 1:length(a) 
@@ -73,39 +61,24 @@ function _invmap(a::AbstractVector)
    return inva 
 end
 
+function dropnames(namedtuple::NamedTuple, names::Tuple{Vararg{Symbol}}) 
+   keepnames = Base.diff_names(Base._nt_names(namedtuple), names)
+   return NamedTuple{keepnames}(namedtuple)
+end
+
 function ProductBasis(spec1, bRnl, bYlm)
    spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1)) 
    spec_Rnl = bRnl.spec; inv_Rnl = _invmap(spec_Rnl)
-   spec_Ylm = Polynomials4ML.natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
+   spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
 
    spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
    for (i, b) in enumerate(spec1)
-      spec1idx[i] = (inv_Rnl[(n=b.n, l=b.l)], inv_Ylm[(l=b.l, m=b.m)])
+      spec1idx[i] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
    end
    sparsebasis = SparseProduct(spec1idx)
    return ProductBasis(spec1, bRnl, bYlm, sparsebasis)
 end
 
-
-function evaluate(basis::ProductBasis, X::AbstractVector{<: AbstractVector}, Σ)
-   Nel = length(X)
-   T = promote_type(eltype(X[1]))
-   
-   # create all the shifted configurations
-   xx = zeros(eltype(T), Nel)
-   for i = 1:Nel
-      xx[i] = norm(X[i])
-   end
-
-   # evaluate the radial and angular components on all the shifted particles 
-   Rnl = reshape(evaluate(basis.bRnl, xx[:]), (Nel, length(basis.bRnl)))
-   Ylm = reshape(evaluate(basis.bYlm, X[:]), (Nel, length(basis.bYlm)))
-
-   # evaluate all the atomic orbitals as ϕ_nlm = Rnl * Ylm 
-   ϕnlm = evaluate(basis.sparsebasis, (Rnl, Ylm))
-
-   return ϕnlm
-end
 
 mutable struct AtomicOrbitalsBasis{NB, T}
    prodbasis::ProductBasis{NB}

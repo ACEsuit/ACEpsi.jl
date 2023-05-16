@@ -3,7 +3,7 @@ using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
 using ACEpsi: BackflowPooling
 using ACEpsi: BFwf_lux
-using Polynomials4ML.Testing: print_tf 
+using ACEbase.Testing: print_tf
 using LuxCore
 using Random
 
@@ -34,4 +34,5 @@ bYlm = RYlmBasis(Ylmdegree)
 BFwf_chain = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = 2)
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 
+@info("Test evaluate")
 BFwf_chain(X, ps, st)

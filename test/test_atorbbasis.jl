@@ -2,7 +2,7 @@ using ACEpsi, Polynomials4ML, StaticArrays, Test
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
 using ACEpsi: BackflowPooling
-using Polynomials4ML.Testing: print_tf 
+using ACEbase.Testing: print_tf
 using LuxCore
 using Random
 

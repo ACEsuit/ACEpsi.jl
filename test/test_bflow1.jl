@@ -99,7 +99,7 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 const ↑, ↓, ∅ = '↑','↓','∅'
 Nel = 5
 polys = legendre_basis(8)
-wf = BFwf1(Nel, polys; ν=3)
+wf = BFwf1(Nel, polys, trans = x -> atan(x); ν=3)
 
 X = 2 * rand(Nel) .- 1
 Σ = rand([↑, ↓], Nel)

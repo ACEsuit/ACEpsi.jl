@@ -11,7 +11,61 @@ using LuxCore: AbstractExplicitLayer
 using Lux: Dense, Chain, WrappedFunction
 # ----------------------------------------
 
+struct MaskLayer <: AbstractExplicitLayer 
+   nX::Integer
+end
 
+(l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
+
+
+function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
+   ν = 3, T = Float64, 
+   sd_admissible = bb -> (true),
+   envelope = x -> x) # enveolpe to be replaced by SJ-factor
+
+   spec1p = make_nlms_spec(bRnl, bYlm; 
+                          totaldegree = totdeg)
+
+   # size(X) = (nX, 3); length(Σ) = nX
+   aobasis = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdeg, nuclei = nuclei, )
+   pooling = BackflowPooling(aobasis)
+
+   # define sparse for n-correlations
+   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+
+   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
+                        minvv = fill(0, ν), 
+                        maxvv = fill(length(spec1p), ν), 
+                        ordered = true)
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+
+   # further restrict
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+
+   # define n-correlation
+   corr1 = SparseSymmProd(spec; T = Float64)
+
+   # ----------- Lux connections ---------
+   # Should we break down the aobasis again into x -> (norm(x), x) -> (Rln, Ylm) -> ϕnlm for trainable radial basis later?
+   # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
+   aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)
+   # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
+   pooling_layer = ACEpsi.lux(pooling)
+   # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
+   corr_layer = ACEcore.lux(corr1)
+
+   # TODO: Add J-factor and add trainable basis later
+
+   reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
+   # Questions to discuss:
+   # 1. it seems that we do not need trans since the bases have already taken care of it?
+   # 2. Why we need a tranpose here??? Seems that the output from corr_layer is (length(spec), nX)???
+   # 3. How do we define n-correlations if we use trainable basis?
+   return Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
+               bAA = corr_layer, transpose_layer = WrappedFunction(transpose), hidden1 = Dense(length(corr1), Nel), 
+               Mask = MaskLayer(Nel), logabsdet = WrappedFunction(x -> 2 * logabsdet(x)[1]))
+end
 
 
 
@@ -77,61 +131,6 @@ using Lux: Dense, Chain, WrappedFunction
 #    end
 #    return A 
 # end
-
-struct MaskLayer <: AbstractExplicitLayer 
-   nX::Integer
-end
-
-(l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
-
-
-function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
-   ν = 3, T = Float64, 
-   trans = identity, 
-   sd_admissible = bb -> (true),
-   envelope = x -> x)
-
-   spec1p = make_nlms_spec(bRnl, bYlm; 
-                          totaldegree = totdeg)
-   # size(X) = (nX, 3); length(Σ) = nX
-   # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1 from totaldegree))
-   aobasis = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdeg, nuclei = nuclei, )
-
-   # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1 from totaldegree))
-   pooling = BackflowPooling(aobasis)
-
-   # wrap into Lux layers, should we break down the aobasis again into x -> (norm(x), x) -> (Rln, Ylm) -> ϕnlm ?
-   aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)
-   pooling_layer = ACEpsi.lux(pooling)
-
-   # define sparse for n-correlations
-   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
-   
-   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
-                        minvv = fill(0, ν), 
-                        maxvv = fill(length(spec1p), ν), 
-                        ordered = true)
-   
-   
-   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
-
-   # further restrict
-   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
-
-   corr1 = SparseSymmProd(spec; T = Float64)
-   # corr = corr1.dag
-   # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
-   corr_layer = ACEcore.lux(corr1)
-
-   # TODO: confirm what is the envelope and add trainable basis after bA
-   # A Note here is that the the initial state of the chain must contain st.Σ in some layers... 
-   # to be discuss whether we should put it in X directly since it is not trainable and is the same throughout the training
-   reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
-   logabsdet_func = x -> 2 * logabsdet(x)[1]
-   return Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, transpose = WrappedFunction(transpose), Linear1 = Dense(length(corr1), Nel), Mask = MaskLayer(Nel), logabsdet = WrappedFunction(logabsdet_func))
-end
-
 
 # ---------- old implementation
 
