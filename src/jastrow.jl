@@ -61,7 +61,7 @@ initialstates(rng::AbstractRNG, l::JastrowLayer) = _init_luxstate(rng, l.basis)
       evaluate(l.basis, X, st.Σ), st
 
 function rrule(::typeof(evaluate), js::Jastrow, X::AbstractVector, Σ::AbstractVector) 
-    J = evaluate(js, X) 
+    J = evaluate(js, X, Σ) 
  
     function pb(dJ)
         @assert dJ isa Real  
