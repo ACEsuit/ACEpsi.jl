@@ -116,7 +116,7 @@ function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVecto
    ϕnlm = zeros(T, (Nnuc, Nel, Nnlm))
 
    for I = 1:Nnuc
-      ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:], Σ)
+      ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:])
    end
 
    return ϕnlm

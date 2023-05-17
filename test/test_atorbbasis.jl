@@ -40,7 +40,7 @@ end
 println()
 
 @info("Test evaluate ProductBasis")
-ϕnlm = prodbasis(X, Σ)
+ϕnlm = prodbasis(X)
 
 @info("Test evaluate AtomicOrbitalsBasis")
 bϕnlm = aobasis(X, Σ)
