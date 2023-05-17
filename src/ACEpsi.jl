@@ -9,6 +9,7 @@ include("envelope.jl")
 
 # the new 3d backflow code 
 include("atomicorbitals/atomicorbitals.jl")
+include("jastrow.jl")
 include("bflow3d.jl")
 
 include("backflowpooling.jl")

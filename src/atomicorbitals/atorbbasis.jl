@@ -40,13 +40,13 @@ function make_nlms_spec(bRnl, bYlm;
    spec_Rnl = natural_indices(bRnl)
    spec_Ylm = natural_indices(bYlm)
    
-   spec1 = NTRNL1[]
+   spec1 = []
    for (iR, br) in enumerate(spec_Rnl), (iY, by) in enumerate(spec_Ylm)
       if br.l != by.l 
          continue 
       end
       if admissible(br, by) 
-         push!(spec1, (n=br.n, l = br.l, m = by.m))
+         push!(spec1, (br..., m = by.m))
       end
    end
    return spec1 
@@ -130,10 +130,10 @@ end
 
 
 function get_spec(basis::AtomicOrbitalsBasis) 
-   spec = NTRNLIS[]
+   spec = []
    Nnuc = length(basis.nuclei)
 
-   spec = Array{NTRNLIS, 3}(undef, (3, Nnuc, length(basis.prodbasis.spec1)))
+   spec = Array{3}(undef, (3, Nnuc, length(basis.prodbasis.spec1)))
 
    for (k, nlm) in enumerate(basis.prodbasis.spec1)
       for I = 1:Nnuc 

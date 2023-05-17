@@ -3,12 +3,12 @@ using ACEcore, Polynomials4ML
 using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
-using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
+using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec
 
 using LuxCore: AbstractExplicitLayer
-using Lux: Dense, Chain, WrappedFunction
+using Lux: Dense, Chain, WrappedFunction, BranchLayer
 # ----------------------------------------
 
 struct MaskLayer <: AbstractExplicitLayer 
@@ -56,17 +56,19 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    corr_layer = ACEcore.lux(corr1)
 
    # TODO: Add J-factor and add trainable basis later
+   js = Jastrow(nuclei)
+   jastrow_layer = ACEpsi.lux(js)
 
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
    # Questions to discuss:
    # 1. it seems that we do not need trans since the bases have already taken care of it?
    # 2. Why we need a tranpose here??? Seems that the output from corr_layer is (length(spec), nX)???
    # 3. How do we define n-correlations if we use trainable basis?
-   return Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
-               bAA = corr_layer, transpose_layer = WrappedFunction(transpose), hidden1 = Dense(length(corr1), Nel), 
-               Mask = MaskLayer(Nel), logabsdet = WrappedFunction(x -> 2 * logabsdet(x)[1]))
+   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
+                        bAA = corr_layer, transpose_layer = WrappedFunction(transpose), hidden1 = Dense(length(corr1), Nel), 
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
+   return Chain(; branch = BranchLayer((js = jastrow_layer, bf = BFwf_chain, )), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
 end
-
 
 
 # """
