@@ -8,7 +8,7 @@ using LuxCore
 using Random
 
 
-function replace_namedtuples(nt, rp_st)
+function replace_namedtuples(nt, rp_st, Σ)
     if length(nt) == 0
         return rp_st
     else
@@ -25,7 +25,7 @@ end
 
 function setupBFState(rng, bf, Σ)
     ps, st = LuxCore.setup(rng, bf)
-    rp_st = replace_namedtuples(st, (;))
+    rp_st = replace_namedtuples(st, (;), Σ)
     return ps, rp_st
 end
 
@@ -48,6 +48,8 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 
 @info("Test evaluate")
 A1 = BFwf_chain(X, ps, st)
+
+
 
 # original implementation
 function BFwf_lux2(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
@@ -122,4 +124,16 @@ ps2, st2 = setupBFState(MersenneTwister(1234), branchlayer, Σ)
 A2 = branchlayer(X, ps2, st2)
 @test(2 * logabsdet(A2[1][1] *A2[1][2])[1] == A1[1])
 
+
+using Lux
+using Zygote
+using ACEpsi:evaluate
+
+js = Jastrow(nuclei)
+jatrow_layer = lux(js)
+js_chain = Chain(; jatrow_layer)
+ps, st = setupBFState(MersenneTwister(1234), js_chain, Σ)
+
+gs = Zygote.gradient(X -> js_chain(X, ps, st)[1], X)
+Zygote.gradient(X -> evaluate(js, X, Σ),X)
 

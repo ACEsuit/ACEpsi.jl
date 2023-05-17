@@ -4,6 +4,8 @@ using ACEpsi.AtomicOrbitals: Nuc
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
 
+import ChainRules
+import ChainRules: rrule, NoTangent
 mutable struct Jastrow{T}
     nuclei::Vector{Nuc{T}}  # nuclei
 end
@@ -57,3 +59,14 @@ initialstates(rng::AbstractRNG, l::JastrowLayer) = _init_luxstate(rng, l.basis)
 # This should be removed later and replace by ObejctPools
 (l::JastrowLayer)(X, ps, st) = 
       evaluate(l.basis, X, st.Σ), st
+
+function rrule(::typeof(evaluate), js::Jastrow, X::AbstractVector, Σ::AbstractVector) 
+    J = evaluate(js, X) 
+ 
+    function pb(dJ)
+        @assert dJ isa Real  
+        return NoTangent(), NoTangent(), X, NoTangent()
+    end
+    
+    return J, pb 
+ end 
