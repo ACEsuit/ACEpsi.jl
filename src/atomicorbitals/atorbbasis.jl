@@ -1,7 +1,7 @@
 import Polynomials4ML: evaluate
 
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
-using Polynomials4ML: SparseProduct, ProductBasis
+using Polynomials4ML: SparseProduct, ProductBasis, _make_reqfields
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
 
@@ -76,7 +76,7 @@ function ProductBasis(spec1, bRnl, bYlm)
       spec1idx[i] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
    end
    sparsebasis = SparseProduct(spec1idx)
-   return ProductBasis(spec1, bRnl, bYlm, sparsebasis)
+   return ProductBasis(spec1, bRnl, bYlm, sparsebasis, _make_reqfields()...)
 end
 
 

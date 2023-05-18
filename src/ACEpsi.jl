@@ -14,4 +14,6 @@ include("bflow3d.jl")
 
 include("backflowpooling.jl")
 
+# lux utils for bflow
+include("lux_utils.jl")
 end
