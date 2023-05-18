@@ -2,7 +2,7 @@ using ACEpsi, Polynomials4ML, StaticArrays, Test
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
 using ACEpsi: BackflowPooling
-using ACEbase.Testing: print_tf
+using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Random
 
@@ -90,6 +90,26 @@ end
 println()
 
 # 
+@info("---------- rrule tests ----------")
+using LinearAlgebra: dot 
+
+@info("BackFlowPooling rrule")
+for ntest = 1:30
+   local testϕnlm
+   testϕnlm = randn(size(bϕnlm))
+   bdd = randn(size(bϕnlm))
+   _BB(t) = testϕnlm + t * bdd
+   bA2 = pooling(testϕnlm, Σ)
+   u = randn(size(bA2))
+   F(t) = dot(u, pooling(_BB(t), Σ))
+   dF(t) = begin
+      val, pb = ACEpsi._rrule_evaluate(pooling, _BB(t), Σ)
+      ∂BB = pb(u)
+      return dot(∂BB, bdd)
+   end
+   print_tf(@test fdtest(F, dF, 0.0; verbose=false))
+end
+println()
 
 @info("---------- Lux tests ----------")
 aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)

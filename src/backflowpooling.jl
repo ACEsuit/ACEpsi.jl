@@ -8,7 +8,7 @@ end
 
 (pooling::BackflowPooling)(args...) = evaluate(pooling, args...)
 
-function evaluate(pooling::BackflowPooling, ϕnlm, Σ)
+function evaluate(pooling::BackflowPooling, ϕnlm, Σ::AbstractVector)
    basis = pooling.basis
    nuc = basis.nuclei 
    Nnuc = length(nuc)
@@ -65,7 +65,46 @@ function evaluate(pooling::BackflowPooling, ϕnlm, Σ)
    return A 
 end
 
+# --------------------- connect with ChainRule
+function rrule(::typeof(evaluate), pooling::BackflowPooling, ϕnlm, Σ::AbstractVector) 
+   return _rrule_evaluate(pooling, ϕnlm, Σ)
+end 
 
+function _rrule_evaluate(pooling::BackflowPooling, ϕnlm, Σ)
+   A = pooling(ϕnlm, Σ)
+   return A, ∂A -> _pullback_evaluate(∂A, pooling, ϕnlm, Σ)
+end
+
+function _pullback_evaluate(∂A, pooling::BackflowPooling, ϕnlm, Σ)
+   TA = promote_type(eltype.(ϕnlm)...)
+   ∂ϕnlm = zeros(TA, size(ϕnlm))
+   _pullback_evaluate!(∂ϕnlm, ∂A, pooling, ϕnlm, Σ)
+   return ∂ϕnlm
+end
+
+
+function _pullback_evaluate!(∂ϕnlm, ∂A, pooling::BackflowPooling, ϕnlm, Σ)
+   Nnuc, Nel, Nnlm = size(ϕnlm)
+   basis = pooling.basis
+
+   @assert Nnlm == length(basis.prodbasis.spec1)
+   @assert Nel == length(Σ)
+   @assert size(∂ϕnlm) == (Nnuc, Nel, Nnlm)
+   @assert size(∂A) == (Nel, 3, Nnuc, Nnlm)
+
+   for I = 1:Nnuc
+      for i = 1:Nel
+         for k = 1:Nnlm
+            ∂ϕnlm[I, i, k] += ∂A[i, 3, I, k]
+            for ii = 1:Nel
+               ∂ϕnlm[I, i, k] += ∂A[ii, spin2idx(Σ[i]), I, k] .* (i != ii)
+            end
+         end
+      end
+   end
+ 
+   return nothing 
+end
 
 # --------------------- connect with Lux 
 
@@ -92,3 +131,4 @@ initialstates(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxstate(rng, l
 #    evaluate!(parent(B), l.basis, ϕnlm_Σ[1], ϕnlm_Σ[2])
 #    return B 
 # end 
+

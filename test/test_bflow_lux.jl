@@ -49,6 +49,8 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 @info("Test evaluate")
 A1 = BFwf_chain(X, ps, st)
 
+
+# try with rrule
 using ACEpsi: Jastrow
 using Lux
 using Zygote
@@ -60,5 +62,5 @@ js_chain = Chain(; jatrow_layer)
 ps, st = setupBFState(MersenneTwister(1234), js_chain, Σ)
 
 gs = Zygote.gradient(X -> js_chain(X, ps, st)[1], X)
-Zygote.gradient(X -> ACEpsi.evaluate(js, X, Σ),X)
+Zygote.gradient(X -> ACEpsi.evaluate(js, X, Σ), X)
 
