@@ -6,6 +6,8 @@ using Random: AbstractRNG
 
 import ChainRules
 import ChainRules: rrule, NoTangent
+using Zygote: Buffer
+
 mutable struct Jastrow{T}
     nuclei::Vector{Nuc{T}}  # nuclei
 end
@@ -20,7 +22,8 @@ function evaluate(f::Jastrow, X::AbstractVector, Σ)
     Nnuc = length(nuc)
     Nel = size(X, 1)
     T = promote_type(eltype(X[1]))
-    XN = zeros(T, (Nnuc, Nel))
+    XX = zeros(T, (Nnuc, Nel))
+    XN = Buffer(XX)
 
     C0 = (2-pi)/(12*pi)
     F2 = zero(T)
@@ -59,14 +62,3 @@ initialstates(rng::AbstractRNG, l::JastrowLayer) = _init_luxstate(rng, l.basis)
 # This should be removed later and replace by ObejctPools
 (l::JastrowLayer)(X, ps, st) = 
       evaluate(l.basis, X, st.Σ), st
-
-function rrule(::typeof(evaluate), js::Jastrow, X::AbstractVector, Σ::AbstractVector) 
-    J = evaluate(js, X, Σ) 
- 
-    function pb(dJ)
-        @assert dJ isa Real  
-        return NoTangent(), NoTangent(), X, NoTangent()
-    end
-    
-    return J, pb 
- end 
