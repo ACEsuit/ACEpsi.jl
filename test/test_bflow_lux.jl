@@ -1,33 +1,12 @@
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
-using ACEpsi: BackflowPooling
-using ACEpsi: BFwf_lux
+using ACEpsi: BackflowPooling, BFwf_lux, setupBFState,Jastrow
 using ACEbase.Testing: print_tf
 using LuxCore
+using Lux
+using Zygote
 using Random
-
-
-function replace_namedtuples(nt, rp_st, Σ)
-    if length(nt) == 0
-        return rp_st
-    else
-        for i in 1:length(nt)
-            if length(nt[i]) == 0                
-                rp_st = (; rp_st..., (; keys(nt)[i] => (Σ = Σ, ))...)
-            else
-                rp_st = (; rp_st..., keys(nt)[i] => replace_namedtuples(nt[i], (;), Σ))
-            end
-        end
-        return rp_st
-    end
-end
-
-function setupBFState(rng, bf, Σ)
-    ps, st = LuxCore.setup(rng, bf)
-    rp_st = replace_namedtuples(st, (;), Σ)
-    return ps, rp_st
-end
 
 Rnldegree = 4
 Ylmdegree = 4
