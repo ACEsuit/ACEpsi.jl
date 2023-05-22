@@ -31,7 +31,7 @@ end
 
 (Φ::BFwf)(args...) = evaluate(Φ, args...)
 
-function BFwf(Nel::Integer, polys::OrthPolyBasis1D3T; totdeg = length(polys), 
+function BFwf(Nel::Integer, polys::PolyBasis4ML; totdeg = length(polys), 
                      ν = 3, T = Float64, 
                      trans = identity, 
                      sd_admissible = bb -> (true),
