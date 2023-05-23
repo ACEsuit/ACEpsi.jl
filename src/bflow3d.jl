@@ -44,7 +44,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
 
    # define n-correlation
-   corr1 = SparseSymmProd(spec; T = Float64)
+   corr1 = Polynomials4ML.SparseSymmProd(spec; T = Float64)
 
    # ----------- Lux connections ---------
    # Should we break down the aobasis again into x -> (norm(x), x) -> (Rln, Ylm) -> ϕnlm for trainable radial basis later?
@@ -53,7 +53,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
    pooling_layer = ACEpsi.lux(pooling)
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
-   corr_layer = ACEcore.lux(corr1)
+   corr_layer = Polynomials4ML.lux(corr1)
 
    # TODO: Add J-factor and add trainable basis later
    js = Jastrow(nuclei)

@@ -45,7 +45,7 @@ specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
 spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
 
 # define n-correlation
-corr1 = SparseSymmProd(spec; T = Float64)
+corr1 = Polynomials4ML.SparseSymmProd(spec; T = Float64)
 
 
 
@@ -84,7 +84,7 @@ gs = pb((l, nothing))[1]
 
 # corr_layer
 A = l
-corr_layer = ACEcore.lux(corr1)
+corr_layer = Polynomials4ML.lux(corr1)
 cChain = Chain(; corr_layer)
 ps, st = setupBFState(MersenneTwister(1234), cChain, Σ)
 y, st = Lux.apply(cChain, A, ps, st)

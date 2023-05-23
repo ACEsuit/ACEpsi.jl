@@ -10,6 +10,8 @@ end
 
 (pooling::BackflowPooling)(args...) = evaluate(pooling, args...)
 
+Base.length(pooling::BackflowPooling) = 3 * length(pooling.basis) # length(spin()) * length(1pbasis)
+
 function evaluate(pooling::BackflowPooling, ϕnlm, Σ::AbstractVector)
    basis = pooling.basis
    nuc = basis.nuclei 

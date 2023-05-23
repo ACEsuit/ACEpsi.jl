@@ -34,7 +34,7 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 y, st = Lux.apply(BFwf_chain, X, ps, st)
 
 ## Pullback API to capture change in state
-(l, st_), pb = pullback(p -> Lux.apply(BFwf_chain, X, p, st), ps)
+(l, st_), pb = pullback(x -> Lux.apply(BFwf_chain, x, ps, st), X)
 gs = pb((one.(l), nothing))[1]
 
 # Jastrow: try with gradient
@@ -51,7 +51,5 @@ gs = pb((one.(l), nothing))[1]
 # gs = Zygote.gradient(X -> js_chain(X, ps, st)[1], X)
 # Zygote.gradient(X -> ACEpsi.evaluate(js, X, Σ), X)
 
-
-# BackFlowPooling: Try with rrule
 
 
