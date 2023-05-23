@@ -139,3 +139,19 @@ ps, st = setupBFState(MersenneTwister(1234), lChain, Σ)
 y, st = Lux.apply(lChain, A, ps, st)
 (l, st_), pb = pullback(A -> Lux.apply(lChain, A, ps, st), A)
 gs = pb((l, nothing))[1]
+
+
+
+
+
+using ACEpsi: Jastrow
+
+js = Jastrow(nuclei)
+jastrow_layer = ACEpsi.lux(js)
+jastrow_layer1 = ACEpsi.lux(js)
+bChain = Chain(; branch = BranchLayer((js = jastrow_layer, bf = jastrow_layer1, )), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+
+ps, st = setupBFState(MersenneTwister(1234), bChain, Σ)
+y, st = Lux.apply(bChain, X, ps, st)
+(l, st_), pb = pullback(X -> Lux.apply(bChain, X, ps, st), X)
+gs = pb((l, nothing))[1]
