@@ -5,6 +5,7 @@ using ACEpsi: BackflowPooling
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Random
+using Zygote 
 
 # test configs
 Rnldegree = 4
@@ -111,6 +112,13 @@ for ntest = 1:30
 end
 println()
 
+@info("Checking Zygote running correctly")
+val, pb = Zygote.pullback(pooling, bϕnlm, Σ)
+val1, pb1 = ACEpsi._rrule_evaluate(pooling, bϕnlm, Σ)
+@assert val1 ≈ val1
+@assert pb1(val) ≈ pb(val)[1] # pb(val)[2] is for Σ with no pb
+
+
 @info("---------- Lux tests ----------")
 aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)
 pooling_layer = ACEpsi.lux(pooling)
@@ -133,4 +141,3 @@ chain_st = (aobasis = (Σ = Σ, ), pooling = (Σ = Σ, ))
 print_tf(@test tryChain(X, chain_ps, chain_st)[1] ≈ A)
 
 println()
-

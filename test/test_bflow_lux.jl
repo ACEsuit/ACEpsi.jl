@@ -28,18 +28,30 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 @info("Test evaluate")
 A1 = BFwf_chain(X, ps, st)
 
+@info("Test Zygote API")
+ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 
-# try with rrule
-using ACEpsi: Jastrow
-using Lux
-using Zygote
-using ACEpsi:evaluate
+y, st = Lux.apply(BFwf_chain, X, ps, st)
 
-js = Jastrow(nuclei)
-jatrow_layer = ACEpsi.lux(js)
-js_chain = Chain(; jatrow_layer)
-ps, st = setupBFState(MersenneTwister(1234), js_chain, Σ)
+## Pullback API to capture change in state
+(l, st_), pb = pullback(p -> Lux.apply(BFwf_chain, X, p, st), ps)
+gs = pb((one.(l), nothing))[1]
 
-gs = Zygote.gradient(X -> js_chain(X, ps, st)[1], X)
-Zygote.gradient(X -> ACEpsi.evaluate(js, X, Σ), X)
+# Jastrow: try with gradient
+# using ACEpsi: Jastrow
+# using Lux
+# using Zygote
+# using ACEpsi:evaluate
+
+# js = Jastrow(nuclei)
+# jatrow_layer = ACEpsi.lux(js)
+# js_chain = Chain(; jatrow_layer)
+# ps, st = setupBFState(MersenneTwister(1234), js_chain, Σ)
+
+# gs = Zygote.gradient(X -> js_chain(X, ps, st)[1], X)
+# Zygote.gradient(X -> ACEpsi.evaluate(js, X, Σ), X)
+
+
+# BackFlowPooling: Try with rrule
+
 

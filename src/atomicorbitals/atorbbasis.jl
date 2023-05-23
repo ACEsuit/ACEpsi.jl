@@ -9,6 +9,9 @@ using Polynomials4ML
 using StaticArrays
 using LinearAlgebra: norm 
 
+using ChainRulesCore
+using ChainRulesCore: NoTangent
+
 struct Nuc{T}
    rr::SVector{3, T}
    charge::T   # should this be an integer? 
@@ -150,6 +153,18 @@ end
 # ------------ Evaluation kernels 
 
 
+# ------------ connect with ChainRulesCore
+
+# Placeholder for now, fix this later after making sure Zygote is done correct with Lux
+function ChainRulesCore.rrule(::typeof(evaluate), basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
+   val = evaluate(basis, X, Σ)
+   dB = similar(X)
+   function pb(dA)
+      return NoTangent(), NoTangent(), dB, NoTangent()
+   end
+   return val, pb
+end
+
 # ------------ connect with Lux
 struct AtomicOrbitalsBasisLayer{TB} <: AbstractExplicitLayer
    basis::TB
@@ -169,6 +184,7 @@ initialstates(rng::AbstractRNG, l::AtomicOrbitalsBasisLayer) = _init_luxstate(rn
 
 
 
+      
 # ----- ObejctPools
 # (l::AtomicOrbitalsBasisLayer)(args...) = evaluate(l, args...)
 

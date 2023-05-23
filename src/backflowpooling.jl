@@ -1,6 +1,8 @@
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
+using ChainRulesCore
+using ChainRulesCore: NoTangent
 
 mutable struct BackflowPooling
    basis::AtomicOrbitalsBasis
@@ -66,8 +68,12 @@ function evaluate(pooling::BackflowPooling, ϕnlm, Σ::AbstractVector)
 end
 
 # --------------------- connect with ChainRule
-function rrule(::typeof(evaluate), pooling::BackflowPooling, ϕnlm, Σ::AbstractVector) 
-   return _rrule_evaluate(pooling, ϕnlm, Σ)
+function ChainRulesCore.rrule(::typeof(evaluate), pooling::BackflowPooling, ϕnlm, Σ::AbstractVector) 
+   A = pooling(ϕnlm, Σ)
+   function pb(∂A)
+      return NoTangent(), NoTangent(), _pullback_evaluate(∂A, pooling, ϕnlm, Σ), NoTangent()
+   end
+   return A, pb
 end 
 
 function _rrule_evaluate(pooling::BackflowPooling, ϕnlm, Σ)
