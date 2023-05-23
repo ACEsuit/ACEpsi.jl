@@ -34,27 +34,36 @@ pooling = BackflowPooling(aobasis)
 bϕnlm = aobasis(X, Σ)
 A = pooling(bϕnlm, Σ)
 ν = 3
-tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+totdeg = 6
+tup2b = vv -> [ spec1[v] for v in vv[vv .> 0]  ]
 default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
 
 specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
                         minvv = fill(0, ν), 
-                        maxvv = fill(length(spec1p), ν), 
+                        maxvv = fill(length(spec1), ν), 
                         ordered = true)
 spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
-
-# further restrict
-spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
 
 # define n-correlation
 corr1 = SparseSymmProd(spec; T = Float64)
 
+
+
+# aobasis layer 
+aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)
+aChain = Chain(; aobasis_layer)
+ps, st = setupBFState(MersenneTwister(1234), aChain, Σ)
+y, st = Lux.apply(aChain, X, ps, st)
+(l, st_), pb = pullback(X -> Lux.apply(aChain, X, ps, st), X)
+gs = pb((l, nothing))[1]
+
 # pooling layer
+bϕnlm = l
 pooling_layer = ACEpsi.lux(pooling)
-pChain = Chain(; reshape_layer)
+pChain = Chain(; pooling_layer)
 ps, st = setupBFState(MersenneTwister(1234), pChain, Σ)
-y, st = Lux.apply(pChain, A, ps, st)
-(l, st_), pb = pullback(ϕnlm -> Lux.apply(pChain, ϕnlm, ps, st), ϕnlm)
+y, st = Lux.apply(pChain, l, ps, st)
+(l, st_), pb = pullback(ϕnlm -> Lux.apply(pChain, ϕnlm, ps, st), bϕnlm)
 gs = pb((l, nothing))[1]
 
 # reshape layer
@@ -66,8 +75,15 @@ y, st = Lux.apply(rChain, A, ps, st)
 (l, st_), pb = pullback(A -> Lux.apply(rChain, A, ps, st), A)
 gs = pb((l, nothing))[1]
 
-A = l
+# first 3 layer
+fChain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func))
+ps, st = setupBFState(MersenneTwister(1234), fChain, Σ)
+y, st = Lux.apply(fChain, X, ps, st)
+(l, st_), pb = pullback(X -> Lux.apply(fChain, X, ps, st), X)
+gs = pb((l, nothing))[1]
+
 # corr_layer
+A = l
 corr_layer = ACEcore.lux(corr1)
 cChain = Chain(; corr_layer)
 ps, st = setupBFState(MersenneTwister(1234), cChain, Σ)
@@ -75,6 +91,7 @@ y, st = Lux.apply(cChain, A, ps, st)
 (l, st_), pb = pullback(A -> Lux.apply(cChain, A, ps, st), A)
 gs = pb((l, nothing))[1]
 
+corr_l = l
 # transpose layer
 ϕ = l
 transpose_layer = WrappedFunction(transpose)
@@ -110,4 +127,15 @@ dChain = Chain(; det_layer)
 ps, st = setupBFState(MersenneTwister(1234), dChain, Σ)
 y, st = Lux.apply(dChain, ϕ, ps, st)
 (l, st_), pb = pullback(ϕ -> Lux.apply(dChain, ϕ, ps, st), ϕ)
+gs = pb((l, nothing))[1]
+
+# last 4 layer
+using LinearAlgebra:transpose
+A = corr_l
+
+lChain = Chain(; transpose_layer = WrappedFunction(transpose), hidden1 = Dense(length(corr1), Nel), 
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
+ps, st = setupBFState(MersenneTwister(1234), lChain, Σ)
+y, st = Lux.apply(lChain, A, ps, st)
+(l, st_), pb = pullback(A -> Lux.apply(lChain, A, ps, st), A)
 gs = pb((l, nothing))[1]
