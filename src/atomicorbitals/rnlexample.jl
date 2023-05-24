@@ -1,7 +1,8 @@
 using Polynomials4ML, ForwardDiff
 import Polynomials4ML: evaluate, evaluate_ed, evaluate_ed2, 
                        natural_indices
-
+using ChainRulesCore
+using ChainRulesCore: NoTangent
 const NLM{T} = NamedTuple{(:n, :l, :m), Tuple{T, T, T}}
 const NL{T} = NamedTuple{(:n, :l), Tuple{T, T}}
 
@@ -126,4 +127,20 @@ function evaluate_ed2(basis::RnlExample, R)
    end
 
    return Rnl, dRnl, ddRnl
+end
+
+using LinearAlgebra:dot
+
+function ChainRulesCore.rrule(::typeof(evaluate), basis::RnlExample, R)
+   A  = evaluate(basis, R)
+   ∂R = similar(R)
+   dR = evaluate_ed(basis, R)[2]
+   function pb(∂A)
+        @assert size(∂A) == (length(R), length(basis))
+        for i = 1:length(R)
+            ∂R[i] = dot(@view(∂A[i, :]), @view(dR[i, :]))
+        end
+        return NoTangent(), NoTangent(), ∂R
+   end
+   return A, pb
 end
