@@ -98,14 +98,18 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 
 const ↑, ↓, ∅ = '↑','↓','∅'
 Nel = 5
-polys = legendre_basis(8)
-wf = BFwf(Nel, polys; ν=3)
+polys = RTrigBasis(4)
+wf = BFwf(Nel, polys; ν=3, 
+            envelope = ACEpsi.envelopefcn(x -> 1, rand()))
 
-X = 2 * rand(Nel) .- 1
+X = π * rand(Nel) .- 1
 Σ = rand([↑, ↓], Nel)
 
 wf(X, Σ)
 g = gradient(wf, X, Σ)
+
+X1 = 2*π .+ X
+wf(X, Σ) ≈ wf(X1, Σ)
 
 ##
 

@@ -1,5 +1,3 @@
-
-
 using Polynomials4ML, ACEcore, ACEpsi, ACEbase, Printf
 using ACEpsi: BFwf, gradient, evaluate, laplacian 
 using LinearAlgebra
@@ -7,28 +5,31 @@ using BenchmarkTools
 
 ##
 
-Nel = 10
-polys = legendre_basis(15)
+const ↑, ↓, ∅ = '↑','↓','∅'
+Nel = 8
+polys = legendre_basis(6)
 wf = BFwf(Nel, polys; ν=3)
 
 
 ##
 
 X = 2 * rand(Nel) .- 1
-wf(X)
-gradient(wf, X)
-laplacian(wf, X)
+Σ = rand([↑, ↓], Nel)
+wf(X, Σ)
+gradient(wf, X, Σ)
+laplacian(wf, X, Σ)
 
 ## 
 
 @info("evaluate")
-@btime $wf($X)
+@btime wf($X, Σ)
 
 @info("gradient")
-@btime gradient($wf, $X)
+@btime gradient($wf, $X, $Σ)
 
 @info("laplacian")
-@btime laplacian($wf, $X)
+@btime laplacian($wf, $X, $Σ)
+
 
 ##
 
