@@ -112,8 +112,9 @@ polys = Polynomials4ML.legendre_basis(maximum(MaxDeg))
 wf = BFwf(N, polys, x -> sqrt(1+x^2); pos = pos, tpos = tpos, ν=length(MaxDeg[1]), totdeg = maximum(MaxDeg), trans = trans,sd_admissible = bb -> (length(bb) == 0 || all([bb[i][1] <= MaxDeg[length(bb)] for i = 1:length(bb)])))
 
 X = rand(N)
-evaluate(U,X,Σ)
-g = gradient(U,X,Σ)
+
+evaluate(wf,X,Σ)
+g = gradient(wf,X,Σ)
 
 
 
