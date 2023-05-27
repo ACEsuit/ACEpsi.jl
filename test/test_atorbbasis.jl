@@ -141,3 +141,7 @@ chain_st = (aobasis = (Σ = Σ, ), pooling = (Σ = Σ, ))
 print_tf(@test tryChain(X, chain_ps, chain_st)[1] ≈ A)
 
 println()
+
+val, pb = Zygote.pullback(evaluate, aobasis, X, Σ)
+
+pb(val)

@@ -11,6 +11,7 @@ using LinearAlgebra: norm
 
 using ChainRulesCore
 using ChainRulesCore: NoTangent
+using Zygote
 
 struct Nuc{T}
    rr::SVector{3, T}
@@ -103,26 +104,27 @@ end
 
 
 function evaluate(basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
-   nuc = basis.nuclei 
+   nuc = basis.nuclei
    Nnuc = length(nuc)
    Nel = size(X, 1)
    T = promote_type(eltype(X[1]))
-   VT = SVector{3, T}
-   XX = zeros(VT, (Nnuc, Nel))
    
-   # trans
-   for I = 1:Nnuc, i = 1:Nel
-      XX[I, i] = X[i] - nuc[I].rr
-   end
+   # XX = zeros(VT, (Nnuc, Nel))
+   
+   # # trans
+   # for I = 1:Nnuc, i = 1:Nel
+   #    XX[I, i] = X[i] - nuc[I].rr
+   # end
 
    Nnlm = length(basis.prodbasis.sparsebasis.spec) 
-   ϕnlm = zeros(T, (Nnuc, Nel, Nnlm))
+   ϕnlm = Zygote.Buffer(zeros(T, (Nnuc, Nel, Nnlm)))
 
+   # Think how to prevent this extra FLOPS here while keeping it Zygote-friendly
    for I = 1:Nnuc
-      ϕnlm[I,:,:] = evaluate(basis.prodbasis, XX[I,:])
+      ϕnlm[I,:,:] = evaluate(basis.prodbasis, map(x -> x - nuc[I].rr, X))
    end
 
-   return ϕnlm
+   return copy(ϕnlm)
 end
 
 # ------------ utils for AtomicOrbitalsBasis ------------
@@ -156,14 +158,14 @@ end
 # ------------ connect with ChainRulesCore
 
 # Placeholder for now, fix this later after making sure Zygote is done correct with Lux
-function ChainRulesCore.rrule(::typeof(evaluate), basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
-   val = evaluate(basis, X, Σ)
-   dB = similar(X)
-   function pb(dA)
-      return NoTangent(), NoTangent(), dB, NoTangent()
-   end
-   return val, pb
-end
+# function ChainRulesCore.rrule(::typeof(evaluate), basis::AtomicOrbitalsBasis, X::AbstractVector{<: AbstractVector}, Σ)
+#    val = evaluate(basis, X, Σ)
+#    dB = similar(X)
+#    function pb(dA)
+#       return NoTangent(), NoTangent(), dB, NoTangent()
+#    end
+#    return val, pb
+# end
 
 # ------------ connect with Lux
 struct AtomicOrbitalsBasisLayer{TB} <: AbstractExplicitLayer

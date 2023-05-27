@@ -1,10 +1,11 @@
 using LuxCore
 
 function replace_namedtuples(nt, rp_st, Σ)
-    if length(nt) == 0
-        return rp_st
+    if :tmp in keys(nt) || length(nt) == 0
+        return (; rp_st...)
     else
         for i in 1:length(nt)
+            # @show nt[i]
             if length(nt[i]) == 0                
                 rp_st = (; rp_st..., (; keys(nt)[i] => (Σ = Σ, ))...)
             else

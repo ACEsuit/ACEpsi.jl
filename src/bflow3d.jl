@@ -44,7 +44,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
 
    # define n-correlation
-   corr1 = Polynomials4ML.SparseSymmProd(spec; T = Float64)
+   corr1 = Polynomials4ML.SparseSymmProd(spec)
 
    # ----------- Lux connections ---------
    # Should we break down the aobasis again into x -> (norm(x), x) -> (Rln, Ylm) -> ϕnlm for trainable radial basis later?

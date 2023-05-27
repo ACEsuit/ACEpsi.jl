@@ -6,7 +6,20 @@ using ACEbase.Testing: print_tf
 using LuxCore
 using Lux
 using Zygote
+using Optimisers # mainly for the destrcuture(ps) function
 using Random
+
+function grad_test2(f, df, X::AbstractVector)
+   F = f(X) 
+   ∇F = df(X)
+   nX = length(X)
+   EE = Matrix(I, (nX, nX))
+   
+   for h in 0.1.^(3:12)
+      gh = [ (f(X + h * EE[:, i]) - F) / h for i = 1:nX ]
+      @printf(" %.1e | %.2e \n", h, norm(gh - ∇F, Inf))
+   end
+end
 
 Rnldegree = 4
 Ylmdegree = 4
@@ -34,8 +47,14 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 y, st = Lux.apply(BFwf_chain, X, ps, st)
 
 ## Pullback API to capture change in state
-(l, st_), pb = pullback(x -> Lux.apply(BFwf_chain, x, ps, st), X)
-gs = pb((one.(l), nothing))[1]
+gl = Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]
+
+@info("Test ∇ψ w.r.t. parameters")
+W0, re = destructure(ps)
+Fp = w -> BFwf_chain(X, re(w), st)[1]
+dFp = w -> ( gl = Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]; destructure(gl)[1])
+grad_test2(Fp, dFp, W0)
+
 
 # Jastrow: try with gradient
 # using ACEpsi: Jastrow
