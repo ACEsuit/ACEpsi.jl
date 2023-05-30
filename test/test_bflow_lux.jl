@@ -6,8 +6,11 @@ using ACEbase.Testing: print_tf
 using LuxCore
 using Lux
 using Zygote
-using Optimisers # mainly for the destrcuture(ps) function
+using Optimisers # mainly for the destrcuture(ps) functionx
 using Random
+using HyperDualNumbers: Hyper
+using Printf
+using LinearAlgebra
 
 function grad_test2(f, df, X::AbstractVector)
    F = f(X) 
@@ -26,6 +29,11 @@ Ylmdegree = 4
 totdegree = 8
 Nel = 5
 X = randn(SVector{3, Float64}, Nel)
+
+# wrap it as HyperDualNumbers
+x2dualwrtj(x, j) = SVector([Hyper(x[i], i == j, i == j, 0) for i = 1:3], 3)
+
+hX = [x2dualwrtj(x, 1) for x in X]
 Σ = rand(spins(), Nel)
 
 nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
@@ -40,20 +48,35 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 
 @info("Test evaluate")
 A1 = BFwf_chain(X, ps, st)
+hA1 = BFwf_chain(hX, ps, st)
+
+@assert hA1[1].value ≈ A1[1]
 
 @info("Test Zygote API")
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
-
 y, st = Lux.apply(BFwf_chain, X, ps, st)
 
-## Pullback API to capture change in state
-gl = Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]
 
+@info("Test ∇ψ w.r.t. X")
+
+
+
+## Pullback API to capture change in state
+Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]
 @info("Test ∇ψ w.r.t. parameters")
 W0, re = destructure(ps)
 Fp = w -> BFwf_chain(X, re(w), st)[1]
 dFp = w -> ( gl = Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]; destructure(gl)[1])
 grad_test2(Fp, dFp, W0)
+
+@info("Test Δψ w.r.t. X")
+
+
+
+@info("Test gradp Δψ")
+
+
+
 
 
 # Jastrow: try with gradient

@@ -1,4 +1,5 @@
 using LuxCore
+using HyperDualNumbers
 
 function replace_namedtuples(nt, rp_st, Σ)
     if :tmp in keys(nt) || length(nt) == 0

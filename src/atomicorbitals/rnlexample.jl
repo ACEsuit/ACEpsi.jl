@@ -27,10 +27,10 @@ degree(basis::RnlExample, b::NamedTuple) = b.n + b.l
 
 # -------- Evaluation Code 
 
-_alloc(basis::RnlExample, r::T) where {T <: Real} = 
+_alloc(basis::RnlExample, r::T) where T = 
       zeros(T, length(Rnl))
 
-_alloc(basis::RnlExample, rr::Vector{T}) where {T <: Real} = 
+_alloc(basis::RnlExample, rr::Vector{T}) where T = 
       zeros(T, length(rr), length(basis))
 
       
