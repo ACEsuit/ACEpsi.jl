@@ -11,6 +11,7 @@ using Random
 using HyperDualNumbers: Hyper
 using Printf
 using LinearAlgebra
+using ACEbase.Testing: fdtest
 
 function grad_test2(f, df, X::AbstractVector)
    F = f(X) 
@@ -31,7 +32,7 @@ Nel = 5
 X = randn(SVector{3, Float64}, Nel)
 
 # wrap it as HyperDualNumbers
-x2dualwrtj(x, j) = SVector([Hyper(x[i], i == j, i == j, 0) for i = 1:3], 3)
+x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
 
 hX = [x2dualwrtj(x, 1) for x in X]
 Σ = rand(spins(), Nel)
@@ -56,9 +57,11 @@ hA1 = BFwf_chain(hX, ps, st)
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 y, st = Lux.apply(BFwf_chain, X, ps, st)
 
-
+Zygote.gradient(x -> BFwf_chain(x, ps, st)[1], X)[1]
 @info("Test ∇ψ w.r.t. X")
-
+F(X) = BFwf_chain(X, ps, st)[1]
+dF(X) = Zygote.gradient(x -> BFwf_chain(x, ps, st)[1], X)[1]
+fdtest(F, dF, X, verbose = true)
 
 
 ## Pullback API to capture change in state
@@ -71,27 +74,7 @@ grad_test2(Fp, dFp, W0)
 
 @info("Test Δψ w.r.t. X")
 
-
-
 @info("Test gradp Δψ")
-
-
-
-
-
-# Jastrow: try with gradient
-# using ACEpsi: Jastrow
-# using Lux
-# using Zygote
-# using ACEpsi:evaluate
-
-# js = Jastrow(nuclei)
-# jatrow_layer = ACEpsi.lux(js)
-# js_chain = Chain(; jatrow_layer)
-# ps, st = setupBFState(MersenneTwister(1234), js_chain, Σ)
-
-# gs = Zygote.gradient(X -> js_chain(X, ps, st)[1], X)
-# Zygote.gradient(X -> ACEpsi.evaluate(js, X, Σ), X)
 
 
 
