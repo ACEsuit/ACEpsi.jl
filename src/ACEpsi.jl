@@ -1,5 +1,8 @@
 module ACEpsi
 
+# define operation on HyperDualNumbers
+include("hyper.jl")
+
 # define spin symbols and some basic functionality 
 include("spins.jl")
 
