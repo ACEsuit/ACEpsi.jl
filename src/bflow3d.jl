@@ -1,14 +1,17 @@
 
-using ACEcore, Polynomials4ML
+using ACEcore, Polynomials4ML, Random 
 using Polynomials4ML: OrthPolyBasis1D3T
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec
-
 using LuxCore: AbstractExplicitLayer
-using Lux: Dense, Chain, WrappedFunction, BranchLayer
+using LuxCore
+using Lux
+using Lux: Chain, WrappedFunction, BranchLayer
+using ChainRulesCore
+using ChainRulesCore: NoTangent
 # ----------------------------------------
 
 struct MaskLayer <: AbstractExplicitLayer 
@@ -17,6 +20,25 @@ end
 
 (l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
 
+struct DenseLayer <: AbstractExplicitLayer 
+   in_dim::Integer
+   out_dim::Integer
+end
+
+function (l::DenseLayer)(x::AbstractMatrix, ps, st)
+   return  ps.W * x, st
+end
+
+LuxCore.initialparameters(rng::AbstractRNG, l::DenseLayer) = ( W = randn(rng, l.out_dim, l.in_dim), )
+LuxCore.initialstates(rng::AbstractRNG, l::DenseLayer) = NamedTuple()
+
+function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix, ps, st)
+   val = l(x, ps, st)
+   function pb(A)
+      return NoTangent, NoTangent, NoTangent, A[1] * x', NoTangent
+   end
+   return val, pb
+end
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
@@ -65,7 +87,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # 2. Why we need a tranpose here??? Seems that the output from corr_layer is (length(spec), nX)???
    # 3. How do we define n-correlations if we use trainable basis?
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
-                        bAA = corr_layer, transpose_layer = WrappedFunction(transpose), hidden1 = Dense(length(corr1), Nel), 
+                        bAA = corr_layer, transpose_layer = WrappedFunction(transpose), hidden1 = DenseLayer(length(corr1), Nel), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
    return Chain(; branch = BranchLayer((js = jastrow_layer, bf = BFwf_chain, )), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
 end
