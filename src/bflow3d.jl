@@ -32,10 +32,10 @@ end
 LuxCore.initialparameters(rng::AbstractRNG, l::DenseLayer) = ( W = randn(rng, l.out_dim, l.in_dim), )
 LuxCore.initialstates(rng::AbstractRNG, l::DenseLayer) = NamedTuple()
 
-function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix, ps, st)
+function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix{Hyper{T}}, ps, st) where T<:Number
    val = l(x, ps, st)
    function pb(A)
-      return NoTangent, NoTangent, NoTangent, A[1] * x', NoTangent
+      return NoTangent(), NoTangent(), NoTangent(), (W = A[1] * x',), NoTangent()
    end
    return val, pb
 end
