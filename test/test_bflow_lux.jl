@@ -1,17 +1,18 @@
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
-using ACEpsi: BackflowPooling, BFwf_lux, setupBFState,Jastrow
-using ACEbase.Testing: print_tf
+using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
+using ACEbase.Testing: print_tf, fd_test
+
 using LuxCore
 using Lux
 using Zygote
 using Optimisers # mainly for the destrcuture(ps) function
 using Random
-using HyperDualNumbers: Hyper
 using Printf
 using LinearAlgebra
-using ACEbase.Testing: fdtest
+
+using HyperDualNumbers: Hyper
 
 function grad_test2(f, df, X::AbstractVector)
    F = f(X) 
@@ -30,40 +31,45 @@ Ylmdegree = 4
 totdegree = 8
 Nel = 5
 X = randn(SVector{3, Float64}, Nel)
+Σ = rand(spins(), Nel)
+nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
 
 # wrap it as HyperDualNumbers
 x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
-
 hX = [x2dualwrtj(x, 0) for x in X]
 hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
 
-Σ = rand(spins(), Nel)
-
-nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
 ##
 
 # Defining AtomicOrbitalsBasis
 bRnl = ACEpsi.AtomicOrbitals.RnlExample(Rnldegree)
 bYlm = RYlmBasis(Ylmdegree)
 
+# setup state
 BFwf_chain = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = 2)
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
+
+##
 
 @info("Test evaluate")
 A1 = BFwf_chain(X, ps, st)
 hA1 = BFwf_chain(hX, ps, st)
 
-@assert hA1[1].value ≈ A1[1]
+print_tf(@test hA1[1].value ≈ A1[1])
 
-@info("Test Zygote API")
+println()
+
+##
+
+@info("Test ∇ψ w.r.t. X")
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 y, st = Lux.apply(BFwf_chain, X, ps, st)
 
-Zygote.gradient(x -> BFwf_chain(x, ps, st)[1], X)[1]
-@info("Test ∇ψ w.r.t. X")
 F(X) = BFwf_chain(X, ps, st)[1]
 dF(X) = Zygote.gradient(x -> BFwf_chain(x, ps, st)[1], X)[1]
 fdtest(F, dF, X, verbose = true)
+
+##
 
 @info("Test consistency with HyperDualNumbers")
 for _ = 1:30
@@ -82,17 +88,20 @@ for _ = 1:30
 end
 println()
 
+##
 
-## Pullback API to capture change in state
+@info("Test ∇ψ w.r.t. parameters")
 p = Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]
 p, = destructure(p)
-@info("Test ∇ψ w.r.t. parameters")
+
 W0, re = destructure(ps)
 Fp = w -> BFwf_chain(X, re(w), st)[1]
 dFp = w -> ( gl = Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]; destructure(gl)[1])
 grad_test2(Fp, dFp, W0)
 
-@info("Test consistency with HyperDualNumbers")
+##
+
+@info("Test consistency when input isa HyperDualNumbers")
 hp = Zygote.gradient(p -> BFwf_chain(hX, p, st)[1], ps)[1]
 hp, = destructure(hp)
 P = similar(p)
@@ -100,7 +109,11 @@ for i = 1:length(P)
    P[i] = hp[i].value
 end
 
-@assert P ≈ p
+print_tf(@test P ≈ p)
+
+println()
+
+##
 
 @info("Test Δψ w.r.t. X using HyperDualNumbers")
 
@@ -137,10 +150,9 @@ for h in  0.1.^(1:8)
    @printf(" %.1e | %.2e \n", h, abs(Δfh - Δ1))
 end
 
-# [ tr( hessian(xx -> gfun(xx).dot.W[i], xx) ) 
-# for i = 1:length(Δ1.dot.W) ]
+##
 
-@info("Test gradp Δψ")
+@info("Test gradp Δψ using HyperDualNumbers")
 g_bchain = xx -> Zygote.gradient(p -> BFwf_chain(xx, p, st)[1], ps)[1]
 g_bchain(hX)
 
