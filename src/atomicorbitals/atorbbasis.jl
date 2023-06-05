@@ -201,13 +201,13 @@ function set_nuclei!(basis::AtomicOrbitalsBasisLayer, nuclei::AbstractVector{<: 
 end
 
 
-function get_spec(l::AtomicOrbitalsBasisLayer) 
+function get_spec(l::AtomicOrbitalsBasisLayer, spec1p) 
    spec = []
    Nnuc = length(l.nuclei)
 
-   spec = Array{Any}(undef, (3, Nnuc, length(l.prodbasis.layers.ϕnlms.basis.spec)))
+   spec = Array{Any}(undef, (3, Nnuc, length(spec1p)))
 
-   for (k, nlm) in enumerate(l.prodbasis.layers.ϕnlms.basis.spec)
+   for (k, nlm) in enumerate(spec1p)
       for I = 1:Nnuc 
          for (is, s) in enumerate(extspins())
             spec[is, I, k] = (I = I, s=s, nlm...)

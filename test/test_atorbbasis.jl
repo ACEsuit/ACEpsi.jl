@@ -1,11 +1,13 @@
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
-using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
+using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate, AtomicOrbitalsBasisLayer
+using ACEpsi: extspins
 using ACEpsi: BackflowPooling
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Random
 using Zygote 
+
 
 # test configs
 Rnldegree = 4
@@ -21,30 +23,20 @@ nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
 # Defining AtomicOrbitalsBasis
 bRnl = ACEpsi.AtomicOrbitals.RnlExample(Rnldegree)
 bYlm = RYlmBasis(Ylmdegree)
-spec1 = make_nlms_spec(bRnl, bYlm; totaldegree = totdegree) 
+spec1p = make_nlms_spec(bRnl, bYlm; totaldegree = totdegree) 
 
 # define basis and pooling operations
-prodbasis = ProductBasis(spec1, bRnl, bYlm)
-aobasis = AtomicOrbitalsBasis(prodbasis, nuclei)
-pooling = BackflowPooling(aobasis)
+prodbasis_layer = ACEpsi.AtomicOrbitals.ProductBasisLayer(spec1p, bRnl, bYlm)
+aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer, nuclei)
 
-# we can also construct in this way which wraps the definition of product basis inside
-aobasis2 = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdegree, nuclei = nuclei, )
-
-@info("Checking two type of construction are same")
-for ntest = 1:30
-   local X = randn(SVector{3, Float64}, Nel)
-   local Σ = rand(spins(), Nel)
-   print_tf(@test evaluate(aobasis, X, Σ) ≈ evaluate(aobasis2, X, Σ))
-end
+pooling = BackflowPooling(aobasis_layer)
+pooling_layer = ACEpsi.lux(pooling)
 
 println()
 
-@info("Test evaluate ProductBasis")
-ϕnlm = prodbasis(X)
-
 @info("Test evaluate AtomicOrbitalsBasis")
-bϕnlm = aobasis(X, Σ)
+ps, st = LuxCore.setup(MersenneTwister(1234), aobasis_layer)
+bϕnlm, st = aobasis_layer(X, ps, st)
 
 @info("Test BackflowPooling")
 A = pooling(bϕnlm, Σ)
@@ -54,22 +46,22 @@ println()
 
 ##
 @info("Check get_spec is working")
-spec = ACEpsi.AtomicOrbitals.get_spec(aobasis)
+spec = ACEpsi.AtomicOrbitals.get_spec(aobasis_layer, spec1p)
 
 
 @info("Test evaluation by manual construction")
 using LinearAlgebra: norm 
 bYlm_ = RYlmBasis(totdegree)
-Nnlm = length(aobasis.prodbasis.sparsebasis.spec)
-Nnuc = length(aobasis.nuclei)
+Nnlm = length(aobasis_layer.prodbasis.layers.ϕnlms.basis.spec)
+Nnuc = length(aobasis_layer.nuclei)
 
 for I = 1:Nnuc 
-   XI = X .- Ref(aobasis.nuclei[I].rr)
+   XI = X .- Ref(aobasis_layer.nuclei[I].rr)
    xI = norm.(XI)
    Rnl = evaluate(bRnl, xI)
    Ylm = evaluate(bYlm_, XI)
    for k = 1:Nnlm 
-      nlm = aobasis.prodbasis.sparsebasis.spec[k]
+      nlm = aobasis_layer.prodbasis.layers.ϕnlms.basis.spec[k]
       iR = nlm[1]
       iY = nlm[2]
 
@@ -117,31 +109,3 @@ val, pb = Zygote.pullback(pooling, bϕnlm, Σ)
 val1, pb1 = ACEpsi._rrule_evaluate(pooling, bϕnlm, Σ)
 @assert val1 ≈ val1
 @assert pb1(val) ≈ pb(val)[1] # pb(val)[2] is for Σ with no pb
-
-
-@info("---------- Lux tests ----------")
-aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)
-pooling_layer = ACEpsi.lux(pooling)
-
-# set up null states
-ps, st = LuxCore.setup(MersenneTwister(1234), aobasis_layer)
-st1 = (Σ = Σ, )
-
-@info("Checking layers working fine seperately")
-print_tf(@test aobasis_layer(X, ps, st1)[1] ≈ bϕnlm)
-print_tf(@test pooling_layer(bϕnlm, ps, st1)[1] ≈ A)
-println()
-
-@info("Checking Chain towards A basis")
-using Lux: Chain
-tryChain = Chain(; aobasis = aobasis_layer, pooling = pooling_layer)
-chain_ps, chain_st = LuxCore.setup(MersenneTwister(1234), tryChain)
-chain_st = (aobasis = (Σ = Σ, ), pooling = (Σ = Σ, ))
-# try Chain is as expected
-print_tf(@test tryChain(X, chain_ps, chain_st)[1] ≈ A)
-
-println()
-
-val, pb = Zygote.pullback(evaluate, aobasis, X, Σ)
-
-pb(val)
