@@ -1,6 +1,6 @@
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
-using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
+using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore

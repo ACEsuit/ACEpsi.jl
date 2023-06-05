@@ -6,7 +6,7 @@ using ChainRulesCore: NoTangent
 const NLM{T} = NamedTuple{(:n, :l, :m), Tuple{T, T, T}}
 const NL{T} = NamedTuple{(:n, :l), Tuple{T, T}}
 
-struct RnlExample{TP, TI}
+struct RnlExample{TP, TI} <: Polynomials4ML.AbstractPoly4MLBasis
    Pn::TP
    spec::Vector{NL{TI}}
 end

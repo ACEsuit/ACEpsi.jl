@@ -1,11 +1,11 @@
-using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis
+using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasisLayer
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
 using ChainRulesCore
 using ChainRulesCore: NoTangent
 
 mutable struct BackflowPooling
-   basis::AtomicOrbitalsBasis
+   basis::AtomicOrbitalsBasisLayer
 end
 
 (pooling::BackflowPooling)(args...) = evaluate(pooling, args...)
@@ -16,7 +16,7 @@ function evaluate(pooling::BackflowPooling, ϕnlm, Σ::AbstractVector)
    basis = pooling.basis
    nuc = basis.nuclei 
    Nnuc = length(nuc)
-   Nnlm = length(basis.prodbasis.sparsebasis.spec) 
+   Nnlm = length(basis.prodbasis.layers.ϕnlms.basis.spec) 
    Nel = length(Σ)
    T = promote_type(eltype(ϕnlm))
 
@@ -95,7 +95,7 @@ function _pullback_evaluate!(∂ϕnlm, ∂A, pooling::BackflowPooling, ϕnlm, Σ
    Nnuc, Nel, Nnlm = size(ϕnlm)
    basis = pooling.basis
 
-   @assert Nnlm == length(basis.prodbasis.spec1)
+   @assert Nnlm == length(basis.prodbasis.layers.ϕnlms.basis.spec)
    @assert Nel == length(Σ)
    @assert size(∂ϕnlm) == (Nnuc, Nel, Nnlm)
    @assert size(∂A) == (Nel, 3, Nnuc, Nnlm)

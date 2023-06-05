@@ -14,11 +14,14 @@ using ChainRulesCore
 using ChainRulesCore: NoTangent
 # ----------------------------------------
 
+# ----------------- custom layers ------------------
 struct MaskLayer <: AbstractExplicitLayer 
    nX::Integer
 end
 
 (l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
+
+##
 
 struct DenseLayer <: AbstractExplicitLayer 
    in_dim::Integer
@@ -29,6 +32,7 @@ function (l::DenseLayer)(x::AbstractMatrix, ps, st)
    return  ps.W * x, st
 end
 
+# Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?
 LuxCore.initialparameters(rng::AbstractRNG, l::DenseLayer) = ( W = randn(rng, l.out_dim, l.in_dim), )
 LuxCore.initialstates(rng::AbstractRNG, l::DenseLayer) = NamedTuple()
 
@@ -40,6 +44,10 @@ function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMat
    return val, pb
 end
 
+##
+
+# ----------------- custom layers ------------------
+
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
    sd_admissible = bb -> (true),
@@ -49,8 +57,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
                           totaldegree = totdeg)
 
    # size(X) = (nX, 3); length(Σ) = nX
-   aobasis = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdeg, nuclei = nuclei, )
-   pooling = BackflowPooling(aobasis)
+   # aobasis = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdeg, nuclei = nuclei, )
 
    # define sparse for n-correlations
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
@@ -69,23 +76,22 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    corr1 = Polynomials4ML.SparseSymmProd(spec)
 
    # ----------- Lux connections ---------
-   # Should we break down the aobasis again into x -> (norm(x), x) -> (Rln, Ylm) -> ϕnlm for trainable radial basis later?
    # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
-   aobasis_layer = ACEpsi.AtomicOrbitals.lux(aobasis)
+   prodbasis_layer = ACEpsi.AtomicOrbitals.ProductBasisLayer(spec1p, bRnl, bYlm)
+   aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer, nuclei)
+
    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
+   pooling = BackflowPooling(aobasis_layer)
    pooling_layer = ACEpsi.lux(pooling)
+
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
    corr_layer = Polynomials4ML.lux(corr1)
 
-   # TODO: Add J-factor and add trainable basis later
    js = Jastrow(nuclei)
    jastrow_layer = ACEpsi.lux(js)
 
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
-   # Questions to discuss:
-   # 1. it seems that we do not need trans since the bases have already taken care of it?
-   # 2. Why we need a tranpose here??? Seems that the output from corr_layer is (length(spec), nX)???
-   # 3. How do we define n-correlations if we use trainable basis?
+
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                         bAA = corr_layer, transpose_layer = WrappedFunction(transpose), hidden1 = DenseLayer(length(corr1), Nel), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
