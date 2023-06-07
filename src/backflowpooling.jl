@@ -3,35 +3,43 @@ using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
 using ChainRulesCore
 using ChainRulesCore: NoTangent
+using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META
+using ObjectPools: acquire!
 
 mutable struct BackflowPooling
    basis::AtomicOrbitalsBasisLayer
+   @reqfields
+end
+
+function BackflowPooling(basis::AtomicOrbitalsBasisLayer)
+   return BackflowPooling(basis, _make_reqfields()...)
 end
 
 (pooling::BackflowPooling)(args...) = evaluate(pooling, args...)
 
 Base.length(pooling::BackflowPooling) = 3 * length(pooling.basis) # length(spin()) * length(1pbasis)
 
-function evaluate(pooling::BackflowPooling, ϕnlm, Σ::AbstractVector)
-   basis = pooling.basis
-   nuc = basis.nuclei
-   Nnuc = length(nuc)
-   Nnlm = size(ϕnlm, 3)
+function evaluate(pooling::BackflowPooling, ϕnlm::AbstractArray, Σ::AbstractVector)   
+   Nnuc, _, Nnlm = size(ϕnlm)
    Nel = length(Σ)
    T = promote_type(eltype(ϕnlm))
 
     # evaluate the pooling operation
    #                spin  I    k = (nlm)
 
-   Aall = zeros(T, ((2, Nnuc, Nnlm)))
-   for k = 1:Nnlm
-      for i = 1:Nel 
-         iσ = spin2idx(Σ[i])
+   Aall = acquire!(pooling.pool, :Aall, (2, Nnuc, Nnlm), T)
+   fill!(Aall, 0)
+
+   @inbounds begin
+      for k = 1:Nnlm
          for I = 1:Nnuc 
-            Aall[iσ, I, k] += ϕnlm[I, i, k]
+            @simd ivdep for i = 1:Nel
+               iσ = spin2idx(Σ[i])
+               Aall[iσ, I, k] += ϕnlm[I, i, k]
+            end
          end
       end
-   end
+   end # inbounds
 
    # now correct the pooling Aall and write into A^(i)
    # with do it with i leading so that the N-correlations can 
@@ -51,22 +59,29 @@ function evaluate(pooling::BackflowPooling, ϕnlm, Σ::AbstractVector)
    @assert spin2idx(↑) == 1
    @assert spin2idx(↓) == 2
    @assert spin2idx(∅) == 3
-   A = zeros(T, ((Nel, 3, Nnuc, Nnlm)))
-   for k = 1:Nnlm 
-      for I = 1:Nnuc 
-         for i = 1:Nel             
-            A[i, 3, I, k] = ϕnlm[I, i, k]
-         end
-         for iσ = 1:2 
-            σ = idx2spin(iσ)
-            for i = 1:Nel 
-               A[i, iσ, I, k] = Aall[iσ, I, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
+
+   A = acquire!(pooling.tmp, :Aall, (Nel, 3, Nnuc, Nnlm), T)
+   fill!(A, 0)
+
+   @inbounds begin
+      for k = 1:Nnlm
+         for I = 1:Nnuc 
+            @simd ivdep for i = 1:Nel             
+               A[i, 3, I, k] = ϕnlm[I, i, k]
+            end
+            @simd ivdep for iσ = 1:2
+               σ = idx2spin(iσ)
+               for i = 1:Nel
+                  A[i, iσ, I, k] = Aall[iσ, I, k] - (Σ[i] == σ) * ϕnlm[I, i, k]
+               end
             end
          end
       end
-   end
+   end # inbounds
 
-   return A 
+   release!(Aall)
+   
+   return A
 end
 
 # --------------------- connect with ChainRule
@@ -130,13 +145,4 @@ initialstates(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxstate(rng, l
 # This should be removed later and replace by ObejctPools
 (l::BackflowPoolingLayer)(ϕnlm, ps, st) = 
       evaluate(l.basis, ϕnlm, st.Σ), st
-
-# ----- ObejctPools
-# (l::BackflowPoolingLayer)(args...) = evaluate(l, args...)
-
-# function evaluate(l::BackflowPoolingLayer, ϕnlm_Σ::SINGLE, ps, st)
-#    B = acquire!(st.cache, :B, (length(l.basis), ), _valtype(l.basis, x))
-#    evaluate!(parent(B), l.basis, ϕnlm_Σ[1], ϕnlm_Σ[2])
-#    return B 
-# end 
 

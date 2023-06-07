@@ -7,7 +7,7 @@ using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Random
 using Zygote 
-
+using Cthulhu
 
 # test configs
 Rnldegree = 4
@@ -33,6 +33,9 @@ pooling = BackflowPooling(aobasis_layer)
 pooling_layer = ACEpsi.lux(pooling)
 
 println()
+@info("Test evaluate ProductBasisLayer")
+ps1, st1 = LuxCore.setup(MersenneTwister(1234), prodbasis_layer)
+bϕnlm, st1 = prodbasis_layer(X, ps1, st1)
 
 @info("Test evaluate AtomicOrbitalsBasis")
 ps, st = LuxCore.setup(MersenneTwister(1234), aobasis_layer)

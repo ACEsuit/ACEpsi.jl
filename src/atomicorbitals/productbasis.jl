@@ -1,6 +1,6 @@
 using Lux: WrappedFunction
 using Lux
-using Polynomials4ML: SparseProduct
+using Polynomials4ML: SparseProduct, AbstractPoly4MLBasis
 
 function _invmap(a::AbstractVector)
    inva = Dict{eltype(a), Int}()
@@ -15,7 +15,7 @@ function dropnames(namedtuple::NamedTuple, names::Tuple{Vararg{Symbol}})
    return NamedTuple{keepnames}(namedtuple)
 end
 
-function ProductBasisLayer(spec1, bRnl, bYlm)
+function ProductBasisLayer(spec1::Vector, bRnl::AbstractPoly4MLBasis, bYlm::AbstractPoly4MLBasis)
     spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
     spec_Rnl = natural_indices(bRnl); inv_Rnl = _invmap(spec_Rnl)
     spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
