@@ -14,16 +14,16 @@ Base.length(pooling::BackflowPooling) = 3 * length(pooling.basis) # length(spin(
 
 function evaluate(pooling::BackflowPooling, ϕnlm, Σ::AbstractVector)
    basis = pooling.basis
-   nuc = basis.nuclei 
+   nuc = basis.nuclei
    Nnuc = length(nuc)
-   Nnlm = length(basis.prodbasis.layers.ϕnlms.basis.spec) 
+   Nnlm = size(ϕnlm, 3)
    Nel = length(Σ)
    T = promote_type(eltype(ϕnlm))
 
     # evaluate the pooling operation
-   #                spin  I    k = (nlm) 
+   #                spin  I    k = (nlm)
 
-   Aall = zeros(T, (2, Nnuc, Nnlm))
+   Aall = zeros(T, ((2, Nnuc, Nnlm)))
    for k = 1:Nnlm
       for i = 1:Nel 
          iσ = spin2idx(Σ[i])
