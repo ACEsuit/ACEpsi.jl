@@ -10,6 +10,8 @@ using Optimisers # mainly for the destrcuture(ps) function
 using Random
 using Printf
 using LinearAlgebra
+using BenchmarkTools
+using Cthulhu
 
 using HyperDualNumbers: Hyper
 
@@ -57,6 +59,18 @@ hA1 = BFwf_chain(hX, ps, st)
 print_tf(@test hA1[1].value ≈ A1[1])
 
 println()
+
+##
+F(X) = BFwf_chain(X, ps, st)[1]
+
+# @profview let  F = F, X = X
+#    for i = 1:10_000
+#        F(X)
+#    end
+# end
+
+@btime F(X)
+
 
 ##
 
@@ -120,6 +134,8 @@ X = [randn(3) for _ = 1:Nel]
 hX = [x2dualwrtj(x, 0) for x in X]
 Σ = rand(spins(), Nel)
 F(x) = BFwf_chain(x, ps, st)[1]
+
+
 function ΔF(x)
    ΔΨ = 0.0
    hX = [x2dualwrtj(xx, 0) for xx in x]
@@ -132,6 +148,7 @@ function ΔF(x)
    end
    return ΔΨ
 end
+
 Δ1 = ΔF(X)
 f0 = F(X)
 
