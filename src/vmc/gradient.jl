@@ -1,3 +1,5 @@
+using Zygote
+
 x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
 
 function _gradlap(g_bchain, x)
@@ -23,7 +25,7 @@ function _gradlap(g_bchain, x)
     return Δ
 end
 
-evaluate(wf, X::AbstractVector, ps, st) = wf(X, ps, st)
+evaluate(wf, X::AbstractVector, ps, st) = wf(X, ps, st)[1]
 
 gradient(wf, x, ps, st) = Zygote.gradient(x -> wf(x, ps, st)[1], x)[1]
 

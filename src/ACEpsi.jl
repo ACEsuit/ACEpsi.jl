@@ -19,4 +19,7 @@ include("backflowpooling.jl")
 
 # lux utils for bflow
 include("lux_utils.jl")
+
+# vmc
+include("vmc/vmc.jl")
 end
