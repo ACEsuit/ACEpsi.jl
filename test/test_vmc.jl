@@ -2,7 +2,7 @@ using ACEpsi, Polynomials4ML, StaticArrays, Test
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
-using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, Eloc_Exp_TV_clip, grad
+using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
@@ -46,10 +46,5 @@ Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1
 
 ham = SumH(K, Vext, Vee)
 sam = MHSampler(wf, Nel)
-
-λ₀, σ, E_clip, x_clip, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham)
-g = grad(wf, x_clip, ps, st, E_clip)
-
-# Optimization
-st_opt = Optimisers.setup(Optimisers.Adam(0.0001), ps)
-st_opt, ps = Optimisers.update(st_opt, ps, g)
+opt = VMC(100, 0.01)
+gd_GradientByVMC(opt,sam,ham,wf,ps,st)

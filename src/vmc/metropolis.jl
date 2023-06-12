@@ -120,7 +120,7 @@ function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
                 clip = 20.)
-    x, x0, acc = sampler(sam, ps, st)
+    x, ~, acc = sampler(sam, ps, st)
     Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
     val = sum(Eloc) / length(Eloc)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
@@ -129,7 +129,7 @@ function Eloc_Exp_TV_clip(wf, ps, st,
     ind = findall(x -> abs(x) > a, ΔE)
     ΔE[ind] = (a * sign.(ΔE) .* (1 .+ log.((1 .+(abs.(ΔE)/a).^2)/2)))[ind]
     E_clip = median(Eloc) .+ ΔE
-    return val, var, E_clip, x, x0, acc
+    return val, var, E_clip, x, acc
 end
 
 function params(a::NamedTuple)
@@ -142,7 +142,7 @@ function grad(wf, x, ps, st, E);
    N = length(x)
    p = params.(dy)
    _,t = destructure(dy[1])
-   g = 1/N * sum( p .* E) - 1/(N^2) * sum(E) * sum(p)
+   g = -1/N * sum( p .* E) + 1/(N^2) * sum(E) * sum(p)
    g = t(g)
    return g;
 end
