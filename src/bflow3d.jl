@@ -29,7 +29,7 @@ struct DenseLayer <: AbstractExplicitLayer
 end
 
 function (l::DenseLayer)(x::AbstractMatrix, ps, st)
-   return  ps.W * x, st
+   return  x * ps.W, st
 end
 
 # Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?
@@ -39,7 +39,7 @@ LuxCore.initialstates(rng::AbstractRNG, l::DenseLayer) = NamedTuple()
 function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix{Hyper{T}}, ps, st) where T<:Number
    val = l(x, ps, st)
    function pb(A)
-      return NoTangent(), NoTangent(), NoTangent(), (W = A[1] * x',), NoTangent()
+      return NoTangent(), NoTangent(), NoTangent(), (W = x * A[1]',), NoTangent()
    end
    return val, pb
 end
@@ -93,7 +93,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
-                        bAA = corr_layer, transpose_layer = WrappedFunction(transpose), hidden1 = DenseLayer(length(corr1), Nel), 
+                        bAA = corr_layer, hidden1 = DenseLayer(Nel,length(corr1)), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
    return Chain(; branch = BranchLayer((js = jastrow_layer, bf = BFwf_chain, )), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
 end
