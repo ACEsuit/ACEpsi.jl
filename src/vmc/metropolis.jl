@@ -1,10 +1,11 @@
 using StatsBase
-
+using StaticArrays
+using Optimisers
+export MHSampler
 """
 `MHSampler`
 Metropolis-Hastings sampling algorithm.
 """
-
 mutable struct MHSampler
     Nel::Int
     Δt::Float64                 # step size (of Gaussian proposal)
@@ -36,12 +37,12 @@ unbiased random walk: R_n+1 = R_n + Δ⋅Wn
 biased random walk:   R_n+1 = R_n + Δ⋅Wn + Δ⋅∇(log Ψ)(R_n)
 """
 
-
+eval(wf, X::AbstractVector, ps, st) = wf(X, ps, st)[1]
 
 function MHstep(r0, 
                 Ψx0, 
                 Nels::Int, 
-                sam::MHSampler)
+                sam::MHSampler, ps, st)
     rand_sample(X::AbstractVector, u::Int, Δt::AbstractFloat) = begin
         Y = copy(X)
         ind = sample(1:length(X), u, replace=false)
@@ -49,8 +50,8 @@ function MHstep(r0,
         return Y
     end
     rp = rand_sample.(r0, Ref(sam.type), Ref(sam.Δt))
-    Ψxp = ACEpsi.vmc.evaluate.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
-    accprob = accfcn(r0, rp, Ψx0, Ψxp, sam)
+    Ψxp = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
+    accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
     r = acc .*  rp + (1 .- acc) .* r0
@@ -63,7 +64,7 @@ acceptance rate for log|Ψ|
 ψₜ₊₁²/ψₜ² = exp((log|Ψₜ₊₁|^2-log |ψₜ|^2))
 """
 
-function accfcn(r0, rp, Ψx0, Ψxp, sam::MHSampler)  
+function accfcn(Ψx0, Ψxp)  
     acc = exp.(Ψxp .- Ψx0)
     return acc
 end
@@ -71,12 +72,13 @@ end
 """============== Metropolis sampling algorithm ============
 type = "restart"
 """
+
 function sampler_restart(sam::MHSampler, ps, st)
-    r0 = [randn(SVector{3, Float64}, Nel) for _ = 1:sam.nchains]
-    Ψx0 = ACEpsi.vmc.evaluate.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+    r0 = [randn(SVector{3, Float64}, sam.Nel) for _ = 1:sam.nchains]
+    Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     acc = []
     for _ = 1 : sam.burnin
-        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam);
+        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
         push!(acc,a)
     end
     return r0, Ψx0, mean(mean(acc))
@@ -91,11 +93,11 @@ function sampler(sam::MHSampler, ps, st)
         r0, Ψx0, = sampler_restart(sam, ps, st);
     else
         r0 = sam.x0
-        Ψx0 = ACEpsi.vmc.evaluate.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+        Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     end
     acc = []
     for i = 1:sam.lag
-        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam);
+        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
         push!(acc, a)
     end
     return r0, Ψx0, mean(mean(acc))
@@ -113,3 +115,35 @@ function rq_MC(Ψ, sam::MHSampler, ham::SumH, ps, st)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc)-1)))
     return val, var, acc
 end
+
+function Eloc_Exp_TV_clip(wf, ps, st,
+                sam::MHSampler, 
+                ham::SumH;
+                clip = 20.)
+    x, x0, acc = sampler(sam, ps, st)
+    Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
+    val = sum(Eloc) / length(Eloc)
+    var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
+    ΔE = Eloc .- median( Eloc )
+    a = clip * mean( abs.(ΔE) )
+    ind = findall(x -> abs(x) > a, ΔE)
+    ΔE[ind] = (a * sign.(ΔE) .* (1 .+ log.((1 .+(abs.(ΔE)/a).^2)/2)))[ind]
+    E_clip = median(Eloc) .+ ΔE
+    return val, var, E_clip, x, x0, acc
+end
+
+function params(a::NamedTuple)
+    p,= destructure(a)
+    return p
+end
+
+function grad(wf, x, ps, st, E);
+   dy = grad_params.(Ref(wf), x, Ref(ps), Ref(st));
+   N = length(x)
+   p = params.(dy)
+   _,t = destructure(dy[1])
+   g = 1/N * sum( p .* E) - 1/(N^2) * sum(E) * sum(p)
+   g = t(g)
+   return g;
+end
+
