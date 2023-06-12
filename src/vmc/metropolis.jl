@@ -28,7 +28,7 @@ MHSampler(Ψ, Nel; Δt = 0.1,
             x0 = [],
             wT = "unbiased", 
             bc = "periodic", 
-            type = 3) =
+            type = 1) =
     MHSampler(Nel, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, type)
 
 
@@ -142,7 +142,7 @@ function grad(wf, x, ps, st, E);
    N = length(x)
    p = params.(dy)
    _,t = destructure(dy[1])
-   g = -1/N * sum( p .* E) + 1/(N^2) * sum(E) * sum(p)
+   g = 1/N * sum( p .* E) - 1/(N^2) * sum(E) * sum(p)
    g = t(g)
    return g;
 end

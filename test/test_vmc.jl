@@ -19,10 +19,10 @@ using HyperDualNumbers: Hyper
 Rnldegree = 4
 Ylmdegree = 4
 totdegree = 8
-Nel = 5
+Nel = 2
 X = randn(SVector{3, Float64}, Nel)
-Σ = rand(spins(), Nel)
-nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
+Σ = [↑, ↓]
+nuclei = [ Nuc(3 * zeros(SVector{3, Float64}), 2.0)]
 
 # wrap it as HyperDualNumbers
 x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
@@ -42,7 +42,6 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 K(wf, X::AbstractVector, ps, st) = -0.5 * laplacian(wf, X, ps, st)
 Vext(wf, X::AbstractVector, ps, st) = sum(1/norm(nuclei[i].rr - X[j]) for i = 1:length(nuclei) for j in 1:length(X))
 Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1 for j = i+1:length(X))
-
 
 ham = SumH(K, Vext, Vee)
 sam = MHSampler(wf, Nel)
