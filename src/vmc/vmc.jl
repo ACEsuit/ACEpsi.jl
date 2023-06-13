@@ -64,6 +64,6 @@ function gd_GradientByVMC(opt::VMC,
             break;
         end  
     end
-    return wf, λ₀, σ, err_opt, ps
+    return wf, err_opt, ps
 end
 

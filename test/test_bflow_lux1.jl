@@ -2,7 +2,7 @@ using ACEpsi, Polynomials4ML, StaticArrays, Test
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
-using ACEpsi.vmc: evaluate, gradient, laplacian, grad_params
+using ACEpsi.vmc: gradient, laplacian, grad_params
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
