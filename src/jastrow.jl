@@ -42,7 +42,7 @@ function evaluate(f::Jastrow, X::AbstractVector, Σ)
     for i = 1:Nnuc, j = 1:Nel-1, k = j+1: Nel 
         F3 += C0 * nuc[i].charge * XN[i, j] * XN[i, k] * log(XN[i, j]^2 + XN[i, k]^2)
     end
-    return exp(F2 + F3)
+    return 1 # exp(F2 + F3)
 end
 
 

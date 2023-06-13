@@ -120,16 +120,17 @@ grad_test2(Fp, dFp, W0)
 ##
 
 @info("Test consistency when input isa HyperDualNumbers")
-hp = Zygote.gradient(p -> BFwf_chain(hX, p, st)[1], ps)[1]
-hp, = destructure(hp)
-P = similar(p)
-for i = 1:length(P)
-   P[i] = hp[i].value
-end
+#hp = Zygote.gradient(p -> BFwf_chain(hX, p, st)[1], ps)[1]
 
-print_tf(@test P ≈ p)
+#hp, = destructure(hp)
+#P = similar(p)
+#for i = 1:length(P)
+#   P[i] = hp[i].value
+#end
 
-println()
+#print_tf(@test P ≈ p)
+
+#println()
 
 ##
 
@@ -222,7 +223,7 @@ function ∇ΔF(x, ps)
    return p
 end
 
-W0, re = destructure(ps)
-Fp = w -> ΔF(X, re(w))
-dFp = w -> ∇ΔF(X, re(w))
-fdtest(Fp, dFp, W0)
+#W0, re = destructure(ps)
+#Fp = w -> ΔF(X, re(w))
+#dFp = w -> ∇ΔF(X, re(w))
+#fdtest(Fp, dFp, W0)

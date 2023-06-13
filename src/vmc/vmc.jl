@@ -53,7 +53,7 @@ function gd_GradientByVMC(opt::VMC,
         g = grad(wf, x0, ps, st, E)
 
         # Optimization
-        st_opt = Optimisers.setup(Optimisers.Adam(α), ps)
+        st_opt = Optimisers.setup(Optimisers.AdamW(α), ps)
         st_opt, ps = Optimisers.update(st_opt, ps, g)
 
         res = norm(destructure(g)[1]);
