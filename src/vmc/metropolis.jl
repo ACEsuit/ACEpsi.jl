@@ -43,13 +43,10 @@ function MHstep(r0,
                 Ψx0, 
                 Nels::Int, 
                 sam::MHSampler, ps, st)
-    rand_sample(X::AbstractVector, u::Int, Δt::AbstractFloat) = begin
-        Y = copy(X)
-        ind = sample(1:length(X), u, replace=false)
-        Y[ind] = X[ind] + Δt * randn(SVector{3, Float64}, u)
-        return Y
+    rand_sample(X::AbstractVector, Nels::Int, Δt::AbstractFloat) = begin
+        return X + Δt * randn(SVector{3, Float64}, Nels)
     end
-    rp = rand_sample.(r0, Ref(sam.type), Ref(sam.Δt))
+    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
     Ψxp = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
