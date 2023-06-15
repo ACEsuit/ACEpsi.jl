@@ -29,17 +29,17 @@ struct DenseLayer <: AbstractExplicitLayer
 end
 
 function (l::DenseLayer)(x::AbstractMatrix, ps, st)
-   return  x * ps.W, st
+   return  Matrix(x) * ps.W, st
 end
 
 # Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?
 LuxCore.initialparameters(rng::AbstractRNG, l::DenseLayer) = ( W = randn(rng, l.out_dim, l.in_dim), )
 LuxCore.initialstates(rng::AbstractRNG, l::DenseLayer) = NamedTuple()
 
-function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix{Hyper{T}}, ps, st) where T<:Number
+function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix, ps, st)
    val = l(x, ps, st)
    function pb(A)
-      return NoTangent(), NoTangent(), NoTangent(), (W = x * A[1]',), NoTangent()
+      return NoTangent(), NoTangent(), A[1] * ps.W', (W = x' * A[1],), NoTangent()
    end
    return val, pb
 end
@@ -93,9 +93,9 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
-                        bAA = corr_layer, hidden1 = DenseLayer(Nel,length(corr1)), 
+                        bAA = corr_layer, hidden1 = DenseLayer(Nel, length(corr1)), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
-   return Chain(; branch = BranchLayer((js = jastrow_layer, bf = BFwf_chain, )), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
 end
 
 

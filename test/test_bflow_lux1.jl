@@ -74,7 +74,7 @@ F(X) = BFwf_chain(X, ps, st)[1]
 #    end
 # end
 
-@btime F(X)
+# @btime F(X)
 
 
 ##
