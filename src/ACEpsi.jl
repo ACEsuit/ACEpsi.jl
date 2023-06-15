@@ -22,4 +22,8 @@ include("lux_utils.jl")
 
 # vmc
 include("vmc/optimiser.jl")
+
+# HyperDualNumbersExt
+include("ext/HyperDualNumbersExt.jl")
+
 end

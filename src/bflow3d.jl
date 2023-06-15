@@ -6,6 +6,7 @@ using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec
+using ACEpsi
 using LuxCore: AbstractExplicitLayer
 using LuxCore
 using Lux
@@ -29,7 +30,7 @@ struct DenseLayer <: AbstractExplicitLayer
 end
 
 function (l::DenseLayer)(x::AbstractMatrix, ps, st)
-   return  Matrix(x) * ps.W, st
+   return parent(x) * ps.W, st
 end
 
 # Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?
