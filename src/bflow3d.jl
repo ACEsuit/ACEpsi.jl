@@ -30,7 +30,7 @@ struct DenseLayer <: AbstractExplicitLayer
 end
 
 function (l::DenseLayer)(x::AbstractMatrix, ps, st)
-   return parent(x) * ps.W, st
+   return Matrix(parent(x) * ps.W), st
 end
 
 # Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?
@@ -40,7 +40,7 @@ LuxCore.initialstates(rng::AbstractRNG, l::DenseLayer) = NamedTuple()
 function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix, ps, st)
    val = l(x, ps, st)
    function pb(A)
-      return NoTangent(), NoTangent(), A[1] * ps.W', (W = x' * A[1],), NoTangent()
+      return NoTangent(), NoTangent(), Matrix(A[1] * ps.W'), (W = x' * A[1],), NoTangent()
    end
    return val, pb
 end
