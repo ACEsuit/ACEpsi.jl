@@ -1,74 +1,45 @@
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
-using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasis, Nuc, make_nlms_spec, ProductBasis, evaluate
-using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
-using ACEbase.Testing: print_tf
+using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
+using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, JPauliNet 
+using ACEbase.Testing: print_tf, fdtest
+using ACEpsi.vmc: gradient, laplacian, grad_params
+using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
 using Zygote
+using Optimisers # mainly for the destrcuture(ps) function
 using Random
-using ACEcore.Utils: gensparse
-using ACEcore: SparseSymmProd
-using ACEcore
+using Printf
+using LinearAlgebra
+using BenchmarkTools
 
-Rnldegree = 4
-Ylmdegree = 4
-ν = 2
-totdeg = 10
+using HyperDualNumbers: Hyper
+
+
 Nel = 5
 X = randn(SVector{3, Float64}, Nel)
 Σ = rand(spins(), Nel)
-sd_admissible = bb -> (true)
-
-
 nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
-##
 
-# Defining AtomicOrbitalsBasis
-bRnl = ACEpsi.AtomicOrbitals.RnlExample(Rnldegree)
-bYlm = RYlmBasis(Ylmdegree)
+# wrap it as HyperDualNumbers
+x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
+hX = [x2dualwrtj(x, 0) for x in X]
+hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
 
-spec1p = make_nlms_spec(bRnl, bYlm; 
-                          totaldegree = totdeg)
+js = JPauliNet(nuclei)
+jastrow_layer = ACEpsi.lux(js)
+ps, st = LuxCore.setup(MersenneTwister(1234), jastrow_layer)
+st = (Σ = Σ,)
 
-# size(X) = (nX, 3); length(Σ) = nX
-aobasis = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdeg, nuclei = nuclei, )
-pooling = BackflowPooling(aobasis)
+A1 = jastrow_layer(X, ps, st)
+hA1 = jastrow_layer(hX, ps, st)
+print_tf(@test hA1[1].value ≈ A1[1])
 
-# define sparse for n-correlations
-tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
+@info("Test ∇ψ w.r.t. X")
+y, st = Lux.apply(jastrow_layer, X, ps, st)
 
-specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
-                    minvv = fill(0, ν), 
-                    maxvv = fill(length(spec1p), ν), 
-                    ordered = true)
-spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+F(X) = jastrow_layer(X, ps, st)[1]
+dF(X) = Zygote.gradient(x -> jastrow_layer(x, ps, st)[1], X)[1]
+fdtest(F, dF, X, verbose = true)
 
-# further restrict
-spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
-
-# define n-correlation
-corr1 = SparseSymmProd(spec; T = Float64)
-
-reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
-
-
-pooling_layer = ACEpsi.lux(pooling)
-# (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
-corr_layer = ACEcore.lux(corr1)
-
-pool2AAChain = Chain(; pooling = pooling_layer, reshape = WrappedFunction(reshape_func), 
-bAA = corr_layer)
-
-
-# dummy input
-ϕnlm = aobasis(X, Σ)
-
-ps, st = setupBFState(MersenneTwister(1234), pool2AAChain, Σ)
-
-y, st = Lux.apply(pool2AAChain, ϕnlm, ps, st)
-
-## Pullback API to capture change in state
-(l, st_), pb = pullback(p -> Lux.apply(pool2AAChain, ϕnlm, p, st), ps)
-gs = pb((one.(l), nothing))[1]
