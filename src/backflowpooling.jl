@@ -27,7 +27,7 @@ function evaluate(pooling::BackflowPooling, ϕnlm::AbstractArray, Σ::AbstractVe
     # evaluate the pooling operation
    #                spin  I    k = (nlm)
 
-   Aall = acquire!(pooling.pool, :Aall, (2, Nnuc, Nnlm), T)
+   Aall = acquire!(pooling.tmp, :Aall, (2, Nnuc, Nnlm), T)
    fill!(Aall, 0)
 
    @inbounds begin
@@ -60,7 +60,7 @@ function evaluate(pooling::BackflowPooling, ϕnlm::AbstractArray, Σ::AbstractVe
    @assert spin2idx(↓) == 2
    @assert spin2idx(∅) == 3
 
-   A = acquire!(pooling.tmp, :Aall, (Nel, 3, Nnuc, Nnlm), T)
+   A = acquire!(pooling.pool, :Aall, (Nel, 3, Nnuc, Nnlm), T)
    fill!(A, 0)
 
    @inbounds begin
@@ -100,7 +100,8 @@ end
 
 function _pullback_evaluate(∂A, pooling::BackflowPooling, ϕnlm, Σ)
    TA = eltype(ϕnlm)
-   ∂ϕnlm = zeros(TA, size(ϕnlm))
+   ∂ϕnlm = acquire!(pooling.pool, :∂ϕnlm, size(ϕnlm), TA)
+   fill!(∂ϕnlm, zero(TA))
    _pullback_evaluate!(∂ϕnlm, ∂A, pooling, ϕnlm, Σ)
    return ∂ϕnlm
 end
