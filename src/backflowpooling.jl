@@ -99,7 +99,7 @@ function _rrule_evaluate(pooling::BackflowPooling, ϕnlm, Σ)
 end
 
 function _pullback_evaluate(∂A, pooling::BackflowPooling, ϕnlm, Σ)
-   TA = promote_type(eltype.(ϕnlm)...)
+   TA = eltype(ϕnlm)
    ∂ϕnlm = zeros(TA, size(ϕnlm))
    _pullback_evaluate!(∂ϕnlm, ∂A, pooling, ϕnlm, Σ)
    return ∂ϕnlm
@@ -108,9 +108,9 @@ end
 
 function _pullback_evaluate!(∂ϕnlm, ∂A, pooling::BackflowPooling, ϕnlm, Σ)
    Nnuc, Nel, Nnlm = size(ϕnlm)
-   basis = pooling.basis
+   #basis = pooling.basis
 
-   @assert Nnlm == length(basis.prodbasis.layers.ϕnlms.basis.spec)
+   #@assert Nnlm == length(basis.prodbasis.layers.ϕnlms.basis.spec)
    @assert Nel == length(Σ)
    @assert size(∂ϕnlm) == (Nnuc, Nel, Nnlm)
    @assert size(∂A) == (Nel, 3, Nnuc, Nnlm)
