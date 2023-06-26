@@ -51,8 +51,8 @@ function MHstep(r0,
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
-    r = acc .*  rp + (1 .- acc) .* r0
-    Ψ = acc .*  Ψxp + (1 .- acc) .* Ψx0
+    r = acc .*  rp + (1.0 .- acc) .* r0
+    Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
     return r, Ψ, acc
 end
 
@@ -71,7 +71,7 @@ type = "restart"
 """
 
 function sampler_restart(sam::MHSampler, ps, st)
-    r0 = [randn(SVector{3, Float64}, sam.Nel) for _ = 1:sam.nchains]
+    r0 = [sam.Δt * randn(SVector{3, Float64}, sam.Nel) for _ = 1:sam.nchains]
     Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     acc = []
     for _ = 1 : sam.burnin
@@ -116,7 +116,7 @@ end
 function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
-                clip = 20.)
+                clip = 5.)
     x, ~, acc = sampler(sam, ps, st)
     Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
     val = sum(Eloc) / length(Eloc)

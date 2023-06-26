@@ -88,7 +88,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
    corr_layer = Polynomials4ML.lux(corr1)
 
-   js = Jastrow(nuclei)
+   js = JPauliNet(nuclei)
    jastrow_layer = ACEpsi.lux(js)
 
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))

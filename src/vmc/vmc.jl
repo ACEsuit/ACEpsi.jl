@@ -2,6 +2,7 @@ export VMC
 using Printf
 using LinearAlgebra
 using Optimisers
+#using Plots
 """
 Minimizing the Rayleigh quotient by VMC
 tol: tolrance
@@ -31,6 +32,8 @@ function gd_GradientByVMC(opt::VMC,
     α = opt.lr;
     err_opt = zeros(opt.MaxIter)
     x0, ~, acc = sampler_restart(sam, ps, st);
+    #x = reduce(vcat,reduce(vcat,x0))
+    #display(histogram(x,xlim = (-40,40)))
     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
     acc_step = accMCMC[1];
     acc_opt = zeros(acc_step)
@@ -51,7 +54,10 @@ function gd_GradientByVMC(opt::VMC,
         # optimize
         λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham)
         g = grad(wf, x0, ps, st, E)
-
+        #if k % 10 == 0 
+        #    x = reduce(vcat,reduce(vcat,x0))
+        #    display(histogram(x,xlim = (-40,40)))
+        #end
         # Optimization
         st_opt = Optimisers.setup(Optimisers.AdamW(α), ps)
         st_opt, ps = Optimisers.update(st_opt, ps, g)

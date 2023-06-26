@@ -1,11 +1,9 @@
 # This should probably be re-implemented properly and be made performant. 
 # the current version is just for testing 
 using ACEpsi.AtomicOrbitals: Nuc
+using LuxCore
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
-
-import ChainRules
-import ChainRules: rrule, NoTangent
 using Zygote: Buffer
 
 mutable struct Jastrow{T}
@@ -17,32 +15,22 @@ end
 ## F_2(x) = -1/2\sum_{l=1}^L \sum_{i=1}^N Z_l|yi,l|+1/4\sum_{1\leq i<j\leq N}|x_i-x_j|
 ## F_3(x) = C_0\sum_{l=1}^L  \sum_{1\leq i<j\leq N} Z_l (yil * yjl) * ln(|yil|^2+|yjl|^2)
 
-function evaluate(f::Jastrow, X::AbstractVector, Σ) 
+function evaluate(f::Jastrow, X::AbstractVector, ξ) 
     nuc = f.nuclei
     Nnuc = length(nuc)
     Nel = size(X, 1)
     T = promote_type(eltype(X[1]))
     XX = zeros(T, (Nnuc, Nel))
     XN = Buffer(XX)
-
-    C0 = (2-pi)/(12*pi)
     F2 = zero(T)
-    F3 = zero(T)
 
     # trans
     for I = 1:Nnuc, i = 1:Nel
         XN[I, i] = norm(X[i] - nuc[I].rr)
-        F2 += -1/2 * nuc[I].charge * XN[I, i]
+        F2 += -nuc[I].charge * XN[I, i]
     end
 
-    for i = 1:Nel-1, j = i+1:Nel
-        F2 += 1/4 * norm(X[i] - X[j])
-    end
-
-    for i = 1:Nnuc, j = 1:Nel-1, k = j+1: Nel 
-        F3 += C0 * nuc[i].charge * XN[i, j] * XN[i, k] * log(XN[i, j]^2 + XN[i, k]^2)
-    end
-    return 1 # exp(F2 + F3)
+    return exp(ξ[1] * F2)
 end
 
 
@@ -54,11 +42,43 @@ end
 
 lux(basis::Jastrow) = JastrowLayer(basis)
 
-initialparameters(rng::AbstractRNG, l::JastrowLayer) = _init_luxparams(rng, l.basis)
-
-initialstates(rng::AbstractRNG, l::JastrowLayer) = _init_luxstate(rng, l.basis)
-
+LuxCore.initialparameters(rng::AbstractRNG, l::JastrowLayer) = ( ξ = [rand()], )
 
 # This should be removed later and replace by ObejctPools
 (l::JastrowLayer)(X, ps, st) = 
+      evaluate(l.basis, X, ps.ξ), st
+
+
+
+## Bernie's code from Jastrow branch
+
+mutable struct JPauliNet{T}
+    nuclei::Vector{Nuc{T}}
+end
+
+## PauliNet
+## γ(R) := ∑_{i<j} -c_{ij}/(1+|r_i-r_j|)
+## c_{ij} = 1/2 if antiparallel, 1/4 if parallel
+
+function evaluate(f::JPauliNet, X::AbstractVector, Σ)
+    Nel = size(X, 1)
+    T = promote_type(eltype(X[1]))
+    γ = zero(T)
+    for i = 1:Nel-1, j = i+1:Nel
+        if Σ[i] != Σ[j] # anti-parallel
+            γ += -(1/2) / (1+norm(X[i] - X[j]))
+        else # parallel
+            γ += -(1/4) / (1+norm(X[i] - X[j]))
+        end
+    end
+    return exp(γ)
+end
+
+struct JPauliNetLayer <: AbstractExplicitLayer 
+    basis::JPauliNet
+end
+ 
+lux(basis::JPauliNet) = JPauliNetLayer(basis)
+ 
+(l::JPauliNetLayer)(X, ps, st) = 
       evaluate(l.basis, X, st.Σ), st
