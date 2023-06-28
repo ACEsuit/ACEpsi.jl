@@ -44,7 +44,7 @@ function MHstep(r0,
                 Nels::Int, 
                 sam::MHSampler, ps, st)
     rand_sample(X::AbstractVector, Nels::Int, Δt::AbstractFloat) = begin
-        return X + Δt * randn(SVector{3, Float64}, Nels)
+        return X + Δt * randn(SVector{3, eltype(X[1])}, Nels)
     end
     rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
     Ψxp = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))

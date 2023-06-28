@@ -43,6 +43,7 @@ Vext(wf, X::AbstractVector, ps, st) = -sum(nuclei[i].charge/norm(nuclei[i].rr - 
 Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1 for j = i+1:length(X))
 
 ham = SumH(K, Vext, Vee)
-sam = MHSampler(wf, Nel, Δt = 0.6, burnin = 1000)
-opt = VMC(1000, 0.1, lr_dc = 50)
+sam = MHSampler(wf, Nel, Δt = 0.3, burnin = 1000, nchains = 2000)
+opt = VMC(500, 0.1, lr_dc = 50)
 wf, err_opt, ps = gd_GradientByVMC(opt, sam, ham, wf, ps, st)
+#Eref = -2.9037
