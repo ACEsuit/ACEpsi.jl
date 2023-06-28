@@ -15,12 +15,9 @@ end
 ## F_2(x) = -1/2\sum_{l=1}^L \sum_{i=1}^N Z_l|yi,l|+1/4\sum_{1\leq i<j\leq N}|x_i-x_j|
 ## F_3(x) = C_0\sum_{l=1}^L  \sum_{1\leq i<j\leq N} Z_l (yil * yjl) * ln(|yil|^2+|yjl|^2)
 
-function evaluate(f::Jastrow, X::AbstractVector, Σ, ξ) 
-    nuc = f.nuclei
-    Nnuc = length(nuc)
+function evaluate(f::Jastrow, X::AbstractVector, Σ) 
     Nel = size(X, 1)
     T = promote_type(eltype(X[1]))
-    F2 = zero(T)
 
     γ = zero(T)
     for i = 1:Nel-1, j = i+1:Nel
@@ -32,11 +29,8 @@ function evaluate(f::Jastrow, X::AbstractVector, Σ, ξ)
     end
 
     # trans
-    for I = 1:Nnuc, i = 1:Nel
-        F2 += -nuc[I].charge * norm(X[i] - nuc[I].rr)
-    end
 
-    return exp(ξ[1] * F2 + γ)
+    return exp(γ)
 end
 
 
@@ -48,11 +42,11 @@ end
 
 lux(basis::Jastrow) = JastrowLayer(basis)
 
-LuxCore.initialparameters(rng::AbstractRNG, l::JastrowLayer) = ( ξ = [rand()], )
+LuxCore.initialparameters(rng::AbstractRNG, l::JastrowLayer) = NamedTuple()
 
 # This should be removed later and replace by ObejctPools
 (l::JastrowLayer)(X, ps, st) = 
-      evaluate(l.basis, X, st.Σ, ps.ξ), st
+      evaluate(l.basis, X, st.Σ), st
 
 
 

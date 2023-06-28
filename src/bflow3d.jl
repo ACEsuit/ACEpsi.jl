@@ -6,6 +6,7 @@ using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec
+using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 using ACEpsi
 using LuxCore: AbstractExplicitLayer
 using LuxCore
@@ -47,34 +48,31 @@ end
 
 ##
 
+function get_spec(nuclei, spec1p) 
+   spec = []
+   Nnuc = length(nuclei)
+
+   spec = Array{Any}(undef, (3, Nnuc, length(spec1p)))
+
+   for (k, nlm) in enumerate(spec1p)
+      for I = 1:Nnuc 
+         for (is, s) in enumerate(extspins())
+            spec[is, I, k] = (s=s, I = I, nlm...)
+         end
+      end
+   end
+
+   return spec[:]
+end
+
 # ----------------- custom layers ------------------
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
-   sd_admissible = bb -> (true),
-   envelope = x -> x) # enveolpe to be replaced by SJ-factor
+   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
 
    spec1p = make_nlms_spec(bRnl, bYlm; 
                           totaldegree = totdeg)
-
-   # size(X) = (nX, 3); length(Σ) = nX
-   # aobasis = AtomicOrbitalsBasis(bRnl, bYlm; totaldegree = totdeg, nuclei = nuclei, )
-
-   # define sparse for n-correlations
-   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
-   default_admissible = bb -> (length(bb) == 0) || (sum(b[1] - 1 for b in bb ) <= totdeg)
-
-   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
-                        minvv = fill(0, ν), 
-                        maxvv = fill(length(spec1p), ν), 
-                        ordered = true)
-   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
-
-   # further restrict
-   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
-
-   # define n-correlation
-   corr1 = Polynomials4ML.SparseSymmProd(spec)
 
    # ----------- Lux connections ---------
    # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
@@ -84,6 +82,23 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
    pooling = BackflowPooling(aobasis_layer)
    pooling_layer = ACEpsi.lux(pooling)
+
+   spec1p = get_spec(nuclei, spec1p)
+   # define sparse for n-correlations
+   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+   default_admissible = bb -> (length(bb) == 0) || (sum(b.n1 - 1 for b in bb ) <= totdeg)
+
+   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
+                        minvv = fill(0, ν), 
+                        maxvv = fill(length(spec1p), ν), 
+                        ordered = true)
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+   
+   # further restrict
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+   
+   # define n-correlation
+   corr1 = Polynomials4ML.SparseSymmProd(spec)
 
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
    corr_layer = Polynomials4ML.lux(corr1)
@@ -96,9 +111,16 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                         bAA = corr_layer, hidden1 = DenseLayer(Nel, length(corr1)), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
-   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
 end
 
+function displayspec(spec, spec1p)
+   nicespec = []
+   for k = 1:length(spec)
+      push!(nicespec, ([spec1p[spec[k][j]] for j = 1:length(spec[k])]))
+   end
+   return nicespec
+end
 
 # """
 # This function returns correct Si for pooling operation.
