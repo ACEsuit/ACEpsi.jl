@@ -2,8 +2,8 @@ using LuxCore
 using HyperDualNumbers
 
 function replace_namedtuples(nt, rp_st, Σ)
-    if :tmp in keys(nt) || length(nt) == 0
-        return (; rp_st...)
+    if :tmp in keys(nt) || :pool in keys(nt) || length(nt) == 0
+        return (; nt...)
     else
         for i in 1:length(nt)
             # @show nt[i]

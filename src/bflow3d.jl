@@ -101,7 +101,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    corr1 = Polynomials4ML.SparseSymmProd(spec)
 
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
-   corr_layer = Polynomials4ML.lux(corr1)
+   corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
 
    js = Jastrow(nuclei)
    jastrow_layer = ACEpsi.lux(js)
