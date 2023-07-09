@@ -2,7 +2,7 @@ using ACEpsi, Polynomials4ML, StaticArrays, Test
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
-using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC, AdamW, SR
+using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
@@ -20,7 +20,7 @@ totdegree = 4
 Nel = 2
 X = randn(SVector{3, Float64}, Nel)
 Σ = [↑,↓]
-nuclei = [ Nuc(zeros(SVector{3, Float64}), 2.0)]
+nuclei = [ Nuc(SVector(0.0,0.0,-0.7), 1.0), Nuc(SVector(0.0,0.0,0.7), 1.0)]
 ##
 
 # Defining AtomicOrbitalsBasis
@@ -47,10 +47,8 @@ Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1
 ham = SumH(K, Vext, Vee)
 sam = MHSampler(wf, Nel, Δt = 0.5, burnin = 1000, nchains = 2000)
 
-opt_vmc = VMC(3000, 0.1, SR(), lr_dc = 100)
+opt_vmc = VMC(3000, 0.1, AdamW(), lr_dc = 100)
 wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
-
-
 
 err = err_opt
 per = 0.2
@@ -58,8 +56,9 @@ err1 = zero(err)
 for i = 1:length(err)
     err1[i] = mean(err[Int(ceil(i-per  * i)):i])
 end
+err1
 
-Eref = -2.9037
+Eref = -1.8887557142857143
 
 # using Plots
-# plot(abs.(err1 .- Eref), w = 3, yscale=:log10)
+plot(abs.(err1 .- Eref), w = 3, yscale=:log10)

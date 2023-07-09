@@ -21,6 +21,6 @@ include("backflowpooling.jl")
 include("lux_utils.jl")
 
 # vmc
-include("vmc/optimiser.jl")
+include("vmc/opt.jl")
 
 end

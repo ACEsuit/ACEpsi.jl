@@ -108,7 +108,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
 
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
-   _det = x -> size(x) == (1, 1) ? x[1,1] : det(x)
+   _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                         bAA = corr_layer, hidden1 = DenseLayer(Nel, length(corr1)), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)))
