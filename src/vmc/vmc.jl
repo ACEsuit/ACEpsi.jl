@@ -37,7 +37,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
         α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
 
         # optimization
-        ps, acc, λ₀, res, σ = Optimization(opt_vmc.type, wf, ps, st, sam::MHSampler, ham::SumH, α)
+        ps, acc, λ₀, res, σ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α)
 
         # err
         verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
