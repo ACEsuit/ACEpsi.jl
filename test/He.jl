@@ -47,7 +47,7 @@ Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1
 ham = SumH(K, Vext, Vee)
 sam = MHSampler(wf, Nel, Δt = 0.5, burnin = 1000, nchains = 2000)
 
-opt_vmc = VMC(3000, 0.1, SR(), lr_dc = 100)
+opt_vmc = VMC(3000, 0.0015, SR(1e-4, 0.015), lr_dc = 50)
 wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
 
 

@@ -52,7 +52,7 @@ bRnl = AtomicOrbitalsRadials(Pn, Dn, spec)
 bYlm = RYlmBasis(Ylmdegree)
 
 # setup state
-BFwf_chain = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = 2)
+BFwf_chain, spec, spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = 2)
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 
 ##
