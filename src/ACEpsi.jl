@@ -15,9 +15,11 @@ include("atomicorbitals/atomicorbitals.jl")
 include("jastrow.jl")
 include("bflow3d.jl")
 include("bflow1d.jl")
+include("bflow1dps.jl")
 
 include("backflowpooling.jl")
 include("backflowpooling1d.jl")
+include("backflowpooling1dps.jl")
 # lux utils for bflow
 include("lux_utils.jl")
 
