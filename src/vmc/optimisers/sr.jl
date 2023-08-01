@@ -2,17 +2,17 @@ using Optimisers
 using Statistics
 # stochastic reconfiguration
 
-mutable struct SR <: opt
+mutable struct sr <: opt
     ϵ1::Number
     ϵ2::Number
 end
 
-SR() = SR(0., 0.01)
+sr() = sr(0., 0.01)
 
 
 _destructure(ps) = destructure(ps)[1]
 
-function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α)
+function Optimization(type::sr, wf, ps, st, sam::MHSampler, ham::SumH, α)
     ϵ1 = type.ϵ1
     ϵ2 = type.ϵ2
 

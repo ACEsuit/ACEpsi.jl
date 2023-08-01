@@ -15,7 +15,13 @@ function acc_adjust(k::Int, Δt::Number, acc_opt::AbstractVector, acc_range::Abs
     return Δt
 end
 
+abstract type sampler_dimension end
 
+mutable struct d3 <: sampler_dimension
+end
+
+mutable struct d1 <: sampler_dimension
+end
 
 
 

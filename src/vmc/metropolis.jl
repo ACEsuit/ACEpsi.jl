@@ -17,7 +17,7 @@ mutable struct MHSampler
     x0::Any                     # initial sampling 
     walkerType::String          # walker type: "unbiased", "Langevin"
     bc::String                  # boundary condition
-    type::Int64                 # move how many electron one time 
+    d::sampler_dimension        # electron dimension
 end
 
 MHSampler(Ψ, Nel; Δt = 0.1, 
@@ -28,8 +28,8 @@ MHSampler(Ψ, Nel; Δt = 0.1,
             x0 = [],
             wT = "unbiased", 
             bc = "periodic", 
-            type = 1) =
-    MHSampler(Nel, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, type)
+            d = d3()) =
+    MHSampler(Nel, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, d)
 
 
 """
@@ -43,10 +43,7 @@ function MHstep(r0,
                 Ψx0, 
                 Nels::Int, 
                 sam::MHSampler, ps, st)
-    rand_sample(X::AbstractVector, Nels::Int, Δt::AbstractFloat) = begin
-        return X + Δt * randn(SVector{3, eltype(X[1])}, Nels)
-    end
-    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
+    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d))
     Ψxp = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
@@ -54,6 +51,16 @@ function MHstep(r0,
     r = acc .*  rp + (1.0 .- acc) .* r0
     Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
     return r, Ψ, acc
+end
+
+rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3) = begin
+    @view(X[rand(1:Nels)]) .+= Δt * randn(SVector{3, eltype(X[1])}, 1)
+    return X
+end
+
+rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d1) = begin
+    @view(X[rand(1:Nels)]) .+= Δt * randn(1)
+    return X
 end
 
 """
@@ -69,9 +76,12 @@ end
 """============== Metropolis sampling algorithm ============
 type = "restart"
 """
+rand_init(Δt::Number, Nel::Int, nchains::Int, d::d3) = [Δt * randn(SVector{3, Float64}, Nel) for _ = 1:nchains]
+
+rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1) = [Δt * randn(Nel) for _ = 1:nchains]
 
 function sampler_restart(sam::MHSampler, ps, st)
-    r0 = [sam.Δt * randn(SVector{3, Float64}, sam.Nel) for _ = 1:sam.nchains]
+    r0 = rand_init(sam.Δt, sam.Nel, sam.nchains, sam.d)
     Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     acc = []
     for _ = 1 : sam.burnin

@@ -4,14 +4,14 @@ using LinearAlgebra
 using Optimisers
 
 mutable struct VMC
-    tol::Float64
+    tol::Number
     MaxIter::Int
-    lr::Float64
-    lr_dc::Float64
+    lr::Number
+    lr_dc::Number
     type::opt
 end
 
-VMC(MaxIter::Int, lr::Float64, type; tol = 1.0e-3, lr_dc = 50.0) = VMC(tol, MaxIter, lr, lr_dc, type);
+VMC(MaxIter::Int, lr::Number, type; tol = 1.0e-3, lr_dc = 50.0) = VMC(tol, MaxIter, lr, lr_dc, type);
         
 function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH, 
                 wf, ps, st, 

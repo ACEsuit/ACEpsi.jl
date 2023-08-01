@@ -20,3 +20,15 @@ function laplacian(wf, x, ps, st)
     end
     return ΔΨ
 end
+
+function laplacian(wf, X::Vector{<:Number}, ps, st)
+   ΔΨ = 0.0
+   hX = [Hyper(x, 0, 0, 0) for x in X]
+   Nel = length(X)
+   for i = 1:Nel
+         hX[i] = Hyper(X[i], 1, 1, 0) # ∂Φ/∂xj_{i}
+         ΔΨ += wf(hX, ps, st)[1].epsilon12
+         hX[i] = Hyper(X[i], 0, 0, 0) 
+   end
+   return ΔΨ
+end
