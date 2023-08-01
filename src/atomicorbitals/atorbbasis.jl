@@ -20,6 +20,10 @@ struct Nuc{T}
    charge::T   # should this be an integer? 
 end 
 
+struct Nuc1d{T}
+   rr::SVector{1, T}
+   charge::T   # should this be an integer? 
+end 
 #
 # Ordering of the embedding 
 # nuc | 1 2 3  1 2 3  1 2 3
