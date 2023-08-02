@@ -19,10 +19,10 @@ function embed_diff_func(Xt, i)
     T = eltype(Xt)
     Nel = length(Xt)
     Xts = Zygote.Buffer(zeros(T, Nel))
-    Xts[i] = Xt[i]
     for j = 1:Nel
         Xts[j] = Xt[j] - Xt[i]
     end    
+    Xts[i] = Xt[i]
     return copy(Xts)
 end
 
