@@ -58,7 +58,7 @@ rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3) = begin
     return X
 end
 
-rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d1) = begin
+rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T) where T <: Union{d1, d1_lattice} = begin
     @view(X[rand(1:Nels)]) .+= Δt * randn(1)
     return X
 end
@@ -79,6 +79,9 @@ type = "restart"
 rand_init(Δt::Number, Nel::Int, nchains::Int, d::d3) = [Δt * randn(SVector{3, Float64}, Nel) for _ = 1:nchains]
 
 rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1) = [Δt * randn(Nel) for _ = 1:nchains]
+
+# same as d1 rand_init, except shifted by equally spaced lattice
+rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [Δt * randn(Nel) + d.L for _ = 1:nchains]
 
 function sampler_restart(sam::MHSampler, ps, st)
     r0 = rand_init(sam.Δt, sam.Nel, sam.nchains, sam.d)

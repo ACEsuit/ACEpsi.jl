@@ -1,5 +1,6 @@
 using ACEcore, Polynomials4ML, Random 
-using Polynomials4ML: OrthPolyBasis1D3T
+# using Polynomials4ML: OrthPolyBasis1D3T
+using Polynomials4ML: AbstractPoly4MLBasis # mainly for RTrigBasis
 using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using ACEcore.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
@@ -26,7 +27,7 @@ function embed_diff_func(Xt, i)
     return copy(Xts)
 end
 
-function BFwf1dps_lux(Nel::Integer, Pn::OrthPolyBasis1D3T; totdeg = 15, 
+function BFwf1dps_lux(Nel::Integer, Pn::AbstractPoly4MLBasis; totdeg = length(Pn), 
     ν = 3, T = Float64, trans = x -> x,
     sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
  

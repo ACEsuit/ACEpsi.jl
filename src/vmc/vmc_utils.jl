@@ -23,7 +23,9 @@ end
 mutable struct d1 <: sampler_dimension
 end
 
-
+mutable struct d1_lattice <: sampler_dimension
+    L::Vector # lattice pts in simulation cell
+end
 
 
         
