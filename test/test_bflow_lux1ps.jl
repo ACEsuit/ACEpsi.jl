@@ -15,6 +15,9 @@ using BenchmarkTools
 
 using HyperDualNumbers: Hyper
 
+using Logging
+
+Logging.disable_logging(Logging.Warn)
 
 totdegree = 8
 Nel = 5
@@ -24,9 +27,16 @@ hX = [Hyper(x, 0, 0, 0) for x in X]
 hX[1] = Hyper(X[1], 1, 1, 0)
 
 # Defining AtomicOrbitalsBasis
-Pn = Polynomials4ML.legendre_basis(totdegree+1)
-BF = BFwf1dps_lux(Nel, Pn, totdeg = totdegree)
+# Pn = Polynomials4ML.legendre_basis(totdegree+1)
+# BF = BFwf1dps_lux(Nel, Pn, totdeg = totdegree)
+# ps, st = setupBFState(MersenneTwister(1234), BF, Σ)
+totdegree = [4,2]
+ord = length(totdegree)
+Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
+trans = x -> 2 * pi * x
+BF = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans)
 ps, st = setupBFState(MersenneTwister(1234), BF, Σ)
+
 
 A = BF(X, ps, st)
 hA = BF(hX, ps, st)

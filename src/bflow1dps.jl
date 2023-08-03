@@ -1,8 +1,8 @@
-using ACEcore, Polynomials4ML, Random 
+using Polynomials4ML, Random 
 # using Polynomials4ML: OrthPolyBasis1D3T
-using Polynomials4ML: AbstractPoly4MLBasis # mainly for RTrigBasis
-using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
-using ACEcore.Utils: gensparse
+using Polynomials4ML: AbstractPoly4MLBasis, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd
+using ObjectPools: release!
+using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec

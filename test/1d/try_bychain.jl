@@ -1,7 +1,7 @@
-using ACEcore, Polynomials4ML, Random 
+using Polynomials4ML, Random 
 using Polynomials4ML: OrthPolyBasis1D3T
-using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
-using ACEcore.Utils: gensparse
+using Polynomials4ML: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd
+using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec

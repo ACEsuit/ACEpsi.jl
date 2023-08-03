@@ -138,15 +138,6 @@ function evaluate(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
    nX = length(X)
    A = assemble_A(wf, X, Σ)
    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
-   
-   # the only basis to be purified are those with same spin
-   # scan through all corr basis, if they comes from same spin, remove self interation by using basis 
-   # from same spin
-   # first we have to construct coefficent for basis coming from same spin, that is in other words the coefficent
-   # matrix of the original polynomial basis, this will be pass from the argument Pnn
-   # === purification goes here === #
-   
-   # === #
    Φ = wf.Φ
    mul!(Φ, parent(AA), wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin

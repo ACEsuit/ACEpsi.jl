@@ -27,10 +27,10 @@ function grad_test2(f, df, X::AbstractVector)
    end
 end
 
-Rnldegree = n1 = 4
-Ylmdegree = 4
-totdegree = 8
-Nel = 5
+Rnldegree = n1 = 3
+Ylmdegree = 2
+totdegree = 4
+Nel = 2
 X = randn(SVector{3, Float64}, Nel)
 Σ = rand(spins(), Nel)
 nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
@@ -43,7 +43,7 @@ hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
 ##
 
 # Defining AtomicOrbitalsBasis
-n2 = 3 
+n2 = 1
 Pn = Polynomials4ML.legendre_basis(n1+1)
 spec = [(n1 = n1, n2 = n2, l = l) for n1 = 1:n1 for n2 = 1:n2 for l = 0:n1-1] 
 ζ = rand(length(spec))

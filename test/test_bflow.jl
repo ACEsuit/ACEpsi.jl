@@ -1,5 +1,5 @@
 
-using Polynomials4ML, ACEcore, ACEbase, Printf, ACEpsi 
+using Polynomials4ML, ACEbase, Printf, ACEpsi 
 using ACEpsi: BFwf1, gradient, laplacian
 using LinearAlgebra
 #using Random

@@ -5,6 +5,7 @@ using LuxCore
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
 using Zygote: Buffer
+using LinearAlgebra
 
 mutable struct Jastrow{T}
     nuclei::Vector{Nuc{T}}  # nuclei

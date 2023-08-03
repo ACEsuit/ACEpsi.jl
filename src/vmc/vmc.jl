@@ -51,3 +51,66 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
 end
 
 
+# function Embedding(wf, ps, st, deg, sd_admissible = x -> true)
+#     Σ = st.bA.Σ
+
+#     # init new wf
+#     wf2 = BFwf1dps_lux(Nel, wf.layers.Pn.layers.layer_1.basis, totdeg = deg, sd_admissible = sd_admissible)
+#     ps2, st2 = setupBFState(MersenneTwister(1234), wf2, Σ)
+
+#     # embed parameters
+    
+
+# end
+
+# function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf, ps, st, totaldegs, νs, verbose = true, accMCMC = [10, [0.45, 0.55]], sd_admissible = x -> true)
+
+#     # burn in 
+#     res, λ₀, α = 1.0, 0., opt_vmc.lr
+#     err_opt = zeros(opt_vmc.MaxIter)
+
+#     x0, ~, acc = sampler_restart(sam, ps, st)
+#     acc_step, acc_range = accMCMC
+#     acc_opt = zeros(acc_step)
+
+
+#     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
+
+#     for (level, totaldeg) in enumerate(totaldegs)
+#         # do embeddings
+#         if level > 1
+#             wf = BFwf1dps_lux(Nel, Pn, totdeg = totdegree)
+
+#             wf = Embedding(wf, ps, st, totaldegs[level-1], totaldeg)
+#             ps = wf.ps
+#         end
+
+#         # optimization
+#         verbose && @printf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
+#         for k = 1 : opt_vmc.MaxIter
+#             sam.x0 = x0
+            
+#             # adjust Δt
+#             acc_opt[mod(k,acc_step)+1] = acc
+#             sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
+
+#             # adjust learning rate
+#             α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
+
+#             # optimization
+#             ps, acc, λ₀, res, σ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α)
+
+#             # err
+#             verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
+#             err_opt[k] = λ₀
+
+#             if res < opt_vmc.tol
+#                 break;
+#             end  
+#         end
+
+#     end
+    
+#     return wf, err_opt, ps
+# end
+
