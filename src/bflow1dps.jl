@@ -71,5 +71,5 @@ function BFwf1dps_lux(Nel::Integer, Pn::AbstractPoly4MLBasis; totdeg = length(Pn
 
     BFwf_chain = Chain(; trans = l_trans, diff = Lux.BranchLayer(embed_layers...), Pn = Lux.Parallel(nothing, l_Pns...), bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, hidden1 = ACEpsi.DenseLayer(Nel, length(corr1)), 
                          Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
-    return BFwf_chain
+    return BFwf_chain, spec, spec1p
 end

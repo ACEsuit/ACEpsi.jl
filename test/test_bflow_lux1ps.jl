@@ -26,13 +26,14 @@ hX[1] = Hyper(X[1], 1, 1, 0)
 # Pn = Polynomials4ML.legendre_basis(totdegree+1)
 # BF = BFwf1dps_lux(Nel, Pn, totdeg = totdegree)
 # ps, st = setupBFState(MersenneTwister(1234), BF, Σ)
-totdegree = [4,2]
 ord = length(totdegree)
 Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
 trans = x -> 2 * pi * x
-BF = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans)
+BF, spec, spec1p = BFwf1dps_lux(Nel, Pn; ν = 2, trans = trans, totdeg = 5)
 ps, st = setupBFState(MersenneTwister(1234), BF, Σ)
 
+BF2, spec2, spec1p2 = BFwf1dps_lux(Nel, Pn; ν = 2, trans = trans, totdeg = 8)
+ps2, st2 = setupBFState(MersenneTwister(1234), BF2, Σ)
 
 A = BF(X, ps, st)
 hA = BF(hX, ps, st)
@@ -108,7 +109,7 @@ end
 Δ1 = ΔF(X)
 f0 = F(X)
 
-for h in  0.1.^(1:8)
+for h in  0.1.^(5:13)
    Δfh = 0.0
    for i = 1:Nel
          XΔX_add, XΔX_sub = deepcopy(X), deepcopy(X)
