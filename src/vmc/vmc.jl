@@ -63,8 +63,10 @@ end
 
 # end
 
-# function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf, ps, st, totaldegs, νs, verbose = true, accMCMC = [10, [0.45, 0.55]], sd_admissible = x -> true)
+# function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list, totaldegs, νs, verbose = true, accMCMC = [10, [0.45, 0.55]], sd_admissible = x -> true)
 
+
+#     # some assertion somake
 #     # burn in 
 #     res, λ₀, α = 1.0, 0., opt_vmc.lr
 #     err_opt = zeros(opt_vmc.MaxIter)
@@ -72,17 +74,23 @@ end
 #     x0, ~, acc = sampler_restart(sam, ps, st)
 #     acc_step, acc_range = accMCMC
 #     acc_opt = zeros(acc_step)
+    
 
+#     # first level
+#     wf = wf_list[1]
+#     ps = ps_list[1]
+#     st = st_list[1]
+#     spec = spec_list[1]
+#     spec1p = spec1p_list[1]
 
 #     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
 
 #     for (level, totaldeg) in enumerate(totaldegs)
 #         # do embeddings
 #         if level > 1
-#             wf = BFwf1dps_lux(Nel, Pn, totdeg = totdegree)
-
-#             wf = Embedding(wf, ps, st, totaldegs[level-1], totaldeg)
-#             ps = wf.ps
+#             wf = wf_list[l]
+#             # embed
+#             ps = Embedding(wf_list[l-1], ps_list, st, totaldegs[level-1], totaldeg)
 #         end
 
 #         # optimization

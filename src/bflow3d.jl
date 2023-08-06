@@ -2,7 +2,7 @@
 using Polynomials4ML, Random 
 using Polynomials4ML: OrthPolyBasis1D3T
 using Polynomials4ML: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd
-using ObjectPools: release!
+using ObjectPools: release!, unwrap
 using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
@@ -32,7 +32,7 @@ struct DenseLayer <: AbstractExplicitLayer
 end
 
 function (l::DenseLayer)(x::AbstractMatrix, ps, st)
-   return parent(x) * ps.W, st
+   return unwrap(x) * ps.W, st
 end
 
 # Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?

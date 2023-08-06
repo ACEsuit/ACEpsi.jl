@@ -15,10 +15,6 @@ using BenchmarkTools
 
 using HyperDualNumbers: Hyper
 
-using Logging
-
-Logging.disable_logging(Logging.Warn)
-
 totdegree = 8
 Nel = 5
 X = randn(Nel)

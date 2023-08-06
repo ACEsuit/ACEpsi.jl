@@ -1,16 +1,17 @@
 
-using ACEcore, Polynomials4ML
+using Polynomials4ML
 using Polynomials4ML: OrthPolyBasis1D3T
-using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
-using ACEcore.Utils: gensparse
+using Polynomials4ML: PooledSparseProduct, SparseSymmProd, SparseSymmProdDAG, release!
+using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
+
 import ForwardDiff
 
 mutable struct BFwf1{T, TT, TPOLY, TE}
    trans::TT
    polys::TPOLY
    pooling::PooledSparseProduct{2}
-   corr::SparseSymmProdDAG{T}
+   corr::Any
    W::Matrix{T}
    envelope::TE
    spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
@@ -58,8 +59,8 @@ function BFwf1(Nel::Integer, polys; totdeg = length(polys),
    # further restrict
    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
 
-   corr1 = SparseSymmProd(spec; T = Float64)
-   corr = corr1.dag   
+   corr1 = SparseSymmProdDAG(spec)
+   corr = corr1
 
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
@@ -128,7 +129,7 @@ function assemble_A(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
 
    for i = 1:nX 
       onehot!(Si, i, Σ)
-      ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
+      Polynomials4ML.evaluate!(Ai, wf.pooling, (unwrap(P), Si))
       A[i, :] .= Ai
    end
    return A 
@@ -137,9 +138,9 @@ end
 function evaluate(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
    nX = length(X)
    A = assemble_A(wf, X, Σ)
-   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   AA = Polynomials4ML.evaluate(wf.corr, A)  # nX x length(wf.corr)
    Φ = wf.Φ
-   mul!(Φ, parent(AA), wf.W) # nX x nX
+   mul!(Φ, unwrap(AA), wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    release!(AA)
 
@@ -152,9 +153,9 @@ function gradp_evaluate(wf::BFwf1, X::AbstractVector, Σ)
    nX = length(X)
    
    A = assemble_A(wf, X, Σ)
-   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   AA = Polynomials4ML.evaluate(wf.corr, A)  # nX x length(wf.corr)
    Φ = wf.Φ 
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, unwrap(AA), wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
 
@@ -166,7 +167,7 @@ function gradp_evaluate(wf::BFwf1, X::AbstractVector, Σ)
    # ∂Wij = ∑_ab ∂Φab * ∂_Wij( ∑_k AA_ak W_kb )
    #      = ∑_ab ∂Φab * ∑_k δ_ik δ_bj  AA_ak
    #      = ∑_a ∂Φaj AA_ai = ∂Φaj' * AA_ai
-   ∇p = transpose(parent(AA)) * ∂Φ
+   ∇p = transpose(unwrap(AA)) * ∂Φ
 
    release!(AA)
    ∇p = ∇p * 2
@@ -221,16 +222,16 @@ function gradient(wf::BFwf1, X, Σ)
    
    for i = 1:nX 
       onehot!(Si, i, Σ)
-      ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
+      Polynomials4ML.evaluate!(Ai, wf.pooling, (unwrap(P), Si))
       A[i, :] .= Ai
    end
    
    # n-correlations 
-   AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
+   AA = Polynomials4ML.evaluate(wf.corr, A)  # nX x length(wf.corr)
 
    # generalized orbitals 
    Φ = wf.Φ
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, unwrap(AA), wf.W)
 
    # the resulting matrix should contains two block each comes from each spin
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
@@ -251,7 +252,8 @@ function gradient(wf::BFwf1, X, Σ)
 
    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
    ∂A = wf.∂A   # zeros(size(A))
-   ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA))
+   Polynomials4ML.pullback_arg!(∂A, ∂AA, wf.corr, unwrap(AA))
+   # Polynomials4ML._pb_evaluate!(∂A, ∂AA, wf.corr, unwrap(AA))
    release!(AA)
 
    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 
@@ -265,7 +267,7 @@ function gradient(wf::BFwf1, X, Σ)
       onehot!(Si_, i, Σ)
       # note this line ADDS the pullback into ∂P, not overwrite the content!!
       ∂Ai = @view ∂A[i, :]
-      ACEcore._pullback_evalpool!((∂P, ∂Si), ∂Ai, wf.pooling, (P, Si_))
+      Polynomials4ML._pullback_evaluate!((∂P, ∂Si), ∂Ai, wf.pooling, (P, Si_))
    end
 
    # ∂X = ∂ψ/∂X = ∂ψ/∂P * ∂P/∂X 
@@ -334,7 +336,7 @@ function _assemble_A_∇A_ΔA(wf, X, Σ)
    @inbounds for i = 1:nX # loop over orbital bases (which i becomes ∅)
       fill!(Si_, 0)
       onehot!(Si_, i, Σ)
-      ACEcore.evalpool!(Ai, wf.pooling, (P, Si_))
+      Polynomials4ML.evaluate!(Ai, wf.pooling, (P, Si_))
       @. A[i, :] .= Ai
       for (iA, (k, σ)) in enumerate(spec_A)
          for a = 1:nX 
@@ -352,7 +354,7 @@ function _assemble_AA_∇AA_ΔAA(A, ∇A, ΔA, wf)
    ∇AA = wf.∇AA  
    ΔAA = zeros(nX, length(wf.corr))
 
-   @inbounds for iAA = 1:wf.corr.num1 
+   @inbounds for iAA = 1:wf.corr.num1
       @. AA[:, iAA] .= A[:, iAA] 
       @. ∇AA[:, :, iAA] .= ∇A[:, :, iAA]
       @. ΔAA[:, iAA] .= ΔA[:, iAA]
@@ -388,7 +390,7 @@ function _laplacian_inner(AA, ∇AA, ΔAA, wf, Σ)
    
    # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, unwrap(AA), wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
    Φ⁻ᵀ = transpose(pinv(Φ))
    
@@ -430,7 +432,7 @@ function gradp_laplacian(wf::BFwf1, X, Σ)
    
    # the wf, and the first layer of derivatives 
    Φ = wf.Φ 
-   mul!(Φ, parent(AA), wf.W)
+   mul!(Φ, unwrap(AA), wf.W)
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
    Φ⁻¹ = pinv(Φ)
