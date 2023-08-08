@@ -91,7 +91,7 @@ This function return correct Si for pooling operation.
 function onehot!(Si, i, Σ)
    Si .= 0
    for k = 1:length(Σ)
-      Si[k, spin2num(Σ[k])] = 1
+      Si[k, spin2num1d(Σ[k])] = 1
    end
    # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
    Si[i, 1] = 1 
@@ -99,6 +99,19 @@ function onehot!(Si, i, Σ)
    Si[i, 3] = 0
 end
 
+"""
+This function convert spin to corresponding integer value used in spec
+"""
+function spin2num1d(σ)
+   if σ == '↑'
+      return 2
+   elseif σ == '↓'
+      return 3
+   elseif σ == '∅'
+      return 1
+   end
+   error("illegal spin char for spin2num")
+end
 
 
 """

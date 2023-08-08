@@ -98,9 +98,8 @@ function _fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 const ↑, ↓, ∅ = '↑','↓','∅'
 Nel = 5
 polys = legendre_basis(8)
-wf = BFwf1(Nel, polys; ν=3, trans = x -> 2/pi * atan(x))
-
-X = 2 * rand(Nel) .- 1
+wf = BFwf1(Nel, polys; ν = 3)
+X = randn(Nel)
 Σ = rand([↑, ↓], Nel)
 
 wf(X, Σ)
@@ -112,7 +111,7 @@ using LinearAlgebra
 using Printf
 
 @info("Fd test of gradient w.r.t. X")
-_fdtest(wf, Σ, g, X)
+@test _fdtest(wf, Σ, g, X)
 
 
 # ##

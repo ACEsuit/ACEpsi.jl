@@ -7,7 +7,6 @@ using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Random
 using Zygote 
-using Cthulhu
 
 # test configs
 Rnldegree = 4
@@ -21,7 +20,13 @@ nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
 ##
 
 # Defining AtomicOrbitalsBasis
-bRnl = ACEpsi.AtomicOrbitals.RnlExample(Rnldegree)
+n1 = 5
+n2 = 1
+Pn = Polynomials4ML.legendre_basis(n1+1)
+spec = [(n1 = n1, n2 = n2, l = l) for n1 = 1:n1 for n2 = 1:n2 for l = 0:n1-1] 
+ζ = 10 * rand(length(spec))
+Dn = SlaterBasis(ζ)
+bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
 bYlm = RYlmBasis(Ylmdegree)
 spec1p = make_nlms_spec(bRnl, bYlm; totaldegree = totdegree) 
 
