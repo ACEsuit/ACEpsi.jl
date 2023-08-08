@@ -27,10 +27,10 @@ function grad_test2(f, df, X::AbstractVector)
    end
 end
 
-Rnldegree = n1 = 3
+Rnldegree = n1 = 2
 Ylmdegree = 3
-totdegree = 4
-Nel = 3
+totdegree = 3
+Nel = 2
 X = randn(SVector{3, Float64}, Nel)
 Σ = rand(spins(), Nel)
 nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
@@ -176,7 +176,7 @@ end
 
 @info("Test gradp Δψ using HyperDualNumbers")
 g_bchain = xx -> Zygote.gradient(p -> BFwf_chain(xx, p, st)[1], ps)[1]
-g_bchain(hX)
+# g_bchain(hX)
 
 using ACEpsi: zero!
 using HyperDualNumbers

@@ -110,7 +110,6 @@ g = gradient(wf, X, Σ)
 
 using LinearAlgebra
 using Printf
-#using ACEbase.Testing: _fdtest 
 
 @info("Fd test of gradient w.r.t. X")
 _fdtest(wf, Σ, g, X)
@@ -219,6 +218,3 @@ wf2 = ACEpsi.set_params!(wf2, param1)
 
 ##
 
-@warn("removed compat test since json file is missing")
-# @info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
-# include("compare_bflow.jl")
