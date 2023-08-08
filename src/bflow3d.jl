@@ -1,7 +1,6 @@
 
 using Polynomials4ML, Random 
-using Polynomials4ML: OrthPolyBasis1D3T
-using Polynomials4ML: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
+using Polynomials4ML: OrthPolyBasis1D3T, LinearLayer, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
@@ -22,32 +21,6 @@ struct MaskLayer <: AbstractExplicitLayer
 end
 
 (l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
-
-##
-
-struct DenseLayer <: AbstractExplicitLayer 
-   in_dim::Integer
-   out_dim::Integer
-end
-
-function (l::DenseLayer)(x::AbstractMatrix, ps, st)
-   return unwrap(x) * ps.W, st
-end
-
-# Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?
-LuxCore.initialparameters(rng::AbstractRNG, l::DenseLayer) = ( W = randn(rng, l.out_dim, l.in_dim), )
-LuxCore.initialstates(rng::AbstractRNG, l::DenseLayer) = NamedTuple()
-
-function ChainRulesCore.rrule(::typeof(Lux.apply), l::DenseLayer, x::AbstractMatrix, ps, st)
-   val = l(x, ps, st)
-   function pb(A)
-      return NoTangent(), NoTangent(), A[1] * ps.W', (W = x' * A[1],), NoTangent()
-   end
-   return val, pb
-end
-
-##
-
 function get_spec(nuclei, spec1p) 
    spec = []
    Nnuc = length(nuclei)
@@ -110,7 +83,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
 
    _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
-                        bAA = corr_layer, hidden1 = DenseLayer(Nel, length(corr1)), 
+                        bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)))
    return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
 end
