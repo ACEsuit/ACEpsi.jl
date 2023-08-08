@@ -82,7 +82,7 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2)
    return ps2
 end
 
-function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list, verbose = true, accMCMC = [10, [0.45, 0.55]])
+function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list; ITERS = [100 for _ in wf_list], verbose = true, accMCMC = [10, [0.45, 0.55]])
 
    # first level
    wf = wf_list[1]
@@ -119,6 +119,7 @@ function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf_list, ps_
       SB = size(ps.hidden1.W, 1)
       # optimization
       @info("level = $l, order = $ν, size of basis = $SB")
+      opt_vmc.MaxIter = ITERS[l]
       for k = 1 : opt_vmc.MaxIter
          sam.x0 = x0
          

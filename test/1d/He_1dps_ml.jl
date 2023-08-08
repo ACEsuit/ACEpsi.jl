@@ -44,14 +44,14 @@ Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1
 ham = SumH(K, Vext, Vee)
 sam = MHSampler(wf_list[1], Nel, Δt = 0.5, burnin = 10, nchains = 2000, d = d1()) # d = d1() means sample for 1d
 
-opt_vmc = VMC(10, 0.1, adamW(), lr_dc = 100)
+opt_vmc = VMC(10, 1e-3, adamW(), lr_dc = 100)
 
 
 
 
 
 
-wf, err_opt, ps = ACEpsi.vmc.VMC_multilevel_1d(opt_vmc, sam, ham, wf_list, ps_list, st_list, spec_list, spec1p_list)
+wf, err_opt, ps = ACEpsi.vmc.VMC_multilevel_1d(opt_vmc, sam, ham, wf_list, ps_list, st_list, spec_list, spec1p_list; ITERS = [5, 5])
 
 # wf, err_opt, ps = (opt_vmc, sam, ham, wf, ps, st)
 
