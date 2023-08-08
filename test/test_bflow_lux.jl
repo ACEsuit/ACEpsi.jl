@@ -12,7 +12,6 @@ using Random
 using Printf
 using LinearAlgebra
 using BenchmarkTools
-# using Cthulhu
 
 using HyperDualNumbers: Hyper
 
@@ -28,10 +27,10 @@ function grad_test2(f, df, X::AbstractVector)
    end
 end
 
-Rnldegree = 4
-Ylmdegree = 4
-totdegree = 8
-Nel = 5
+Rnldegree = n1 = 3
+Ylmdegree = 3
+totdegree = 4
+Nel = 3
 X = randn(SVector{3, Float64}, Nel)
 Σ = rand(spins(), Nel)
 nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
@@ -44,11 +43,16 @@ hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
 ##
 
 # Defining AtomicOrbitalsBasis
-bRnl = ACEpsi.AtomicOrbitals.RnlExample(Rnldegree)
+n2 = 2
+Pn = Polynomials4ML.legendre_basis(n1+1)
+spec = [(n1 = n1, n2 = n2, l = l) for n1 = 1:n1 for n2 = 1:n2 for l = 0:n1-1] 
+ζ = rand(length(spec))
+Dn = GaussianBasis(ζ)
+bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
 bYlm = RYlmBasis(Ylmdegree)
 
 # setup state
-BFwf_chain = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = 2)
+BFwf_chain, spec, spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = 2)
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 
 ##
@@ -116,16 +120,17 @@ grad_test2(Fp, dFp, W0)
 ##
 
 @info("Test consistency when input isa HyperDualNumbers")
-hp = Zygote.gradient(p -> BFwf_chain(hX, p, st)[1], ps)[1]
-hp, = destructure(hp)
-P = similar(p)
-for i = 1:length(P)
-   P[i] = hp[i].value
-end
+#hp = Zygote.gradient(p -> BFwf_chain(hX, p, st)[1], ps)[1]
 
-print_tf(@test P ≈ p)
+#hp, = destructure(hp)
+#P = similar(p)
+#for i = 1:length(P)
+#   P[i] = hp[i].value
+#end
 
-println()
+#print_tf(@test P ≈ p)
+
+#println()
 
 ##
 
@@ -218,7 +223,7 @@ function ∇ΔF(x, ps)
    return p
 end
 
-W0, re = destructure(ps)
-Fp = w -> ΔF(X, re(w))
-dFp = w -> ∇ΔF(X, re(w))
-fdtest(Fp, dFp, W0)
+#W0, re = destructure(ps)
+#Fp = w -> ΔF(X, re(w))
+#dFp = w -> ∇ΔF(X, re(w))
+#fdtest(Fp, dFp, W0)

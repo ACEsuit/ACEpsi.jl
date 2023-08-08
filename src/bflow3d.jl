@@ -1,8 +1,8 @@
 
-using ACEcore, Polynomials4ML, Random 
+using Polynomials4ML, Random 
 using Polynomials4ML: OrthPolyBasis1D3T
-using ACEcore: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
-using ACEcore.Utils: gensparse
+using Polynomials4ML: PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
+using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 import ForwardDiff
 using ACEpsi.AtomicOrbitals: make_nlms_spec
@@ -31,7 +31,7 @@ struct DenseLayer <: AbstractExplicitLayer
 end
 
 function (l::DenseLayer)(x::AbstractMatrix, ps, st)
-   return parent(x) * ps.W, st
+   return unwrap(x) * ps.W, st
 end
 
 # Jerry: Maybe we should use Glorot Uniform if we have no idea about what we should use?
@@ -180,7 +180,7 @@ end
 
 #    for i = 1:nX 
 #       onehot!(Si, i, Σ)
-#       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
+#       ACEcore.evalpool!(Ai, wf.pooling, (unwrap(P), Si))
 #       A[i, :] .= Ai
 #    end
 #    return A 
@@ -295,7 +295,7 @@ end
    
 #    # === #
 #    Φ = wf.Φ
-#    mul!(Φ, parent(AA), wf.W) # nX x nX
+#    mul!(Φ, unwrap(AA), wf.W) # nX x nX
 #    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 #    release!(AA)
 
@@ -310,7 +310,7 @@ end
 #    A = assemble_A(wf, X, Σ)
 #    AA = ACEcore.evaluate(wf.corr, A)  # nX x length(wf.corr)
 #    Φ = wf.Φ 
-#    mul!(Φ, parent(AA), wf.W)
+#    mul!(Φ, unwrap(AA), wf.W)
 #    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
 
@@ -322,7 +322,7 @@ end
 #    # ∂Wij = ∑_ab ∂Φab * ∂_Wij( ∑_k AA_ak W_kb )
 #    #      = ∑_ab ∂Φab * ∑_k δ_ik δ_bj  AA_ak
 #    #      = ∑_a ∂Φaj AA_ai = ∂Φaj' * AA_ai
-#    ∇p = transpose(parent(AA)) * ∂Φ
+#    ∇p = transpose(unwrap(AA)) * ∂Φ
 
 #    release!(AA)
 #    ∇p = ∇p * 2
@@ -377,7 +377,7 @@ end
    
 #    for i = 1:nX 
 #       onehot!(Si, i, Σ)
-#       ACEcore.evalpool!(Ai, wf.pooling, (parent(P), Si))
+#       ACEcore.evalpool!(Ai, wf.pooling, (unwrap(P), Si))
 #       A[i, :] .= Ai
 #    end
    
@@ -386,7 +386,7 @@ end
 
 #    # generalized orbitals 
 #    Φ = wf.Φ
-#    mul!(Φ, parent(AA), wf.W)
+#    mul!(Φ, unwrap(AA), wf.W)
 
 #    # the resulting matrix should contains two block each comes from each spin
 #    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX]
@@ -407,7 +407,7 @@ end
 
 #    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
 #    ∂A = wf.∂A   # zeros(size(A))
-#    ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, parent(AA))
+#    ACEcore.pullback_arg!(∂A, ∂AA, wf.corr, unwrap(AA))
 #    release!(AA)
 
 #    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 
@@ -544,7 +544,7 @@ end
    
 #    # the wf, and the first layer of derivatives 
 #    Φ = wf.Φ 
-#    mul!(Φ, parent(AA), wf.W)
+#    mul!(Φ, unwrap(AA), wf.W)
 #    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 #    Φ⁻ᵀ = transpose(pinv(Φ))
    
@@ -586,7 +586,7 @@ end
    
 #    # the wf, and the first layer of derivatives 
 #    Φ = wf.Φ 
-#    mul!(Φ, parent(AA), wf.W)
+#    mul!(Φ, unwrap(AA), wf.W)
 #    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
 
 #    Φ⁻¹ = pinv(Φ)
