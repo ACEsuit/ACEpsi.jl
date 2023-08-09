@@ -85,8 +85,9 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                         bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)))
-   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
 end
+
 
 function displayspec(spec, spec1p)
    nicespec = []
