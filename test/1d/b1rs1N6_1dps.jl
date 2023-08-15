@@ -1,4 +1,5 @@
-using ACEpsi, Polynomials4ML, StaticArrays, Test 
+using ACEpsi, StaticArrays, Test
+using Polynomials4ML
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.vmc: d1_lattice
 using ACEpsi: BackflowPooling1d, BFwf1dps_lux, setupBFState, Jastrow
@@ -14,7 +15,7 @@ using LinearAlgebra
 using BenchmarkTools
 using HyperDualNumbers: Hyper
 using SpecialFunctions
-
+using Dates, JLD
 
 Nel = 6
 rs = 1 # Wigner-Seitz radius r_s for 1D = 1/(2ρ); where ρ = N/L
@@ -30,10 +31,11 @@ for i = 1:Int(Nel / 2)
 end
 
 # Defining OrbitalsBasis
-totdegree = [4,2]
+totdegree = [2]
 ord = length(totdegree)
 Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
 trans = (x -> 2 * pi * x / L)
+
 wf = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans)
 ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
 
@@ -75,10 +77,22 @@ x0 = -L / 2 + spacing / 2
 Lattice = [x0 + (k - 1) * spacing for k = 1:Nel]
 d = d1_lattice(Lattice)
 
-ham = SumH(Kin, Vext, Vee)
-sam = MHSampler(wf, Nel, Δt = 0.5, burnin = 10, nchains = 600, d = d)
+burnin = 10
+nchains = 600
+MaxIter = 600
 
-opt_vmc = VMC(600, 0.02, adamW(), lr_dc = 100)
+ham = SumH(Kin, Vext, Vee)
+sam = MHSampler(wf, Nel, Δt = 0.5, burnin = burnin, nchains = nchains, d = d)
+
+opt_vmc = VMC(MaxIter, 0.02, adamW(), lr_dc = 100)
+
+# # save_data
+# results_dir = @__DIR__() * "/jellium_data/b1rs1N$(Nel)" * string(Dates.now()) * "/"
+# mkpath(results_dir)
+# ## save initial config
+# @info("initial config saved at : ", results_dir)
+# save(results_dir * "Config_b1rs1N$(Nel).jld", "Nel", Nel, "Ord" , ord, "Deg" , totdegree, "MaxIters" , MaxIter, "burnin" , burnin, "N_chain" , nchains)
+
 @info("Set-up done. Into VMC")
 wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
 
