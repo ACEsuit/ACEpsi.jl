@@ -2,7 +2,7 @@ using ACEpsi, StaticArrays, Test
 using Polynomials4ML
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.vmc: d1_lattice
-using ACEpsi: BackflowPooling1d, BFwf1dps_lux, setupBFState, Jastrow
+using ACEpsi: BackflowPooling1d, BFwf1dps_lux, BFwf1dps_lux2,setupBFState, Jastrow
 using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC, d1, adamW, sr
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
@@ -31,12 +31,13 @@ for i = 1:Int(Nel / 2)
 end
 
 # Defining OrbitalsBasis
-totdegree = [2]
+totdegree = [3]
 ord = length(totdegree)
-Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
+Pn = Polynomials4ML.RTrigBasis(maximum(totdegree))
+length(Pn)
 trans = (x -> 2 * pi * x / L)
 
-wf = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans)
+wf, spec, spec1p = BFwf1dps_lux2(Nel, Pn; ν = ord, trans = trans)
 ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
 
 p, = destructure(ps)
@@ -84,7 +85,7 @@ MaxIter = 600
 ham = SumH(Kin, Vext, Vee)
 sam = MHSampler(wf, Nel, Δt = 0.5, burnin = burnin, nchains = nchains, d = d)
 
-opt_vmc = VMC(MaxIter, 0.02, adamW(), lr_dc = 100)
+opt_vmc = VMC(MaxIter, 0.0, adamW(), lr_dc = 100)
 
 # # save_data
 # results_dir = @__DIR__() * "/jellium_data/b1rs1N$(Nel)" * string(Dates.now()) * "/"
