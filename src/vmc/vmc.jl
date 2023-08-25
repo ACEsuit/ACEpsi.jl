@@ -20,13 +20,14 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
 
    res, λ₀, α = 1.0, 0., opt_vmc.lr
    err_opt = zeros(opt_vmc.MaxIter)
+   N = length(st.trans.Σ)
 
    x0, ~, acc = sampler_restart(sam, ps, st)
    acc_step, acc_range = accMCMC
    acc_opt = zeros(acc_step)
 
    verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
-   verbose && @printf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
+   verbose && @printf("   k |  𝔼[E_L]  |  𝔼[E_L]/N  |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
    for k = 1 : opt_vmc.MaxIter
       sam.x0 = x0
       
@@ -41,7 +42,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
       ps, acc, λ₀, res, σ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α)
 
       # err
-      verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
+      verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, λ₀/N, σ, res, α, acc, sam.Δt)
       err_opt[k] = λ₀
 
       if res < opt_vmc.tol
