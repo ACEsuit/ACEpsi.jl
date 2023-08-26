@@ -27,6 +27,17 @@ function embed_diff_func(Xt, i)
     return copy(Xts)
 end
 
+function embed_usual_func(Xt, i)
+    T = eltype(Xt)
+    Nel = length(Xt)
+    Xts = Zygote.Buffer(zeros(T, Nel))
+    for j = 1:Nel
+        Xts[j] = Xt[j]
+    end 
+    return copy(Xts)
+end
+
+
 function BFwf1dps_lux(Nel::Integer, Pn::AbstractPoly4MLBasis; totdeg = length(Pn), 
     ν = 3, T = Float64, trans = x -> x,
     sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
@@ -64,7 +75,7 @@ function BFwf1dps_lux(Nel::Integer, Pn::AbstractPoly4MLBasis; totdeg = length(Pn
  
     reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
-    embed_layers = Tuple(collect(Lux.WrappedFunction(x -> embed_diff_func(x, i)) for i = 1:Nel))
+    embed_layers = Tuple(collect(Lux.WrappedFunction(x -> embed_usual_func(x, i)) for i = 1:Nel))
     l_Pns = Tuple(collect(l_Pn for _ = 1:Nel))
 
 

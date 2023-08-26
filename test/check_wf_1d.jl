@@ -58,4 +58,10 @@ X = [-0.7130696735938061
 
 wf(X, ps, st)
 
-# ps.hidden1.W
+# @show ps.hidden1.W
+
+# function getnicespec(spec::Vector, spec1p::Vector)
+#     return [[spec1p[i] for i = spec[j]] for j = eachindex(spec)]
+# end
+
+# @show getnicespec(spec, spec1p)
