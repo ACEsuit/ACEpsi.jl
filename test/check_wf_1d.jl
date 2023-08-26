@@ -36,8 +36,15 @@ ord = length(totdegree)
 Pn = Polynomials4ML.RTrigBasis(maximum(totdegree) + ord)
 length(Pn)
 trans = (x -> 2 * pi * x / L)
+# sd_admissible = bb -> (bb[1].s == '∅') && all([b.s != '∅' for b in bb[2:end]]) # what is intended for BFwf1dps_lux2
+# copied from ACESchrodinger
+_get_ord = bb -> sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0 ? 1 : sum([bb[i].n .!= 1 for i = 1:length(bb)])
 
-wf, spec, spec1p = BFwf1dps_lux2(Nel, Pn; ν = ord, trans = trans,  totdeg = totdegree[1])
+sd_admissible_func(ord,Deg) = bb -> (all([length(bb) == ord]) # must be of order ord, and 
+                                     && (all([sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0]) # all of the basis in bb must be (1, σ)
+                                         || all([sum([bb[i].n for i = 1:length(bb)]) <= Deg[_get_ord(bb)] + ord]))) # if the degree of the basis is less then the maxdegree, "+ ord" since we denote degree 0 = 1
+sd_admissible = sd_admissible_func(ord,totdegree[1])
+wf, spec, spec1p = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans,  totdeg = totdegree[1], sd_admissible = sd_admissible)
 ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
 
 using Random
