@@ -84,7 +84,8 @@ function BFwf1dps_lux2(Nel::Integer, Pn::AbstractPoly4MLBasis; totdeg = length(P
     ν = 3, T = Float64, trans = x -> x,
     sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
  
-    spec1p = [(n = n) for n = 1:totdeg]
+    # create as much as we can first, and then filter later
+    spec1p = [(n = n) for n = 1:length(Pn)]
 
 
     l_trans = Lux.WrappedFunction(x -> trans.(x))
@@ -96,9 +97,10 @@ function BFwf1dps_lux2(Nel::Integer, Pn::AbstractPoly4MLBasis; totdeg = length(P
  
     spec1p = get_spec(spec1p)
     spec = [[i] for i in eachindex(spec1p)] # spec of order 1
-    if ν == 1
-        nothing
-    elseif ν > 1
+    default_admissible = bb -> (length(spec1p[bb]) == 0) || (sum(b.n - 1 for b in spec1p[bb] ) <= totdeg)
+    spec = [t for t in spec if default_admissible(t)]  
+
+    if ν > 1
         # define sparse for (n-1)-correlations for order ≥ 2 terms
         tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
         default_admissible = bb -> (length(bb) == 0) || (sum(b.n - 1 for b in bb ) <= totdeg)
