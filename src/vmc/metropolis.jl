@@ -2,13 +2,16 @@ using StatsBase
 using StaticArrays
 using Optimisers
 export MHSampler
+using ACEpsi.AtomicOrbitals: Nuc
+
 """
 `MHSampler`
 Metropolis-Hastings sampling algorithm.
 """
-mutable struct MHSampler
+mutable struct MHSampler{T}
     Nel::Int
-    Δt::Float64                 # step size (of Gaussian proposal)
+    nuclei::Vector{Nuc{T}}
+    Δt::Real                    # step size (of Gaussian proposal)
     burnin::Int                 # burn-in iterations
     lag::Int                    # iterations between successive samples
     N_batch::Int                # batch size
@@ -17,10 +20,10 @@ mutable struct MHSampler
     x0::Any                     # initial sampling 
     walkerType::String          # walker type: "unbiased", "Langevin"
     bc::String                  # boundary condition
-    type::Int64                 # move how many electron one time 
+    type::Int                   # move how many electron one time 
 end
 
-MHSampler(Ψ, Nel; Δt = 0.1, 
+MHSampler(Ψ, Nel, nuclei; Δt = 0.1, 
             burnin = 100, 
             lag = 10, 
             N_batch = 1, 
@@ -29,7 +32,7 @@ MHSampler(Ψ, Nel; Δt = 0.1,
             wT = "unbiased", 
             bc = "periodic", 
             type = 1) =
-    MHSampler(Nel, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, type)
+    MHSampler(Nel, nuclei, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, type)
 
 
 """
@@ -71,7 +74,9 @@ type = "restart"
 """
 
 function sampler_restart(sam::MHSampler, ps, st)
-    r0 = [sam.Δt * randn(SVector{3, Float64}, sam.Nel) for _ = 1:sam.nchains]
+    r = [[sam.nuclei[i].rr for j = 1:Int(ceil(sam.nuclei[i].charge))] for i = 1:length(sam.nuclei)]
+    r = reduce(vcat,r)
+    r0 = [sam.Δt * randn(SVector{3, Float64}, sam.Nel) + r for _ = 1:sam.nchains]
     Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     acc = []
     for _ = 1 : sam.burnin
