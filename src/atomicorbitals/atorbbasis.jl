@@ -184,7 +184,8 @@ function evaluate(l::AtomicOrbitalsBasisLayer, X, ps, st)
 
    ϕnlm = Zygote.Buffer(zeros(T, (Nnuc, Nel, Nnlm)))
    for I = 1:Nnuc
-      ϕnlm[I,:,:], _ = l.prodbasis(map(x -> x - nuc[I].rr, X), ps, st)
+      # ϕnlm[I,:,:], _ = l.prodbasis(map(x -> x - nuc[I].rr, X), ps, st)
+      ϕnlm[I,:,:], _ = l.prodbasis(.-(X, Ref(nuc[I].rr)), ps, st)
    end
 
    return copy(ϕnlm), st
