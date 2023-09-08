@@ -41,6 +41,7 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 p, = destructure(ps)
 length(p)
 AAA = deepcopy(wf(X,ps,st)[1])
+gradient(wf, X, ps, st)
 
 @profview begin for i = 1:1000 gradient(wf, X, ps, st) end end
 
@@ -100,7 +101,7 @@ F(X) = BFwf_chain(X, ps, st)[1]
 # @btime F(X)
 
 
-##
+
 
 @info("Test ∇ψ w.r.t. X")
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
@@ -255,4 +256,4 @@ embed_layers = Tuple(collect(Lux.WrappedFunction(x -> embed_diff_func(x, nuclei,
 BFwf_chain = Chain(; diff = Lux.BranchLayer(embed_layers), Pds = Lux.Parallel(nothing, l_Pds))
 
 
-   """
+"""

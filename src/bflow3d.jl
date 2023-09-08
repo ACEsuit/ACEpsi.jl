@@ -17,27 +17,6 @@ using StaticArrays: SVector
 # ----------------------------------------
 
 # ----------------- custom layers ------------------
-struct MaskLayer <: AbstractExplicitLayer 
-   nX::Integer
-end
-
-(l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
-function get_spec(nuclei, spec1p) 
-   spec = []
-   Nnuc = length(nuclei)
-
-   spec = Array{Any}(undef, (3, Nnuc, length(spec1p)))
-
-   for (k, nlm) in enumerate(spec1p)
-      for I = 1:Nnuc 
-         for (is, s) in enumerate(extspins())
-            spec[is, I, k] = (s=s, I = I, nlm...)
-         end
-      end
-   end
-
-   return spec[:]
-end
 
 function embed_diff_func(X::Vector{SVector{3, T}}, nuc::Vector{Nuc{TT}}, i::Int) where {T, TT}
    Nel = length(X)
@@ -58,6 +37,42 @@ function ChainRulesCore.rrule(::typeof(embed_diff_func), X::Vector{SVector{3, T}
    return val, pb
 end
 
+struct MaskLayer <: AbstractExplicitLayer 
+   nX::Integer
+end
+
+function evaluate(l::MaskLayer, Φ, ps, st)
+   return Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
+end
+
+(l::MaskLayer)(Φ, ps, st) = evaluate(l, Φ, ps, st)
+
+function ChainRulesCore.rrule(::typeof(evaluate), l::MaskLayer, Φ, ps, st)
+   A = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX]
+   val = Φ .* A
+   function pb(dΦ)
+      return NoTangent(), NoTangent(), dΦ[1] .* A, NoTangent(), NoTangent()
+   end
+   return (val, st), pb
+end
+
+
+function get_spec(nuclei, spec1p) 
+   spec = []
+   Nnuc = length(nuclei)
+
+   spec = Array{Any}(undef, (3, Nnuc, length(spec1p)))
+
+   for (k, nlm) in enumerate(spec1p)
+      for I = 1:Nnuc 
+         for (is, s) in enumerate(extspins())
+            spec[is, I, k] = (s=s, I = I, nlm...)
+         end
+      end
+   end
+
+   return spec[:]
+end
 # ----------------- custom layers ------------------
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
@@ -109,7 +124,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    BFwf_chain = Chain(; diff = Lux.BranchLayer(embed_layers...), Pds = Lux.Parallel(nothing, l_Pds...),                   
                      bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                      bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
-                     Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+                     Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x) )))
    return BFwf_chain, spec, spec1p
 end
 
