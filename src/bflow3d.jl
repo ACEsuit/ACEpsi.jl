@@ -18,23 +18,22 @@ using StaticArrays: SVector
 
 # ----------------- custom layers ------------------
 
-function embed_diff_func(X::Vector{SVector{3, T}}, nuc::Vector{Nuc{TT}}, i::Int) where {T, TT}
-   Nel = length(X)
-   Xts = zero(X)
-   for j = 1:Nel
-      Xts[j] = X[j] - nuc[i].rr
-   end    
-   return Xts
+struct embed_diff_layer <: AbstractExplicitLayer
+   nuc::Vector{Nuc{Float64}}
 end
 
-function ChainRulesCore.rrule(::typeof(embed_diff_func), X::Vector{SVector{3, T}}, nuc::Vector{Nuc{TT}}, i::Int) where {T, TT}
-   val = embed_diff_func(X, nuc, i)
+function evaluate(l::embed_diff_layer, X, ps, st)
+   return ntuple(i -> X .- Ref(l.nuc[i].rr), length(l.nuc)), ps, st
+end
+
+(l::embed_diff_layer)(X, ps, st) = evaluate(l, X, ps, st)
+
+function ChainRulesCore.rrule(::typeof(evaluate), l::embed_diff_layer, X, ps, st)
+   val = ntuple(i -> X .- Ref(l.nuc[i].rr), length(l.nuc))
    function pb(dA)
-      @assert size(dA) == size(X)
-      @assert size(dA[1]) == size(X[1])
-      return NoTangent(), dA, NoTangent(), NoTangent()
+      return NoTangent(), NoTangent(), sum(dA[1]), NoTangent(), NoTangent()
    end
-   return val, pb
+   return (val, st), pb
 end
 
 struct MaskLayer <: AbstractExplicitLayer 
@@ -79,13 +78,13 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    ν = 3, T = Float64, 
    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
 
-
+   Nnuc = length(nuclei)
    # ----------- Lux connections ---------
    # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
    
-   embed_layers = Tuple(collect(Lux.WrappedFunction(x -> embed_diff_func(x, nuclei, i)) for i = 1:length(nuclei)))
+   embed_layer = embed_diff_layer(nuclei)
    prodbasis_layer = [ACEpsi.AtomicOrbitals.ProductBasisLayer(make_nlms_spec(bRnl[i], bYlm[i]; totaldegree = totdeg), bRnl[i], bYlm[i]) for i = 1:length(nuclei)]
-   l_Pds = Tuple(collect(prodbasis_layer[i] for i = 1:length(nuclei)))
+   l_Pds = Tuple(collect(prodbasis_layer[i] for i = 1:Nnuc))
 
    aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer[1], nuclei)
    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
@@ -121,10 +120,11 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
    _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
-   BFwf_chain = Chain(; diff = Lux.BranchLayer(embed_layers...), Pds = Lux.Parallel(nothing, l_Pds...),                   
+   BFwf_chain = Chain(; diff = embed_layer, Pds = Lux.Parallel(nothing, l_Pds...),                   
                      bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                      bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
                      Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x) )))
+   
    return BFwf_chain, spec, spec1p
 end
 
