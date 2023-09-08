@@ -13,6 +13,7 @@ using Lux
 using Lux: Chain, WrappedFunction, BranchLayer
 using ChainRulesCore
 using ChainRulesCore: NoTangent
+using StaticArrays: SVector
 # ----------------------------------------
 
 # ----------------- custom layers ------------------
@@ -38,23 +39,46 @@ function get_spec(nuclei, spec1p)
    return spec[:]
 end
 
+function embed_diff_func(X::Vector{SVector{3, T}}, nuc::Vector{Nuc{TT}}, i::Int) where {T, TT}
+   Nel = length(X)
+   Xts = zero(X)
+   for j = 1:Nel
+      Xts[j] = X[j] - nuc[i].rr
+   end    
+   return Xts
+end
+
+function ChainRulesCore.rrule(::typeof(embed_diff_func), X::Vector{SVector{3, T}}, nuc::Vector{Nuc{TT}}, i::Int) where {T, TT}
+   val = embed_diff_func(X, nuc, i)
+   function pb(dA)
+      @assert size(dA) == size(X)
+      @assert size(dA[1]) == size(X[1])
+      return NoTangent(), dA, NoTangent(), NoTangent()
+   end
+   return val, pb
+end
+
 # ----------------- custom layers ------------------
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
 
-   spec1p = make_nlms_spec(bRnl, bYlm; 
-                          totaldegree = totdeg)
 
    # ----------- Lux connections ---------
    # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
-   prodbasis_layer = ACEpsi.AtomicOrbitals.ProductBasisLayer(spec1p, bRnl, bYlm)
-   aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer, nuclei)
+   
+   embed_layers = Tuple(collect(Lux.WrappedFunction(x -> embed_diff_func(x, nuclei, i)) for i = 1:length(nuclei)))
+   prodbasis_layer = [ACEpsi.AtomicOrbitals.ProductBasisLayer(make_nlms_spec(bRnl[i], bYlm[i]; totaldegree = totdeg), bRnl[i], bYlm[i]) for i = 1:length(nuclei)]
+   l_Pds = Tuple(collect(prodbasis_layer[i] for i = 1:length(nuclei)))
 
+   aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer[1], nuclei)
    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
    pooling = BackflowPooling(aobasis_layer)
    pooling_layer = ACEpsi.lux(pooling)
+
+   spec1p = make_nlms_spec(bRnl[1], bYlm[1]; 
+                          totaldegree = totdeg)
 
    spec1p = get_spec(nuclei, spec1p)
    # define sparse for n-correlations
@@ -74,18 +98,19 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    corr1 = Polynomials4ML.SparseSymmProd(spec)
 
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
-   corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
+   corr_layer = Polynomials4ML.lux(corr1; use_cache = true)
 
-   js = Jastrow(nuclei)
-   jastrow_layer = ACEpsi.lux(js)
+   #js = Jastrow(nuclei)
+   #jastrow_layer = ACEpsi.lux(js)
 
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
    _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
-   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
-                        bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
-                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)))
-   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
+   BFwf_chain = Chain(; diff = Lux.BranchLayer(embed_layers...), Pds = Lux.Parallel(nothing, l_Pds...),                   
+                     bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
+                     bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
+                     Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+   return BFwf_chain, spec, spec1p
 end
 
 
