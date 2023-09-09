@@ -42,7 +42,8 @@ p, = destructure(ps)
 length(p)
 AAA = deepcopy(wf(X,ps,st)[1])
 gradient(wf, X, ps, st)
-
+using BenchmarkTools
+@btime gradient(wf, X, ps, st)
 @profview begin for i = 1:1000 gradient(wf, X, ps, st) end end
 
 

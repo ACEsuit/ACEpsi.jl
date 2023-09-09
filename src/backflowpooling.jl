@@ -178,13 +178,13 @@ function _pullback_evaluate(∂A, pooling::BackflowPooling, ϕnlm::NTuple, Σ)
 end
 
 
-function _pullback_evaluate!(∂ϕnlm, ∂A, pooling::BackflowPooling, ϕnlm::NTuple, Σ)
+function _pullback_evaluate!(∂ϕnlm, ∂A, pooling::BackflowPooling, ϕnlm::NTuple{NN, AbstractMatrix}, Σ) where {NN}
    Nnuc, Nel, Nnlm = length(ϕnlm), size(ϕnlm[1])[1], size(ϕnlm[1])[2]
    #basis = pooling.basis
 
    #@assert Nnlm == length(basis.prodbasis.layers.ϕnlms.basis.spec)
    @assert Nel == length(Σ)
-   @assert length(∂ϕnlm) == Nnuc
+   @assert length(∂ϕnlm) == Nnuc == NN
    @assert size(∂ϕnlm[1]) == (Nel, Nnlm)
    @assert size(∂A) == (Nel, 3, Nnuc, Nnlm)
 
