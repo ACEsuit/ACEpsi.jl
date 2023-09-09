@@ -40,15 +40,17 @@ struct MaskLayer <: AbstractExplicitLayer
    nX::Integer
 end
 
-function evaluate(l::MaskLayer, Φ, ps, st)
-   return Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
-end
+(l::MaskLayer)(Φ, ps, st) = begin 
+   T = eltype(Φ)
+   A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX] 
+   val::Matrix{T} = Φ .* A
+   return val, st
+end 
 
-(l::MaskLayer)(Φ, ps, st) = evaluate(l, Φ, ps, st)
-
-function ChainRulesCore.rrule(::typeof(evaluate), l::MaskLayer, Φ, ps, st)
-   A = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX]
-   val = Φ .* A
+function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::MaskLayer, Φ, ps, st) 
+   T = eltype(Φ)
+   A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX]
+   val::Matrix{T} = Φ .* A
    function pb(dΦ)
       return NoTangent(), NoTangent(), dΦ[1] .* A, NoTangent(), NoTangent()
    end
@@ -119,11 +121,10 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
 
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
-   _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
    BFwf_chain = Chain(; diff = embed_layer, Pds = Lux.Parallel(nothing, l_Pds...),                   
                      bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                      bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
-                     Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x) )))
+                     Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x::Matrix -> det(x)), logabs = WrappedFunction(x::Number -> 2 * log(abs(x) )))
    
    return BFwf_chain, spec, spec1p
 end
