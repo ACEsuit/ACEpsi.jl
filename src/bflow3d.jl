@@ -17,10 +17,26 @@ using ChainRulesCore: NoTangent
 
 # ----------------- custom layers ------------------
 struct MaskLayer <: AbstractExplicitLayer 
-   nX::Integer
+   nX::Int64
 end
 
-(l::MaskLayer)(Φ, ps, st) = Φ .* [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX], st
+(l::MaskLayer)(Φ, ps, st) = begin 
+   T = eltype(Φ)
+   A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX] 
+   val::Matrix{T} = Φ .* A
+   return val, st
+end
+
+function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::MaskLayer, Φ, ps, st) 
+   T = eltype(Φ)
+   A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX]
+   val::Matrix{T} = Φ .* A
+   function pb(dΦ)
+      return NoTangent(), NoTangent(), dΦ[1] .* A, NoTangent(), NoTangent()
+   end
+   return (val, st), pb
+end
+
 function get_spec(nuclei, spec1p) 
    spec = []
    Nnuc = length(nuclei)

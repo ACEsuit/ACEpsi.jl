@@ -5,7 +5,8 @@ using Polynomials4ML: SparseProduct, _make_reqfields
 using LuxCore: AbstractExplicitLayer, AbstractExplicitContainerLayer
 using Random: AbstractRNG
 
-using Polynomials4ML
+using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META
+
 using StaticArrays
 using LinearAlgebra: norm 
 
@@ -13,7 +14,8 @@ using ChainRulesCore
 using ChainRulesCore: NoTangent
 using Zygote
 
-using Lux: Chain
+using Lux: Chain, apply
+using ObjectPools: acquire!
 
 struct Nuc{T}
    rr::SVector{3, T}
@@ -166,13 +168,13 @@ end
 struct AtomicOrbitalsBasisLayer{L, T} <: AbstractExplicitContainerLayer{(:prodbasis, )}
    prodbasis::L
    nuclei::Vector{Nuc{T}}
-   meta::Dict{String, Any}
+   @reqfields()
 end
 
 Base.length(l::AtomicOrbitalsBasisLayer) = length(l.prodbasis.layer.ϕnlms.basis.spec) * length(l.nuclei)
 
 function AtomicOrbitalsBasisLayer(prodbasis, nuclei)
-   return AtomicOrbitalsBasisLayer(prodbasis, nuclei, Dict{String, Any}())
+   return AtomicOrbitalsBasisLayer(prodbasis, nuclei, _make_reqfields()...)
 end
 
 function evaluate(l::AtomicOrbitalsBasisLayer, X, ps, st)
@@ -181,16 +183,42 @@ function evaluate(l::AtomicOrbitalsBasisLayer, X, ps, st)
    Nel = size(X, 1)
    T = promote_type(eltype(X[1]))
    Nnlm = length(l.prodbasis.layers.ϕnlms.basis.spec)
-
-   ϕnlm = Zygote.Buffer(zeros(T, (Nnuc, Nel, Nnlm)))
+   # acquire FlexArray/FlexArrayCached from state
+   ϕnlm = acquire!(l.pool, :ϕnlm, (Nnuc, Nel, Nnlm), T)
+   # inplace evaluation X
    for I = 1:Nnuc
-      # ϕnlm[I,:,:], _ = l.prodbasis(map(x -> x - nuc[I].rr, X), ps, st)
-      ϕnlm[I,:,:], _ = l.prodbasis(.-(X, Ref(nuc[I].rr)), ps, st)
+      X .-= Ref(nuc[I].rr)
+      ϕnlm[I,:,:], _ = l.prodbasis(X, ps, st)
+      X .+= Ref(nuc[I].rr)
    end
-
-   return copy(ϕnlm), st
+   # ϕnlm should be released in the next layer
+   return ϕnlm, st
 end
 
+function ChainRulesCore.rrule(::typeof(apply), l::AtomicOrbitalsBasisLayer, X::Vector{SVector{3, T}}, ps, st) where T
+   val = evaluate(l, X, ps, st)
+   nuc = l.nuclei
+   Nnuc = length(nuc)
+   Nel = size(X, 1)
+   function pb(dϕnlm) # dA is of a tuple (dAmat, st), dAmat is of size (Nnuc, Nel, Nnlm)
+      # first we pullback up to each Xts, which should be of size (Nnuc, Nel, 3)
+      dXts = []
+      for I = 1:Nnuc
+         # inplace trans X
+         X .-= Ref(nuc[I].rr)
+         # pullback of productbasis[I], now I used productbasis but generalized to specified atom-dependent basis later
+         # pbI : (Nel, Nnlm) -> vector of length Nel of SVector{3, T}
+         _out, pbI = Zygote.pullback(l.prodbasis, X, ps, st)
+         # write to dXts
+         push!(dXts, pbI((dϕnlm[1][I,:,:], _out[2]))[1]) # out[2] is the state
+         # get back to original X
+         X .+= Ref(nuc[I].rr)
+      end
+      # finally sum all contributions from different I channel, reduces to vector of length Nel of SVector{3, T} again
+      return NoTangent(), NoTangent(), sum(dXts), NoTangent(), NoTangent()
+   end
+   return val, pb
+end
 
 (l::AtomicOrbitalsBasisLayer)(X, ps, st) = 
       evaluate(l, X, ps, st)

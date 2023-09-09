@@ -80,6 +80,7 @@ function evaluate(pooling::BackflowPooling, ϕnlm::AbstractArray, Σ::AbstractVe
    end # inbounds
 
    release!(Aall)
+   release!(ϕnlm)
    
    return A
 end
@@ -141,7 +142,6 @@ lux(basis::BackflowPooling) = BackflowPoolingLayer(basis)
 initialparameters(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxparams(rng, l.basis)
 
 initialstates(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxstate(rng, l.basis)
-
 
 # This should be removed later and replace by ObejctPools
 (l::BackflowPoolingLayer)(ϕnlm, ps, st) = 
