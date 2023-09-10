@@ -60,6 +60,10 @@ function Vee(wf, X::AbstractVector, ps, st)
     end
 end
 
+using BenchmarkTools
+@btime wf(X, ps, st)
+@btime gradient(X, ps, st)
+
 ham = SumH(K, Vext, Vee)
 sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1, nchains = 2000)
 

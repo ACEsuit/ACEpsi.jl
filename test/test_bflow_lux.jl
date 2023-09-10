@@ -135,8 +135,8 @@ grad_test2(Fp, dFp, W0)
 ##
 
 @info("Test Δψ w.r.t. X using HyperDualNumbers")
-
-X = [randn(3) for _ = 1:Nel]
+X = randn(SVector{3, Float64}, Nel)
+XX = [Vector(x) for x in X]
 hX = [x2dualwrtj(x, 0) for x in X]
 Σ = rand(spins(), Nel)
 F(x) = BFwf_chain(x, ps, st)[1]
@@ -162,9 +162,11 @@ for h in  0.1.^(1:8)
    Δfh = 0.0
    for i = 1:Nel
       for j = 1:3
-         XΔX_add, XΔX_sub = deepcopy(X), deepcopy(X)
+         XΔX_add, XΔX_sub = deepcopy(XX), deepcopy(XX)
          XΔX_add[i][j] += h
          XΔX_sub[i][j] -= h
+         XΔX_add = [SVector{3, Float64}(x) for x in XΔX_add]
+         XΔX_sub = [SVector{3, Float64}(x) for x in XΔX_sub]
          Δfh += (F(XΔX_add) - f0) / h^2
          Δfh += (F(XΔX_sub) - f0) / h^2
       end
