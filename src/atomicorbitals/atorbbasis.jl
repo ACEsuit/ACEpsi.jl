@@ -171,7 +171,7 @@ struct AtomicOrbitalsBasisLayer{L, T} <: AbstractExplicitContainerLayer{(:prodba
    @reqfields()
 end
 
-Base.length(l::AtomicOrbitalsBasisLayer) = length(l.prodbasis.layer.ϕnlms.basis.spec) * length(l.nuclei)
+#Base.length(l::AtomicOrbitalsBasisLayer) = length(l.prodbasis.layer.ϕnlms.basis.spec) * length(l.nuclei)
 
 function AtomicOrbitalsBasisLayer(prodbasis, nuclei)
    return AtomicOrbitalsBasisLayer(prodbasis, nuclei, _make_reqfields()...)
@@ -182,8 +182,8 @@ function evaluate(l::AtomicOrbitalsBasisLayer, X, ps, st)
    Nnuc = length(nuc)
    Nel = size(X, 1)
    T = promote_type(eltype(X[1]))
-   Nnlm = length(l.prodbasis.layers.ϕnlms.basis.spec)
    # acquire FlexArray/FlexArrayCached from state
+   Nnlm = l.prodbasis.L
    ϕnlm = acquire!(l.pool, :ϕnlm, (Nnuc, Nel, Nnlm), T)
    # inplace evaluation X
    for I = 1:Nnuc
@@ -203,9 +203,9 @@ function ChainRulesCore.rrule(::typeof(apply), l::AtomicOrbitalsBasisLayer{L, T}
       # first we pullback up to each Xts, which should be of size (Nnuc, Nel, 3)
       dXts = Vector{SVector{3, TX}}[]
       dps = deepcopy(ps)
-      if :ζ in keys(dps.embed.Rn)
-         for t in 1:length(dps.embed.Rn.ζ)
-            dps.embed.Rn.ζ[t] = zero(TX)
+      if :ζ in keys(dps)
+         for t in 1:length(dps.ζ)
+            dps.ζ[t] = zero(TX)
          end
          for I = 1:Nnuc
             # inplace trans X
@@ -216,8 +216,8 @@ function ChainRulesCore.rrule(::typeof(apply), l::AtomicOrbitalsBasisLayer{L, T}
             # write to dXts
             Xts, _dp = pbI((dϕnlm[1][I,:,:], _out[2]))
             push!(dXts, Xts) # out[2] is the state
-            for t in 1:length(dps.embed.Rn.ζ)
-               dps.embed.Rn.ζ[t] += _dp.embed.Rn.ζ[t]
+            for t in 1:length(dps.ζ)
+               dps.ζ[t] += _dp.ζ[t]
             end         
          # get back to original X
             X .+= Ref(nuc[I].rr)
