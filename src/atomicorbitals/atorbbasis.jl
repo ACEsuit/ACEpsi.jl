@@ -195,27 +195,35 @@ function evaluate(l::AtomicOrbitalsBasisLayer, X, ps, st)
    return ϕnlm, st
 end
 
-function ChainRulesCore.rrule(::typeof(apply), l::AtomicOrbitalsBasisLayer, X::Vector{SVector{3, T}}, ps, st) where T
+function ChainRulesCore.rrule(::typeof(apply), l::AtomicOrbitalsBasisLayer{L, T}, X::Vector{SVector{3, TX}}, ps, st) where {L, T, TX}
    val = evaluate(l, X, ps, st)
    nuc = l.nuclei
    Nnuc = length(nuc)
    Nel = size(X, 1)
    function pb(dϕnlm) # dA is of a tuple (dAmat, st), dAmat is of size (Nnuc, Nel, Nnlm)
       # first we pullback up to each Xts, which should be of size (Nnuc, Nel, 3)
-      dXts = []
+      dXts = Vector{SVector{3, TX}}[]
+      dps = deepcopy(ps)
+      for t in 1:length(dps.embed.Rn.ζ)
+         dps.embed.Rn.ζ[t] = zero(TX)
+      end
       for I = 1:Nnuc
          # inplace trans X
          X .-= Ref(nuc[I].rr)
          # pullback of productbasis[I], now I used productbasis but generalized to specified atom-dependent basis later
          # pbI : (Nel, Nnlm) -> vector of length Nel of SVector{3, T}
-         _out, pbI = Zygote.pullback(l.prodbasis, X, ps, st)
+         _out, pbI = Zygote.pullback(l.prodbasis::L, X, ps, st)
          # write to dXts
-         push!(dXts, pbI((dϕnlm[1][I,:,:], _out[2]))[1]) # out[2] is the state
+         Xts, _dp = pbI((dϕnlm[1][I,:,:], _out[2]))
+         push!(dXts, Xts) # out[2] is the state
+         for t in 1:length(dps.embed.Rn.ζ)
+            dps.embed.Rn.ζ[t] += _dp.embed.Rn.ζ[t]
+         end         
          # get back to original X
          X .+= Ref(nuc[I].rr)
       end
       # finally sum all contributions from different I channel, reduces to vector of length Nel of SVector{3, T} again
-      return NoTangent(), NoTangent(), sum(dXts), NoTangent(), NoTangent()
+      return NoTangent(), NoTangent(), sum(dXts), dps, NoTangent()
    end
    return val, pb
 end
