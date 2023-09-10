@@ -129,9 +129,6 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis_STOLayer, X::V
          ∂X_bRnl[i] = ∂R[i] * dnorm[i]
          ∂X[i] = ∂X_bYlm[i] +  ∂X_bRnl[i]
       end
-      for i = 1:length(l.bRnl.ζ)
-         ∂ζ[i] = dot(@view(∂BB[1][:, i]), @view(dζ[:, i]))
-      end
       return NoTangent(), NoTangent(), ∂X, NoTangent(), NoTangent()
    end
    return (val, st), pb
