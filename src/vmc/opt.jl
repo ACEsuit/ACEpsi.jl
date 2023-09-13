@@ -19,6 +19,7 @@ include("metropolis.jl")
 
 include("vmc_utils.jl")
 include("vmc.jl")
+include("multilevel.jl")
 include("optimisers/adamw.jl")
 include("optimisers/sr.jl")
 
