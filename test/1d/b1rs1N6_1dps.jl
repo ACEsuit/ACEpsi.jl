@@ -1,7 +1,7 @@
 using ACEpsi, StaticArrays, Test
 using Polynomials4ML
 using Polynomials4ML: natural_indices, degree, SparseProduct
-using ACEpsi.vmc: d1_lattice
+using ACEpsi.vmc: d1_lattice, EmbeddingW!
 using ACEpsi: BackflowPooling1d, BFwf1dps_lux, BFwf1dps_lux2,setupBFState, Jastrow
 using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC, d1, adamW, sr
 using ACEbase.Testing: print_tf, fdtest
@@ -31,17 +31,41 @@ for i = 1:Int(Nel / 2)
 end
 
 # Defining OrbitalsBasis
-totdegree = [3]
+totdegree = [2]
 ord = length(totdegree)
 Pn = Polynomials4ML.RTrigBasis(maximum(totdegree))
 length(Pn)
 trans = (x -> 2 * pi * x / L)
 
-wf, spec, spec1p = BFwf1dps_lux2(Nel, Pn; ν = ord, trans = trans)
+@info("setting up old wf in new code")
+_get_ord = bb -> sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0 ? 1 : sum([bb[i].n .!= 1 for i = 1:length(bb)])
+sd_admissible_func(ord,Deg) = bb -> (all([length(bb) == ord]) # must be of order ord, and 
+                                     && (all([sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0]) # all of the basis in bb must be (1, σ)
+                                         || all([sum([bb[i].n for i = 1:length(bb)]) <= Deg[_get_ord(bb)] + ord])) # if the degree of the basis is less then the maxdegree, "+ ord" since we denote degree 0 = 1
+                                         && (bb[1].s == '∅') # ensure b=1 are of empty spin
+                                         && all([b.s != '∅' for b in bb[2:end]])) # ensure b≠1 are of of non-empty spin
+sd_admissible = sd_admissible_func(ord,totdegree[1])
+
+wf, spec, spec1p = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans,  totdeg = totdegree[1], sd_admissible = sd_admissible)
 ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
 
+function getnicespec(spec::Vector, spec1p::Vector)
+    return [[spec1p[i] for i = spec[j]] for j = eachindex(spec)]
+end
+@show getnicespec(spec, spec1p)
+
 p, = destructure(ps)
+
+# some sanity check
 length(p)
+X =  [0.4311443915115578
+0.6119576335525756
+0.20139687963184993
+0.21725047756277704
+0.4431086290322228
+0.6995381939761542]
+wf(X, ps, st)
+
 
 # pair potential
 function v_ewald(x::AbstractFloat, b::Real, L::Real, M::Integer, K::Integer)
@@ -78,16 +102,16 @@ x0 = -L / 2 + spacing / 2
 Lattice = [x0 + (k - 1) * spacing for k = 1:Nel]
 d = d1_lattice(Lattice)
 
-burnin = 10
+burnin = 5
 nchains = 600
-MaxIter = 600
+MaxIter = 200
 
 ham = SumH(Kin, Vext, Vee)
 sam = MHSampler(wf, Nel, Δt = 0.5, burnin = burnin, nchains = nchains, d = d)
 
-opt_vmc = VMC(MaxIter, 0.0, adamW(), lr_dc = 100)
+opt_vmc = VMC(MaxIter, 0.02, adamW(), lr_dc = 100; tol = 0.0) # apparently using a good a basis I only get 1 iteration with default tol = 1e-3
 
-# # save_data
+# save_data
 # results_dir = @__DIR__() * "/jellium_data/b1rs1N$(Nel)" * string(Dates.now()) * "/"
 # mkpath(results_dir)
 # ## save initial config
@@ -96,10 +120,27 @@ opt_vmc = VMC(MaxIter, 0.0, adamW(), lr_dc = 100)
 
 @info("Set-up done. Into VMC")
 wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
-
+@show ps.hidden1.W
 E_RHF = -0.152250987350
 
 
 # using Plots
 # p = plot(err_opt/N, w = 3)
 # hline!([E_HF], lw=3, label="RHF($E_RHF)"
+
+# save parameters
+save(results_dir * "b1rs1N$(Nel)_W1.jld", "W", ps.hidden1.W)
+
+# manual multilevel using embedding
+# first define wf2
+totdegree = [3, 2]
+ord = length(totdegree)
+Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
+sd_admissible = sd_admissible_func(ord,totdegree)
+wf2, spec2, spec1p2 = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans, totdeg = length(Pn), sd_admissible = sd_admissible)
+ps2, st = setupBFState(MersenneTwister(1234), wf2, Σ)
+# @show getnicespec(spec2, spec1p2)
+
+# EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2)
+
+wf2, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf2, ps2, st)
