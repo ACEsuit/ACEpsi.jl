@@ -16,6 +16,8 @@ using ChainRulesCore
 using ChainRulesCore: NoTangent
 using Zygote 
 
+""" Embed by displacement
+"""
 function embed_diff_func(Xt, i)
     T = eltype(Xt)
     Nel = length(Xt)
@@ -27,6 +29,8 @@ function embed_diff_func(Xt, i)
     return copy(Xts)
 end
 
+""" trivial embedding
+"""
 function embed_usual_func(Xt, i)
     T = eltype(Xt)
     Nel = length(Xt)
