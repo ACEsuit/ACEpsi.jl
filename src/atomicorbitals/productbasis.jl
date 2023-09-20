@@ -5,6 +5,9 @@ import LuxCore
 import LuxCore: initialparameters, initialstates, AbstractExplicitLayer
 using Random: AbstractRNG
 
+AOR_type(TP, T, TI, Dn) = AtomicOrbitalsRadials{TP, Dn{T}, TI}
+const ATOLayer = Union{GaussianBasis, SlaterBasis}
+
 function _invmap(a::AbstractVector)
    inva = Dict{eltype(a), Int}()
    for i = 1:length(a) 
@@ -17,28 +20,16 @@ function dropnames(namedtuple::NamedTuple, names::Tuple{Vararg{Symbol}})
    keepnames = Base.diff_names(Base._nt_names(namedtuple), names)
    return NamedTuple{keepnames}(namedtuple)
 end
-struct ProductBasis_ATOLayer <: AbstractExplicitLayer 
-   sparsebasis::SparseProduct
-   bRnl::AbstractPoly4MLBasis
-   bYlm::AbstractPoly4MLBasis
-   L::Int
-end
 
-struct ProductBasis_STOLayer{TP, T, TT, TI, NB} <: AbstractExplicitLayer 
+struct ProductBasis{TDN, TP, T, TT, TI, NB} <: AbstractExplicitLayer 
    sparsebasis::SparseProduct{NB}
-   bRnl::AtomicOrbitalsRadials{TP, STO_NG{T}, TI}
-   bYlm::RYlmBasis{TT}
+   bRnl::Union{AOR_type(TP, T, TI, STO_NG), AOR_type(TP, T, TI, GaussianBasis), AOR_type(TP, T, TI, SlaterBasis)}
+   bYlm::Union{RYlmBasis{TT}, RRlmBasis{TT}}
    L::Int
+   Dn::TDN
 end
 
-# struct ProductBasisFreeze <: AbstractExplicitLayer
-#    sparsebasis::SparseProduct
-#    bRnl::AtomicOrbitalsRadials{TP, TD, TI}
-#    bYlm::SVecPoly4MLBasis
-#    L::Int
-# end
-
-ProductBasisLayer(spec1::Vector,bRnl::AbstractPoly4MLBasis,bYlm::AbstractPoly4MLBasis) = begin
+ProductBasisLayer(spec1::Vector, bRnl::AbstractPoly4MLBasis, bYlm::AbstractPoly4MLBasis) = begin
    spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
    spec_Rnl = natural_indices(bRnl); inv_Rnl = _invmap(spec_Rnl)
    spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
@@ -48,21 +39,18 @@ ProductBasisLayer(spec1::Vector,bRnl::AbstractPoly4MLBasis,bYlm::AbstractPoly4ML
       spec1idx[i] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
    end
    sparsebasis = SparseProduct(spec1idx)
-
-   if bRnl.Dn isa Union{Polynomials4ML.GaussianBasis, Polynomials4ML.SlaterBasis}
-      return ProductBasis_ATOLayer(sparsebasis, bRnl, bYlm, length(spec1))
-   elseif bRnl.Dn isa Polynomials4ML.STO_NG
-      return ProductBasis_STOLayer(sparsebasis, bRnl, bYlm, length(spec1))
-   end
+   return ProductBasis(sparsebasis, bRnl, bYlm, length(spec1), bRnl.Dn)
 end
 
-initialparameters(rng::AbstractRNG, l::ProductBasis_ATOLayer) = ( ζ = l.bRnl.Dn.ζ, )
-initialparameters(rng::AbstractRNG, l::ProductBasis_STOLayer) = NamedTuple()
+initialparameters(rng::AbstractRNG, l::ProductBasis{ATOLayer{T}, TP, T, TT, TI, NB}) where {TP, T, TT, TI, NB} = ( ζ = l.bRnl.Dn.ζ, )
+initialparameters(rng::AbstractRNG, l::ProductBasis{STO_NG{T}, TP, T, TT, TI, NB}) where {TP, T, TT, TI, NB} = NamedTuple()
 
-initialstates(rng::AbstractRNG, l::ProductBasis_ATOLayer) = NamedTuple()
-initialstates(rng::AbstractRNG, l::ProductBasis_STOLayer) = (ζ = l.bRnl.Dn.ζ, )
+initialstates(rng::AbstractRNG, l::ProductBasis{ATOLayer{T}, TP, T, TT, TI, NB}) where {TP, T, TT, TI, NB} = NamedTuple()
+initialstates(rng::AbstractRNG, l::ProductBasis{STO_NG{T}, TP, T, TT, TI, NB}) where {TP, T, TT, TI, NB} = (ζ = l.bRnl.Dn.ζ, )
 
-function evaluate(l::ProductBasis_ATOLayer, X::Vector{SVector{3, T}}, ps, st) where {T}
+(l::ProductBasis)(X, ps, st) = evaluate(l, X, ps, st)
+
+function evaluate(l::ProductBasis{ATOLayer{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
    R = norm.(X)
    l.bRnl.Dn.ζ = ps[1] 
    _bRnl = evaluate(l.bRnl, R)
@@ -73,9 +61,7 @@ function evaluate(l::ProductBasis_ATOLayer, X::Vector{SVector{3, T}}, ps, st) wh
    return _ϕnlm, st
 end
 
-(l::ProductBasis_ATOLayer)(X, ps, st) = evaluate(l, X, ps, st)
-
-function evaluate(l::ProductBasis_STOLayer, X::Vector{SVector{3, T}}, ps, st) where {T}
+function evaluate(l::ProductBasis{STO_NG{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
    R = norm.(X)
    l.bRnl.Dn.ζ = st[1] 
    _bRnl = evaluate(l.bRnl, R)
@@ -86,11 +72,9 @@ function evaluate(l::ProductBasis_STOLayer, X::Vector{SVector{3, T}}, ps, st) wh
    return _ϕnlm, st
 end
 
-(l::ProductBasis_STOLayer)(X, ps, st) = evaluate(l, X, ps, st)
-
 using ChainRulesCore
 
-function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis_ATOLayer, X::Vector{SVector{3, T}}, ps, st) where {T}
+function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{ATOLayer{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
    R = norm.(X)
    dnorm = X ./ R
    _bRnl, dR = evaluate_ed(l.bRnl, R)
@@ -118,7 +102,7 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis_ATOLayer, X::V
    return (val, st), pb
 end 
 
-function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis_STOLayer, X::Vector{SVector{3, T}}, ps, st) where {T}
+function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{STO_NG{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
    R = norm.(X)
    dnorm = X ./ R
    _bRnl, dR = evaluate_ed(l.bRnl, R)
@@ -140,4 +124,3 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis_STOLayer, X::V
    end
    return (val, st), pb
 end 
-
