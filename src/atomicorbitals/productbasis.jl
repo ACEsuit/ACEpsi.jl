@@ -1,6 +1,6 @@
 using Lux: WrappedFunction
 using Lux
-using Polynomials4ML: SparseProduct, AbstractPoly4MLBasis, release!
+using Polynomials4ML: SparseProduct, AbstractPoly4MLBasis, release!, GaussianBasis, SlaterBasis, STO_NG, AtomicOrbitalsRadials, SVecPoly4MLBasis
 import LuxCore 
 import LuxCore: initialparameters, initialstates, AbstractExplicitLayer
 using Random: AbstractRNG
@@ -24,12 +24,19 @@ struct ProductBasis_ATOLayer <: AbstractExplicitLayer
    L::Int
 end
 
-struct ProductBasis_STOLayer <: AbstractExplicitLayer 
-   sparsebasis::SparseProduct
-   bRnl::AbstractPoly4MLBasis
-   bYlm::AbstractPoly4MLBasis
+struct ProductBasis_STOLayer{TP, T, TT, TI, NB} <: AbstractExplicitLayer 
+   sparsebasis::SparseProduct{NB}
+   bRnl::AtomicOrbitalsRadials{TP, STO_NG{T}, TI}
+   bYlm::RYlmBasis{TT}
    L::Int
 end
+
+# struct ProductBasisFreeze <: AbstractExplicitLayer
+#    sparsebasis::SparseProduct
+#    bRnl::AtomicOrbitalsRadials{TP, TD, TI}
+#    bYlm::SVecPoly4MLBasis
+#    L::Int
+# end
 
 ProductBasisLayer(spec1::Vector,bRnl::AbstractPoly4MLBasis,bYlm::AbstractPoly4MLBasis) = begin
    spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
