@@ -3,6 +3,9 @@ using Printf
 using LinearAlgebra
 using Optimisers
 using ACEpsi
+using Distributed
+using ParallelDataTransfer: @getfrom
+using SharedArrays
 
 mutable struct VMC
    tol::Number
@@ -148,3 +151,67 @@ function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf_list, ps_
    return wf, err_opt, ps
 end
 
+# === paralell code
+function gd_GradientByVMC_parallel(opt_vmc::VMC, sam::MHSampler, ham::SumH, 
+               wf, ps, st, 
+               ν = 1, verbose = true, accMCMC = [10, [0.45, 0.55]])
+
+   res, λ₀, α = 1.0, 0., opt_vmc.lr
+   err_opt = zeros(opt_vmc.MaxIter)
+   N = length(st.trans.Σ)
+
+   @everywhere (x0, ~, acc) = ACEpsi.vmc.sampler_restart(sam, ps, st)
+
+   acc_list = SharedArray{Float64}(nprocs())
+   acc_list = [@getfrom i acc for i in 1:nprocs()]
+   acc_all = mean(acc_list)
+
+   @everywhere accMCMC = $accMCMC
+   @everywhere acc_opt = zeros(accMCMC[1]) # define acc_opt on each processor for updating time step respectively
+
+
+   verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc_all)
+   verbose && @printf("   k |  𝔼[E_L]  |  𝔼[E_L]/N  |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
+   for k = 1 : opt_vmc.MaxIter
+      
+      # synchronize parameters
+      @everywhere sam.x0 = x0
+      
+      @everywhere begin
+         @everywhere (ps, st) = ($ps, $st)
+         # sam.Ψ = wf;
+         k = $k;
+         # adjust the MCMC step-size every `acc_step` step
+         acc_list = $acc_list
+         acc_opt[mod(k, accMCMC[1])+1] = acc_list[myid()]
+      end
+
+      _acc_opt = reduce(vcat, [@getfrom i acc_opt for i in 1:nprocs()])
+      macc_opt = mean(_acc_opt)
+      @everywhere macc_opt = $macc_opt
+      
+      # adjust Δt
+      if mod(k, accMCMC[1]) == 0
+         if macc_opt < accMCMC[2][1]
+             @everywhere sam.Δt = sam.Δt * exp(1/10 * (macc_opt - accMCMC[2][1])/accMCMC[2][1])
+         elseif macc_opt > accMCMC[2][2]
+             @everywhere sam.Δt = sam.Δt * exp(1/10 * (macc_opt - accMCMC[2][2])/accMCMC[2][2])
+         end
+      end
+
+      # adjust learning rate
+      α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
+
+      # optimization
+      ps, acc, λ₀, res, σ = Optimization_parallel(opt_vmc.type, wf, ps, st, sam, ham, α)
+      
+      # err
+      verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, λ₀/N, σ, res, α, acc, sam.Δt)
+      err_opt[k] = λ₀
+
+      if res < opt_vmc.tol
+         break;
+      end  
+   end
+   return wf, err_opt, ps
+end

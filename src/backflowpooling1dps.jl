@@ -5,6 +5,7 @@ using ChainRulesCore
 using ChainRulesCore: NoTangent
 using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META
 using ObjectPools: acquire!
+using StrideArrays: PtrArray, StaticInt
 
 mutable struct BackflowPooling1dps
    @reqfields
@@ -25,7 +26,12 @@ function evaluate(pooling::BackflowPooling1dps, Ps, Σ::AbstractVector)
 
     # evaluate the pooling operation
    #                spin  I    k = (nlm)
-   Aall = [acquire!(pooling.tmp, Symbol("Aall$i"), (2, n), T) for i in 1:Nel] # Nel * 2 * n
+   Aall = Vector{PtrArray{T, 2, (1, 2), Tuple{Int64, Int64}, Tuple{Nothing, Nothing}, Tuple{StaticInt{1}, StaticInt{1}}}}()
+
+   for i::Int64 = 1:Nel
+      push!(Aall, acquire!(pooling.tmp, Symbol("Aall$i"), (2, n), T))
+   end
+
    for j = 1:Nel
       fill!(Aall[j], zero(T))
    end
@@ -33,7 +39,7 @@ function evaluate(pooling::BackflowPooling1dps, Ps, Σ::AbstractVector)
    @inbounds begin
       for j = 1:Nel
          for k = 1:n
-            @simd ivdep for i = 1:Nel
+            for i = 1:Nel
                   iσ = spin2idx(Σ[i])
                   Aall[j][iσ, k] += Ps[j][i, k]
             end
