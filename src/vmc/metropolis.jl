@@ -3,24 +3,25 @@ using StaticArrays
 using Optimisers
 export MHSampler
 using ACEpsi.AtomicOrbitals: Nuc
+using Lux: Chain
 
 """
 `MHSampler`
 Metropolis-Hastings sampling algorithm.
 """
-mutable struct MHSampler{T}
-    Nel::Int
+mutable struct MHSampler{T, TT}
+    Nel::Int64
     nuclei::Vector{Nuc{T}}
-    Δt::Real                    # step size (of Gaussian proposal)
-    burnin::Int                 # burn-in iterations
-    lag::Int                    # iterations between successive samples
-    N_batch::Int                # batch size
-    nchains::Int                # Number of chains
-    Ψ                           # many-body wavefunction for sampling
+    Δt::Float64                 # step size (of Gaussian proposal)
+    burnin::Int64               # burn-in iterations
+    lag::Int64                  # iterations between successive samples
+    N_batch::Int64              # batch size
+    nchains::Int64              # Number of chains
+    Ψ::Chain{TT}                # many-body wavefunction for sampling
     x0::Any                     # initial sampling 
     walkerType::String          # walker type: "unbiased", "Langevin"
     bc::String                  # boundary condition
-    type::Int                   # move how many electron one time 
+    type::Int64                 # move how many electron one time 
 end
 
 MHSampler(Ψ, Nel, nuclei; Δt = 0.1, 
@@ -42,29 +43,29 @@ biased random walk:   R_n+1 = R_n + Δ⋅Wn + Δ⋅∇(log Ψ)(R_n)
 
 eval(wf, X::AbstractVector, ps, st) = wf(X, ps, st)[1]
 
-function MHstep(r0, 
-                Ψx0, 
-                Nels::Int, 
-                sam::MHSampler, ps, st)
-    rand_sample(X::AbstractVector, Nels::Int, Δt::AbstractFloat) = begin
-        return X + Δt * randn(SVector{3, eltype(X[1])}, Nels)
+function MHstep(r0::Vector{Vector{SVector{3, TT}}}, 
+                Ψx0::Vector{T}, 
+                Nels::Int64, 
+                sam::MHSampler, ps::NamedTuple, st::NamedTuple) where {T, TT}
+    rand_sample(X::Vector{SVector{3, TX}}, Nels::Int, Δt::Float64) where {TX}= begin
+        return X + Δt * randn(SVector{3, TX}, Nels)
     end
     rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
-    Ψxp = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
+    Ψxp::Vector{T} = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
-    r = acc .*  rp + (1.0 .- acc) .* r0
+    r::Vector{Vector{SVector{3, TT}}} = acc .*  rp + (1.0 .- acc) .* r0
     Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
     return r, Ψ, acc
 end
-
+ 
 """
 acceptance rate for log|Ψ|
 ψₜ₊₁²/ψₜ² = exp((log|Ψₜ₊₁|^2-log |ψₜ|^2))
 """
 
-function accfcn(Ψx0, Ψxp)  
+function accfcn(Ψx0::Vector{T}, Ψxp::Vector{T}) where {T} 
     acc = exp.(Ψxp .- Ψx0)
     return acc
 end
@@ -73,17 +74,34 @@ end
 type = "restart"
 """
 
-function sampler_restart(sam::MHSampler, ps, st)
-    r = [[sam.nuclei[i].rr for j = 1:Int(ceil(sam.nuclei[i].charge))] for i = 1:length(sam.nuclei)]
-    r = reduce(vcat,r)
-    r0 = [sam.Δt * randn(SVector{3, Float64}, sam.Nel) + r for _ = 1:sam.nchains]
-    Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
-    acc = []
-    for _ = 1 : sam.burnin
-        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
-        push!(acc,a)
+function pos(sam::MHSampler)
+    T = eltype(sam.nuclei[1].rr)
+    M = length(sam.nuclei)
+    rr = zeros(SVector{3, T}, sam.Nel)
+    tt = zeros(Int, 1)
+    @inbounds begin
+        for i = 1:M
+            @simd ivdep for j = Int(ceil(sam.nuclei[i].charge))
+                tt[1] += 1
+                rr[tt[1]] = sam.nuclei[i].rr
+            end
+        end
     end
-    return r0, Ψx0, mean(mean(acc))
+    return rr
+end
+
+function sampler_restart(sam::MHSampler, ps, st)
+    r = pos(sam)
+    T = eltype(r[1])
+    r0 = Vector{Vector{SVector{3, T}}}(undef, sam.nchains)
+    r0 = [sam.Δt * randn(SVector{3, T}, sam.Nel) + r for _ = 1:sam.nchains]
+    Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+    acc = zeros(T, sam.burnin)
+    for i = 1 : sam.burnin
+        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
+        acc[i] = mean(a)
+    end
+    return r0, Ψx0, mean(acc)
 end
 
 """
@@ -97,12 +115,13 @@ function sampler(sam::MHSampler, ps, st)
         r0 = sam.x0
         Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     end
-    acc = []
+    T = eltype(r0[1][1])
+    acc = zeros(T, sam.lag)
     for i = 1:sam.lag
         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
-        push!(acc, a)
+        acc[i] = mean(a)
     end
-    return r0, Ψx0, mean(mean(acc))
+    return r0, Ψx0, mean(acc)
 end
 
 

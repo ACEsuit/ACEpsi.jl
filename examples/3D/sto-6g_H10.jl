@@ -40,7 +40,6 @@ D = reshape(D, 1, length(D))
 Dn = STO_NG((ζ, D))
 bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
 bYlm = RYlmBasis(Ylmdegree)
-
 # setup state
 ord = 2
 wf, spec, spec1p = BFwf_chain, spec, spec1p  = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = ord)
@@ -49,17 +48,7 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 p, = destructure(ps)
 length(p)
 
-using BenchmarkTools
-@btime wf(X, ps, st)
-@btime gradient(wf, X, ps, st)
-
 ham = SumH(nuclei)
-sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1, nchains = 2000)
+sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)
 
 opt_vmc = VMC(10, 0.1, ACEpsi.vmc.adamW(); lr_dc = 100.0)
-wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
-@profview wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
-
-sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 100, nchains = 2000)
-
-#@profview ACEpsi.vmc.sampler_restart(sam, ps, st)
