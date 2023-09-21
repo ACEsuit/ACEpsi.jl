@@ -25,7 +25,7 @@ Nuc(SVector(0.0,0.0,-2.5), 1.0),Nuc(SVector(0.0,0.0,-1.5), 1.0),
 Nuc(SVector(0.0,0.0,-0.5), 1.0),Nuc(SVector(0.0,0.0,0.5), 1.0),
 Nuc(SVector(0.0,0.0,1.5), 1.0),Nuc(SVector(0.0,0.0,2.5), 1.0),
 Nuc(SVector(0.0,0.0,3.5), 1.0),Nuc(SVector(0.0,0.0,4.5), 1.0)]
-##
+## 23.11399
 
 # Defining AtomicOrbitalsBasis
 n2 = 1
@@ -49,23 +49,17 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 p, = destructure(ps)
 length(p)
 
-K(wf, X::AbstractVector, ps, st) = -0.5 * laplacian(wf, X, ps, st)
-Vext(wf, X::AbstractVector, ps, st) = -sum(nuclei[i].charge/norm(nuclei[i].rr - X[j]) for i = 1:length(nuclei) for j in 1:length(X))
-function Vee(wf, X::AbstractVector, ps, st) 
-    nX = length(X)
-    if nX <=1 
-        return 0
-    else 
-        return sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1 for j = i+1:length(X))
-    end
-end
-
 using BenchmarkTools
 @btime wf(X, ps, st)
 @btime gradient(wf, X, ps, st)
 
-ham = SumH(K, Vext, Vee)
+ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1, nchains = 2000)
 
 opt_vmc = VMC(10, 0.1, ACEpsi.vmc.adamW(); lr_dc = 100.0)
+wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
 @profview wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
+
+sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 100, nchains = 2000)
+
+#@profview ACEpsi.vmc.sampler_restart(sam, ps, st)

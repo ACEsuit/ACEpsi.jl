@@ -56,7 +56,7 @@ function Vee(wf, X::AbstractVector, ps, st)
     end
 end
 
-ham = SumH(K, Vext, Vee)
+ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, nuclei, Δt = 1.0, burnin = 1000, nchains = 2000)
 
 opt_vmc = VMC(3000, 0.1, ACEpsi.vmc.adamW(); lr_dc = 100.0)

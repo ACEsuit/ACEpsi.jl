@@ -44,7 +44,7 @@ K(wf, X::AbstractVector, ps, st) = -0.5 * laplacian(wf, X, ps, st)
 Vext(wf, X::AbstractVector, ps, st) = -sum(nuclei[i].charge/norm(nuclei[i].rr - X[j]) for i = 1:length(nuclei) for j in 1:length(X))
 Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1 for j = i+1:length(X))
 
-ham = SumH(K, Vext, Vee)
+ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, Δt = 0.5, burnin = 1000, nchains = 2000)
 
 opt_vmc = VMC(3000, 0.1, ACEpsi.vmc.adamW(), lr_dc = 100)
