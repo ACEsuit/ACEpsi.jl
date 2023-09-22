@@ -55,6 +55,13 @@ function get_spec(nuclei, spec1p)
 end
 
 # ----------------- custom layers ------------------
+struct myReshapeLayer{N} <: AbstractExplicitLayer
+   dims::NTuple{N, Int}
+end
+
+@inline function (r::myReshapeLayer)(x::AbstractArray, ps, st::NamedTuple)
+   return reshape(unwrap(x), r.dims), st
+end
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
@@ -98,7 +105,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
    #_det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
-   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
+   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * length(nuclei) * length(prodbasis_layer.sparsebasis))), 
                         bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
    # return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
