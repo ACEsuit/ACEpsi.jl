@@ -28,7 +28,7 @@ function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α)
     p, s = destructure(ps)
     p = p - α * g
     ps = s(p)
-    return ps, acc, λ₀, res, σ
+    return ps, acc, λ₀, res, σ, x0
 end
    
 

@@ -9,7 +9,7 @@ using Lux: Chain
 `MHSampler`
 Metropolis-Hastings sampling algorithm.
 """
-mutable struct MHSampler{T, TT}
+mutable struct MHSampler{T}
     Nel::Int64
     nuclei::Vector{Nuc{T}}
     Δt::Float64                 # step size (of Gaussian proposal)
@@ -17,8 +17,8 @@ mutable struct MHSampler{T, TT}
     lag::Int64                  # iterations between successive samples
     N_batch::Int64              # batch size
     nchains::Int64              # Number of chains
-    Ψ::Chain{TT}                # many-body wavefunction for sampling
-    x0::Any                     # initial sampling 
+    Ψ::Chain                    # many-body wavefunction for sampling
+    x0::Vector                  # initial sampling 
     walkerType::String          # walker type: "unbiased", "Langevin"
     bc::String                  # boundary condition
     type::Int64                 # move how many electron one time 
@@ -29,7 +29,7 @@ MHSampler(Ψ, Nel, nuclei; Δt = 0.1,
             lag = 10, 
             N_batch = 1, 
             nchains = 1000,
-            x0 = [],
+            x0 = Vector{Vector{SVector{3, Float64}}}(undef, nchains),
             wT = "unbiased", 
             bc = "periodic", 
             type = 1) =
@@ -93,7 +93,7 @@ end
 function sampler_restart(sam::MHSampler, ps, st)
     r = pos(sam)
     T = eltype(r[1])
-    r0 = Vector{Vector{SVector{3, T}}}(undef, sam.nchains)
+    r0 = sam.x0
     r0 = [sam.Δt * randn(SVector{3, T}, sam.Nel) + r for _ = 1:sam.nchains]
     Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     acc = zeros(T, sam.burnin)
@@ -109,12 +109,8 @@ type = "continue"
 start from the previous sampling x0
 """
 function sampler(sam::MHSampler, ps, st)
-    if isempty(sam.x0)
-        r0, Ψx0, = sampler_restart(sam, ps, st);
-    else
-        r0 = sam.x0
-        Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
-    end
+    r0 = sam.x0
+    Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     T = eltype(r0[1][1])
     acc = zeros(T, sam.lag)
     for i = 1:sam.lag

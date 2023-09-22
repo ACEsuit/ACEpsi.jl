@@ -32,16 +32,29 @@ n2 = 1
 Pn = Polynomials4ML.legendre_basis(n1+1)
 spec = [(n1 = 1, n2 = 1, l = 0) ] 
 
+
+# Ref: https://www.basissetexchange.org/
+# https://link.springer.com/book/10.1007/978-90-481-3862-3: 235
+# 0.7790 * e^(-1.24 * r)
+# ϕ_1s(1, r) = \sum_(k = 1)^K d_1s,k g_1s(α_1k, r)
+# ϕ_1s(ζ, r) = ζ^(3/2) * ϕ(1, ζr)
+# g_1s(α, r) = (2α/π)^(3/4) * exp(-αr^2)
+# d_1s = [0.130334, 0.416492, 0.370563, 0.168538, 0.0493615, 0.0091636]
+# α_1s = [0.0651095, 0.158088, 0.407099, 1.18506, 4.23592, 23.1030]
+
 ζ = [0.3552322122E+02, 0.6513143725E+01, 0.1822142904E+01,0.6259552659E+00, 0.2430767471E+00, 0.1001124280E+00]
-ζ = reshape(ζ, 1, length(ζ))
 D = [0.9163596281E-02, 0.4936149294E-01,0.1685383049E+00,0.3705627997E+00,  0.4164915298E+00, 0.1303340841E+00]
+D = [(2 * ζ[i]/pi)^(3/4) * D[i] for i = 1:length(ζ)] * sqrt(2) * 2 * sqrt(pi)
+
+ζ = reshape(ζ, 1, length(ζ))
 D = reshape(D, 1, length(D))
 
 Dn = STO_NG((ζ, D))
 bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
 bYlm = RYlmBasis(Ylmdegree)
+
 # setup state
-ord = 2
+ord = 1
 wf, spec, spec1p = BFwf_chain, spec, spec1p  = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = ord)
 
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
@@ -51,4 +64,5 @@ length(p)
 ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)
 
-opt_vmc = VMC(10, 0.1, ACEpsi.vmc.adamW(); lr_dc = 100.0)
+opt_vmc = VMC(1000, 0.015, ACEpsi.vmc.adamW(); lr_dc = 100.0)
+wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)

@@ -63,6 +63,15 @@ end
    return reshape(unwrap(x), r.dims), st
 end
 
+function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::myReshapeLayer{N}, X, ps, st) where {N}
+   val = l(X, ps, st)
+   function pb(dϕnlm) # dA is of a tuple (dAmat, st), dAmat is of size (Nnuc, Nel, Nnlm)
+      A = reshape(unwrap(dϕnlm[1]), size(X))
+      return NoTangent(), NoTangent(), A, NoTangent(), NoTangent()
+   end
+   return val, pb
+end
+
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
@@ -102,7 +111,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    #js = Jastrow(nuclei)
    #jastrow_layer = ACEpsi.lux(js)
 
-   reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
+   #reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
 
    #_det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * length(nuclei) * length(prodbasis_layer.sparsebasis))), 
