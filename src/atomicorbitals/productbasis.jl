@@ -77,11 +77,11 @@ function evaluate(l::ProductBasis{STO_NG{T}, TP, T, TT, TI, NB}, X::Vector{SVect
    RT = promote_type(T, TT, TX)
    Nel = length(X)
    R = acquire!(l.bRnl.pool, :R, (Nel,), RT)
-   @simd ivdep for i = Nel
+   @simd ivdep for i = 1:Nel
       R[i] = norm(X[i])
    end
    l.bRnl.Dn.ζ = st[1] 
-   _bRnl = evaluate(l.bRnl, R)
+   _bRnl = evaluate(l.bRnl, R) 
    _Ylm = evaluate(l.bYlm, X)
    _ϕnlm = evaluate(l.sparsebasis,(_bRnl, _Ylm))
    release!(R)
