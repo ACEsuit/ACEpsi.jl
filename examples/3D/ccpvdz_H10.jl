@@ -16,13 +16,12 @@ using HyperDualNumbers: Hyper
 
 n1 = Rnldegree = 2
 Ylmdegree = 1
-totdegree = 20
+totdegree = 30
 Nel = 10
 X = randn(SVector{3, Float64}, Nel)
 Σ = [↑,↑,↑,↑,↑,↓,↓,↓,↓,↓]
 spacing = 1.0
 nuclei = [Nuc(SVector(0.0,0.0,(i-1/2-Nel/2) * spacing), 1.0) for i = 1:Nel]
-n2 = 1
 Pn = Polynomials4ML.legendre_basis(n1)
 spec = [(n1 = 1, n2 = 1, l = 0), (n1 = 1, n2 = 2, l = 0), (n1 = 2, n2 = 1, l = 1)]
 
@@ -38,21 +37,21 @@ spec = [(n1 = 1, n2 = 1, l = 0), (n1 = 1, n2 = 2, l = 0), (n1 = 2, n2 = 1, l = 1
 
 ζ = [[1.301000E+01, 1.962000E+00, 4.446000E-01, 1.220000E-01], [1.220000E-01], [7.270000E-01]]
 D = [[1.968500E-02, 1.379770E-01, 4.781480E-01, 5.012400E-01], [1.0000000], [1.0000000]]
-
-D[1] = [(2 * ζ[1][i]/pi)^(3/4) * D[1][i] for i = 1:length(ζ[1])] * sqrt(2) * 2 * sqrt(pi) # sqrt(2),sqrt(2/3)
-D[2] = [(2 * ζ[2][i]/pi)^(3/4) * D[2][i] for i = 1:length(ζ[2])] * sqrt(2) * 2 * sqrt(pi) 
-
+D[1] = [(2 * ζ[1][i]/pi)^(3/4) * D[1][i] for i = 1:length(ζ[1])] * sqrt(2) * 2 * sqrt(pi)
+D[2] = [(2 * ζ[2][i]/pi)^(3/4) * D[2][i] for i = 1:length(ζ[2])] * sqrt(2) * 2 * sqrt(pi)
 
 Dn = STO_NG((ζ, D))
 bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
 bYlm = RYlmBasis(Ylmdegree)
 
-ord = 1
+ord = 2
 wf, spec, spec1p = BFwf_chain, spec, spec1p  = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = ord)
 
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 p, = destructure(ps)
 length(p)
+
+@profview begin for i = 1:1000 wf(X, ps, st) end end
 
 ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)

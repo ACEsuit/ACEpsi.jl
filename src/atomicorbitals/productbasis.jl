@@ -52,7 +52,12 @@ initialstates(rng::AbstractRNG, l::ProductBasis{STO_NG{T}, TP, T, TT, TI, NB}) w
 (l::ProductBasis)(X, ps, st) = evaluate(l, X, ps, st)
 
 function evaluate(l::ProductBasis{GaussianBasis{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
-   R = norm.(X)
+   RT = promote_type(T, TT, TX)
+   Nel = length(X)
+   R = acquire!(l.bRnl.pool, :R, (Nel,), RT)
+   @simd ivdep for i = 1:Nel
+      R[i] = norm(X[i])
+   end
    l.bRnl.Dn.ζ = ps[1] 
    _bRnl = evaluate(l.bRnl, R)
    _Ylm = evaluate(l.bYlm, X)
@@ -63,7 +68,12 @@ function evaluate(l::ProductBasis{GaussianBasis{T}, TP, T, TT, TI, NB}, X::Vecto
 end
 
 function evaluate(l::ProductBasis{SlaterBasis{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
-   R = norm.(X)
+   RT = promote_type(T, TT, TX)
+   Nel = length(X)
+   R = acquire!(l.bRnl.pool, :R, (Nel,), RT)
+   @simd ivdep for i = 1:Nel
+      R[i] = norm(X[i])
+   end
    l.bRnl.Dn.ζ = ps[1] 
    _bRnl = evaluate(l.bRnl, R)
    _Ylm = evaluate(l.bYlm, X)
@@ -93,24 +103,26 @@ end
 using ChainRulesCore
 
 function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{GaussianBasis{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
-   R = norm.(X)
+   RT = promote_type(T, TT, TX)
+   Nel = length(X)
+   R = acquire!(l.bRnl.pool, :R, (Nel,), RT)
+   @simd ivdep for i = 1:Nel
+      R[i] = norm(X[i])
+   end
    dnorm = X ./ R
    _bRnl, dR, dζ = Polynomials4ML.evaluate_ed_dp(l.bRnl, R)
    _bYlm, dX = evaluate_ed(l.bYlm, X)
    val = evaluate(l.sparsebasis, (_bRnl, _bYlm))
    release!(_bRnl); release!(_bYlm)
-   ∂R = similar(R)
-   ∂X_bYlm = similar(X)
-   ∂X_bRnl = similar(X)
    ∂X = similar(X)
    ∂ζ = similar(l.bRnl.Dn.ζ)
    function pb(Δ)
       ∂BB = Polynomials4ML._pullback_evaluate(Δ[1], l.sparsebasis, (_bRnl, _bYlm))
       for i = 1:length(X)
-         ∂X_bYlm[i] = sum([∂BB[2][i,j] * dX[i,j] for j = 1:length(dX[i,:])])
-         ∂R[i] = dot(@view(∂BB[1][i, :]), @view(dR[i, :]))
-         ∂X_bRnl[i] = ∂R[i] * dnorm[i]
-         ∂X[i] = ∂X_bYlm[i] +  ∂X_bRnl[i]
+         ∂X[i] = dot(@view(∂BB[1][i, :]), @view(dR[i, :])) * dnorm[i]
+         for j = 1:length(dX[i,:])
+            ∂X[i] = muladd(∂BB[2][i,j], dX[i,j], ∂X[i])
+         end
       end
       for i = 1:length(l.bRnl.Dn.ζ)
          ∂ζ[i] = dot(@view(∂BB[1][:, i]), @view(dζ[:, i]))
@@ -122,24 +134,26 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{GaussianBasis{
 end 
 
 function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{SlaterBasis{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
-   R = norm.(X)
+   RT = promote_type(T, TT, TX)
+   Nel = length(X)
+   R = acquire!(l.bRnl.pool, :R, (Nel,), RT)
+   @simd ivdep for i = 1:Nel
+      R[i] = norm(X[i])
+   end
    dnorm = X ./ R
    _bRnl, dR, dζ = Polynomials4ML.evaluate_ed_dp(l.bRnl, R)
    _bYlm, dX = evaluate_ed(l.bYlm, X)
    val = evaluate(l.sparsebasis, (_bRnl, _bYlm))
    release!(_bRnl); release!(_bYlm)
-   ∂R = similar(R)
-   ∂X_bYlm = similar(X)
-   ∂X_bRnl = similar(X)
    ∂X = similar(X)
    ∂ζ = similar(l.bRnl.Dn.ζ)
    function pb(Δ)
       ∂BB = Polynomials4ML._pullback_evaluate(Δ[1], l.sparsebasis, (_bRnl, _bYlm))
       for i = 1:length(X)
-         ∂X_bYlm[i] = sum([∂BB[2][i,j] * dX[i,j] for j = 1:length(dX[i,:])])
-         ∂R[i] = dot(@view(∂BB[1][i, :]), @view(dR[i, :]))
-         ∂X_bRnl[i] = ∂R[i] * dnorm[i]
-         ∂X[i] = ∂X_bYlm[i] +  ∂X_bRnl[i]
+         ∂X[i] = dot(@view(∂BB[1][i, :]), @view(dR[i, :])) * dnorm[i]
+         for j = 1:length(dX[i,:])
+            ∂X[i] = muladd(∂BB[2][i,j], dX[i,j], ∂X[i])
+         end
       end
       for i = 1:length(l.bRnl.Dn.ζ)
          ∂ζ[i] = dot(@view(∂BB[1][:, i]), @view(dζ[:, i]))
@@ -150,23 +164,26 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{SlaterBasis{T}
    return (val, st), pb
 end 
 
+
 function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{STO_NG{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
-   R = norm.(X)
+   RT = promote_type(T, TT, TX)
+   Nel = length(X)
+   R = acquire!(l.bRnl.pool, :R, (Nel,), RT)
+   @simd ivdep for i = 1:Nel
+      R[i] = norm(X[i])
+   end
    dnorm = X ./ R
    _bRnl, dR = evaluate_ed(l.bRnl, R)
    _bYlm, dX = evaluate_ed(l.bYlm, X)
    val = evaluate(l.sparsebasis, (_bRnl, _bYlm))
-   ∂R = similar(R)
-   ∂X_bYlm = similar(X)
-   ∂X_bRnl = similar(X)
    ∂X = similar(X)
    function pb(Δ)
       ∂BB = Polynomials4ML._pullback_evaluate(Δ[1], l.sparsebasis, (_bRnl, _bYlm))
       for i = 1:length(X)
-         ∂X_bYlm[i] = sum([∂BB[2][i,j] * dX[i,j] for j = 1:length(dX[i,:])])
-         ∂R[i] = dot(@view(∂BB[1][i, :]), @view(dR[i, :]))
-         ∂X_bRnl[i] = ∂R[i] * dnorm[i]
-         ∂X[i] = ∂X_bYlm[i] +  ∂X_bRnl[i]
+         ∂X[i] = dot(@view(∂BB[1][i, :]), @view(dR[i, :])) * dnorm[i]
+         for j = 1:length(dX[i,:])
+            ∂X[i] = muladd(∂BB[2][i,j], dX[i,j], ∂X[i])
+         end
       end
       return NoTangent(), NoTangent(), ∂X, NoTangent(), NoTangent()
    end
