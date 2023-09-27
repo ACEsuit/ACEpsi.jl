@@ -45,7 +45,7 @@ Vext(wf, X::AbstractVector, ps, st) = -sum(nuclei[i].charge/norm(nuclei[i].rr - 
 Vee(wf, X::AbstractVector, ps, st) = sum(1/norm(X[i]-X[j]) for i = 1:length(X)-1 for j = i+1:length(X))
 
 ham = SumH(nuclei)
-sam = MHSampler(wf, Nel, Δt = 0.5, burnin = 1000, nchains = 2000)
+sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)
 
 opt_vmc = VMC(3000, 0.1, ACEpsi.vmc.adamW(), lr_dc = 100)
 wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
@@ -60,6 +60,3 @@ err1
 
 Eref = -14.667
 
-
-# using Plots
-# plot(abs.(err1 .- Eref), w = 3, yscale=:log10)

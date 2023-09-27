@@ -89,14 +89,14 @@ using ChainRulesCore
 function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{GaussianBasis{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
    R = norm.(X)
    dnorm = X ./ R
-   _bRnl, dR = evaluate_ed(l.bRnl, R)
+   _bRnl, dR, dζ = Polynomials4ML.evaluate_ed_dp(l.bRnl, R)
    _bYlm, dX = evaluate_ed(l.bYlm, X)
    val = evaluate(l.sparsebasis, (_bRnl, _bYlm))
+   release!(_bRnl); release!(_bYlm)
    ∂R = similar(R)
    ∂X_bYlm = similar(X)
    ∂X_bRnl = similar(X)
    ∂X = similar(X)
-   dζ = Polynomials4ML.pb_params(ps.ζ, l.bRnl, R)
    ∂ζ = similar(l.bRnl.Dn.ζ)
    function pb(Δ)
       ∂BB = Polynomials4ML._pullback_evaluate(Δ[1], l.sparsebasis, (_bRnl, _bYlm))
@@ -111,20 +111,21 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{GaussianBasis{
       end
       return NoTangent(), NoTangent(), ∂X, (ζ = ∂ζ,), NoTangent()
    end
+   release!(dX);release!(dR);release!(dζ);
    return (val, st), pb
 end 
 
 function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{SlaterBasis{T}, TP, T, TT, TI, NB}, X::Vector{SVector{3, TX}}, ps, st) where {TP, T, TT, TI, NB, TX}
    R = norm.(X)
    dnorm = X ./ R
-   _bRnl, dR = evaluate_ed(l.bRnl, R)
+   _bRnl, dR, dζ = Polynomials4ML.evaluate_ed_dp(l.bRnl, R)
    _bYlm, dX = evaluate_ed(l.bYlm, X)
    val = evaluate(l.sparsebasis, (_bRnl, _bYlm))
+   release!(_bRnl); release!(_bYlm)
    ∂R = similar(R)
    ∂X_bYlm = similar(X)
    ∂X_bRnl = similar(X)
    ∂X = similar(X)
-   dζ = Polynomials4ML.pb_params(ps.ζ, l.bRnl, R)
    ∂ζ = similar(l.bRnl.Dn.ζ)
    function pb(Δ)
       ∂BB = Polynomials4ML._pullback_evaluate(Δ[1], l.sparsebasis, (_bRnl, _bYlm))
@@ -139,6 +140,7 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{SlaterBasis{T}
       end
       return NoTangent(), NoTangent(), ∂X, (ζ = ∂ζ,), NoTangent()
    end
+   release!(dX);release!(dR);release!(dζ);
    return (val, st), pb
 end 
 
