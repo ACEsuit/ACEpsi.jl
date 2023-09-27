@@ -186,10 +186,14 @@ function evaluate(l::AtomicOrbitalsBasisLayer, X, ps, st)
    Nnlm = l.prodbasis.L
    ϕnlm = acquire!(l.pool, :ϕnlm, (Nnuc, Nel, Nnlm), T)
    # inplace evaluation X
-   for I = 1:Nnuc
-      X .-= Ref(nuc[I].rr)
+   @inbounds for I = 1:Nnuc
+      @simd ivdep for i = 1:Nel
+         X[i] = X[i] - nuc[I].rr
+      end
       ϕnlm[I,:,:], _ = l.prodbasis(X, ps, st)
-      X .+= Ref(nuc[I].rr)
+      @simd ivdep for i = 1:Nel
+         X[i] = X[i] + nuc[I].rr
+      end
    end
    # ϕnlm should be released in the next layer
    return ϕnlm, st
