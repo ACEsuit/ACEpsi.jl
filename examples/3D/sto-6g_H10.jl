@@ -60,7 +60,7 @@ Dn = STO_NG((ζ, D))
 bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
 bYlm = RYlmBasis(Ylmdegree)
 
-ord = 2
+ord = 3
 wf, spec, spec1p = BFwf_chain, spec, spec1p  = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = ord)
 
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ) # ps.hidden1.W: Nels * basis
@@ -71,21 +71,21 @@ ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)
 
 #using BenchmarkTools # N = 10, nuc = 10  # 10, 265, 3685
-#@btime $wf($X, $ps, $st)               # ord = 1: 17.847 μs (27 allocations: 8.27 KiB)
-                                        # ord = 2: 22.100 μs (27 allocations: 8.27 KiB)
-                                        # ord = 3: 78.104 μs (27 allocations: 8.27 KiB)
+#@btime $wf($X, $ps, $st)               # ord = 1: 17.197 μs (17 allocations: 6.86 KiB)
+                                        # ord = 2: 23.086 μs (17 allocations: 6.86 KiB)
+                                        # ord = 3: 78.264 μs (17 allocations: 6.86 KiB)
 
-#@btime $gradient($wf, $X, $ps, $st)    # ord = 1: 63.649 μs (305 allocations: 117.30 KiB)
-                                        # ord = 2: 93.476 μs (307 allocations: 160.55 KiB)
-                                        # ord = 3: 704.326 μs (307 allocations: 698.33 KiB)
+#@btime $gradient($wf, $X, $ps, $st)    # ord = 1: 56.969 μs (165 allocations: 100.73 KiB)
+                                        # ord = 2: 75.596 μs (167 allocations: 143.98 KiB)
+                                        # ord = 3: 889.464 μs (167 allocations: 681.77 KiB)
 
-#@btime $grad_params($wf, $X, $ps, $st) # ord = 1: 56.309 μs (282 allocations: 58.45 KiB)
-                                        # ord = 2: 83.227 μs (284 allocations: 98.30 KiB)
-                                        # ord = 3: 623.401 μs (284 allocations: 632.67 KiB)
+#@btime $grad_params($wf, $X, $ps, $st) # ord = 1: 48.483 μs (142 allocations: 41.89 KiB)
+                                        # ord = 2: 67.085 μs (144 allocations: 81.73 KiB)
+                                        # ord = 3: 887.024 μs (144 allocations: 616.11 KiB)
 
-#@btime $laplacian($wf, $X, $ps, $st)   # ord = 1: 762.276 μs (881 allocations: 837.47 KiB)
-                                        # ord = 2: 1.763 ms (881 allocations: 837.47 KiB)
-                                        # ord = 3: 20.683 ms (881 allocations: 837.47 KiB)
+#@btime $laplacian($wf, $X, $ps, $st)   # ord = 1: 738.616 μs (581 allocations: 720.28 KiB)
+                                        # ord = 2: 1.747 ms (581 allocations: 720.28 KiB)
+                                        # ord = 3: 20.752 ms (581 allocations: 720.28 KiB)
 
 opt_vmc = VMC(5000, 0.015, ACEpsi.vmc.adamW(); lr_dc = 100.0)
 wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
