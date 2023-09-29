@@ -1,5 +1,7 @@
 module ACEpsi
 
+using Distributed
+
 # define operation on HyperDualNumbers
 include("hyper.jl")
 
