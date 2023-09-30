@@ -139,9 +139,13 @@ end
 function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
-                clip = 5.)
+                clip = 5.; batch_size = 1)
     x, ~, acc = sampler(sam, ps, st)
-    Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
+    # Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
+    raw_data = pmap(x; batch_size = batch_size) do d
+        Elocal(ham, wf, d, ps, st)
+    end
+    Eloc = vcat(raw_data)
     val = sum(Eloc) / length(Eloc)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
     ΔE = Eloc .- median( Eloc )
