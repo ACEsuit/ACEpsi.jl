@@ -46,12 +46,15 @@ eval(wf, X::AbstractVector, ps, st) = wf(X, ps, st)[1]
 function MHstep(r0::Vector{Vector{SVector{3, TT}}}, 
                 Ψx0::Vector{T}, 
                 Nels::Int64, 
-                sam::MHSampler, ps::NamedTuple, st::NamedTuple) where {T, TT}
+                sam::MHSampler, ps::NamedTuple, st::NamedTuple; batch_size = 1) where {T, TT}
     rand_sample(X::Vector{SVector{3, TX}}, Nels::Int, Δt::Float64) where {TX}= begin
         return X + Δt * randn(SVector{3, TX}, Nels)
     end
     rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
-    Ψxp::Vector{T} = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
+    raw_data = pmap(rp; batch_size = batch_size) do d
+        sam.Ψ(d, ps, st)[1]
+    end
+    Ψxp = vcat(raw_data)
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
