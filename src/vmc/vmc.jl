@@ -6,6 +6,7 @@ using ACEpsi
 using Distributed
 using ParallelDataTransfer: @getfrom
 using SharedArrays
+using JLD # for intermediate results
 
 mutable struct VMC
    tol::Number
@@ -208,6 +209,11 @@ function gd_GradientByVMC_parallel(opt_vmc::VMC, sam::MHSampler, ham::SumH,
       # err
       verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, λ₀/N, σ, res, α, acc, sam.Δt)
       err_opt[k] = λ₀
+
+      if mod(k, 10) == 0
+         Degree = size(ps.hidden1.W)[1]
+         save("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/DataDeg$(Degree)Ord$(B)_$k.jld", "params", ps.hidden1.W, "EperN", err_opt/N, "Sig", σ) 
+      end
 
       if res < opt_vmc.tol
          break;
