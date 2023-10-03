@@ -1,16 +1,9 @@
 
 using Polynomials4ML
-<<<<<<< HEAD
-using Polynomials4ML: OrthPolyBasis1D3T
-using Polynomials4ML: PooledSparseProduct, SparseSymmProd, SparseSymmProdDAG, release!
-using Polynomials4ML.Utils: gensparse
-using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
-=======
 using Polynomials4ML: OrthPolyBasis1D3T, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
 using ObjectPools: unwrap
->>>>>>> parallel_mc
 
 import ForwardDiff
 
@@ -18,11 +11,7 @@ mutable struct BFwf1{T, TT, TPOLY, TE}
    trans::TT
    polys::TPOLY
    pooling::PooledSparseProduct{2}
-<<<<<<< HEAD
-   corr::Any
-=======
    corr::SparseSymmProdDAG
->>>>>>> parallel_mc
    W::Matrix{T}
    envelope::TE
    spec::AbstractArray
@@ -72,11 +61,8 @@ function BFwf1(Nel::Integer, polys; totdeg = length(polys),
 
    corr1 = SparseSymmProdDAG(spec)
    corr = corr1
-<<<<<<< HEAD
-=======
 
    spec = Tuple.(spec)
->>>>>>> parallel_mc
 
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
@@ -168,8 +154,6 @@ function evaluate(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
    nX = length(X)
    A = assemble_A(wf, X, Σ)
    AA = Polynomials4ML.evaluate(wf.corr, A)  # nX x length(wf.corr)
-<<<<<<< HEAD
-=======
    
    # the only basis to be purified are those with same spin
    # scan through all corr basis, if they comes from same spin, remove self interation by using basis 
@@ -179,7 +163,6 @@ function evaluate(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
    # === purification goes here === #
    
    # === #
->>>>>>> parallel_mc
    Φ = wf.Φ
    mul!(Φ, unwrap(AA), wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
@@ -294,10 +277,6 @@ function gradient(wf::BFwf1, X, Σ)
    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
    ∂A = wf.∂A   # zeros(size(A))
    Polynomials4ML.pullback_arg!(∂A, ∂AA, wf.corr, unwrap(AA))
-<<<<<<< HEAD
-   # Polynomials4ML._pb_evaluate!(∂A, ∂AA, wf.corr, unwrap(AA))
-=======
->>>>>>> parallel_mc
    release!(AA)
 
    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 
