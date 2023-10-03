@@ -159,32 +159,3 @@ function grad(wf, x, ps, st, E);
    g = t(g)
    return g;
 end
-
-# ==== 
-function Eloc_Exp_TV_clip_parallel(wf, ps, st,
-                sam::MHSampler, 
-                ham::SumH;
-                clip = 5.)
-    # spawn jobs
-    job_list = [@spawnat i sampler(sam, ps, st) for i in procs()]
-    res = fetch.(job_list)
-            
-    # reduce results
-    x = reduce(vcat, [res[i][1] for i in procs()])
-    x0 = reduce(vcat, [res[i][2] for i in procs()])
-    acc = mean(reduce(vcat, [res[i][3] for i = 1:nprocs()]))
-    
-    # set up Eloc
-    Eloc = SharedArray{Float64}(length(x))
-    @sync @distributed for i in 1:length(x)
-        Eloc[i] = Elocal(ham, wf, x[i], ps, st)
-    end
-    val = sum(Eloc) / length(Eloc)
-    var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
-    ΔE = Eloc .- median( Eloc )
-    a = clip * mean( abs.(ΔE) )
-    ind = findall(x -> abs(x) > a, ΔE)
-    ΔE[ind] = (a * sign.(ΔE) .* (1 .+ log.((1 .+(abs.(ΔE)/a).^2)/2)))[ind]
-    E_clip = median(Eloc) .+ ΔE
-    return val, var, E_clip, x, acc
-end
