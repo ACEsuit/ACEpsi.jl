@@ -2,9 +2,8 @@
 using Polynomials4ML, ACEbase, Printf, ACEpsi 
 using ACEpsi: BFwf1, gradient, laplacian
 using LinearAlgebra
-#using Random
-#Random.seed!(123)
-##
+
+
 function lap_test(f, Δf, X)
    F = f(X) 
    ΔF = Δf(X)
@@ -63,7 +62,7 @@ function grad_test(f, df, X)
 end
 
 "This function should be removed later to test in a nicer way..."
-function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
+function _fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
     errors = Float64[]
     E = F(x, Σ)
     dE = dF
@@ -99,9 +98,8 @@ function fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
 const ↑, ↓, ∅ = '↑','↓','∅'
 Nel = 5
 polys = legendre_basis(8)
-wf = BFwf1(Nel, polys; ν=3)
-
-X = 2 * rand(Nel) .- 1
+wf = BFwf1(Nel, polys; ν = 3)
+X = randn(Nel)
 Σ = rand([↑, ↓], Nel)
 
 wf(X, Σ)
@@ -111,10 +109,9 @@ g = gradient(wf, X, Σ)
 
 using LinearAlgebra
 using Printf
-#using ACEbase.Testing: fdtest 
 
 @info("Fd test of gradient w.r.t. X")
-fdtest(wf, Σ, g, X)
+@test _fdtest(wf, Σ, g, X)
 
 
 # ##
@@ -220,6 +217,3 @@ wf2 = ACEpsi.set_params!(wf2, param1)
 
 ##
 
-@warn("removed compat test since json file is missing")
-# @info("Test compatibility with ACESchrodinger") # Jerry: Not sure if this should be kept in the same file
-# include("compare_bflow.jl")

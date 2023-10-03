@@ -5,34 +5,38 @@ using Distributed: @spawnat, @fetch, @distributed
 using SharedArrays
 
 export MHSampler
+using ACEpsi.AtomicOrbitals: Nuc
+using Lux: Chain
+
 """
 `MHSampler`
 Metropolis-Hastings sampling algorithm.
 """
-mutable struct MHSampler
-    Nel::Int
+mutable struct MHSampler{T}
+    Nel::Int64
+    nuclei::Vector{Nuc{T}}
     Δt::Float64                 # step size (of Gaussian proposal)
-    burnin::Int                 # burn-in iterations
-    lag::Int                    # iterations between successive samples
-    N_batch::Int                # batch size
-    nchains::Int                # Number of chains
-    Ψ                           # many-body wavefunction for sampling
-    x0::Any                     # initial sampling 
+    burnin::Int64               # burn-in iterations
+    lag::Int64                  # iterations between successive samples
+    N_batch::Int64              # batch size
+    nchains::Int64              # Number of chains
+    Ψ::Chain                    # many-body wavefunction for sampling
+    x0::Vector                  # initial sampling 
     walkerType::String          # walker type: "unbiased", "Langevin"
     bc::String                  # boundary condition
     d::sampler_dimension        # electron dimension
 end
 
-MHSampler(Ψ, Nel; Δt = 0.1, 
+MHSampler(Ψ, Nel, nuclei; Δt = 0.1, 
             burnin = 100, 
             lag = 10, 
             N_batch = 1, 
             nchains = 1000,
-            x0 = [],
+            x0 = Vector{Vector{SVector{3, Float64}}}(undef, nchains),
             wT = "unbiased", 
             bc = "periodic", 
-            d = d3()) =
-    MHSampler(Nel, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, d)
+            type = 1) =
+    MHSampler(Nel, nuclei, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, type)
 
 
 """
@@ -42,36 +46,32 @@ biased random walk:   R_n+1 = R_n + Δ⋅Wn + Δ⋅∇(log Ψ)(R_n)
 
 eval(wf, X::AbstractVector, ps, st) = wf(X, ps, st)[1]
 
-function MHstep(r0, 
-                Ψx0, 
-                Nels::Int, 
-                sam::MHSampler, ps, st)
-    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d))
-    Ψxp = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
+function MHstep(r0::Vector{Vector{SVector{3, TT}}}, 
+                Ψx0::Vector{T}, 
+                Nels::Int64, 
+                sam::MHSampler, ps::NamedTuple, st::NamedTuple; batch_size = 1) where {T, TT}
+    rand_sample(X::Vector{SVector{3, TX}}, Nels::Int, Δt::Float64) where {TX}= begin
+        return X + Δt * randn(SVector{3, TX}, Nels)
+    end
+    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
+    raw_data = pmap(rp; batch_size = batch_size) do d
+        sam.Ψ(d, ps, st)[1]
+    end
+    Ψxp = vcat(raw_data)
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
-    r = acc .*  rp + (1.0 .- acc) .* r0
+    r::Vector{Vector{SVector{3, TT}}} = acc .*  rp + (1.0 .- acc) .* r0
     Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
     return r, Ψ, acc
 end
-
-rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3) = begin
-    @view(X[rand(1:Nels)]) .+= Δt * randn(SVector{3, eltype(X[1])}, 1)
-    return X
-end
-
-rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T) where T <: Union{d1, d1_lattice} = begin
-    @view(X[rand(1:Nels)]) .+= Δt * randn(1)
-    return X
-end
-
+ 
 """
 acceptance rate for log|Ψ|
 ψₜ₊₁²/ψₜ² = exp((log|Ψₜ₊₁|^2-log |ψₜ|^2))
 """
 
-function accfcn(Ψx0, Ψxp)  
+function accfcn(Ψx0::Vector{T}, Ψxp::Vector{T}) where {T} 
     acc = exp.(Ψxp .- Ψx0)
     return acc
 end
@@ -79,22 +79,35 @@ end
 """============== Metropolis sampling algorithm ============
 type = "restart"
 """
-rand_init(Δt::Number, Nel::Int, nchains::Int, d::d3) = [Δt * randn(SVector{3, Float64}, Nel) for _ = 1:nchains]
 
-rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1) = [Δt * randn(Nel) for _ = 1:nchains]
-
-# same as d1 rand_init, except shifted by equally spaced lattice
-rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [Δt * randn(Nel) + d.L for _ = 1:nchains]
+function pos(sam::MHSampler)
+    T = eltype(sam.nuclei[1].rr)
+    M = length(sam.nuclei)
+    rr = zeros(SVector{3, T}, sam.Nel)
+    tt = zeros(Int, 1)
+    @inbounds begin
+        for i = 1:M
+            @simd ivdep for j = Int(ceil(sam.nuclei[i].charge))
+                tt[1] += 1
+                rr[tt[1]] = sam.nuclei[i].rr
+            end
+        end
+    end
+    return rr
+end
 
 function sampler_restart(sam::MHSampler, ps, st)
-    r0 = rand_init(sam.Δt, sam.Nel, sam.nchains, sam.d)
+    r = pos(sam)
+    T = eltype(r[1])
+    r0 = sam.x0
+    r0 = [sam.Δt * randn(SVector{3, T}, sam.Nel) + r for _ = 1:sam.nchains]
     Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
-    acc = []
-    for _ = 1 : sam.burnin
+    acc = zeros(T, sam.burnin)
+    for i = 1 : sam.burnin
         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
-        push!(acc,a)
+        acc[i] = mean(a)
     end
-    return r0, Ψx0, mean(mean(acc))
+    return r0, Ψx0, mean(acc)
 end
 
 """
@@ -102,18 +115,15 @@ type = "continue"
 start from the previous sampling x0
 """
 function sampler(sam::MHSampler, ps, st)
-    if isempty(sam.x0)
-        r0, Ψx0, = sampler_restart(sam, ps, st);
-    else
-        r0 = sam.x0
-        Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
-    end
-    acc = []
+    r0 = sam.x0
+    Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+    T = eltype(r0[1][1])
+    acc = zeros(T, sam.lag)
     for i = 1:sam.lag
         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
-        push!(acc, a)
+        acc[i] = mean(a)
     end
-    return r0, Ψx0, mean(mean(acc))
+    return r0, Ψx0, mean(acc)
 end
 
 
@@ -132,9 +142,13 @@ end
 function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
-                clip = 5.)
+                clip = 5.; batch_size = 1)
     x, ~, acc = sampler(sam, ps, st)
-    Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
+    # Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
+    raw_data = pmap(x; batch_size = batch_size) do d
+        Elocal(ham, wf, d, ps, st)
+    end
+    Eloc = vcat(raw_data)
     val = sum(Eloc) / length(Eloc)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
     ΔE = Eloc .- median( Eloc )

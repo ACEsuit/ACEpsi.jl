@@ -1,9 +1,16 @@
 
 using Polynomials4ML
+<<<<<<< HEAD
 using Polynomials4ML: OrthPolyBasis1D3T
 using Polynomials4ML: PooledSparseProduct, SparseSymmProd, SparseSymmProdDAG, release!
 using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
+=======
+using Polynomials4ML: OrthPolyBasis1D3T, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
+using Polynomials4ML.Utils: gensparse
+using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr 
+using ObjectPools: unwrap
+>>>>>>> parallel_mc
 
 import ForwardDiff
 
@@ -11,10 +18,14 @@ mutable struct BFwf1{T, TT, TPOLY, TE}
    trans::TT
    polys::TPOLY
    pooling::PooledSparseProduct{2}
+<<<<<<< HEAD
    corr::Any
+=======
+   corr::SparseSymmProdDAG
+>>>>>>> parallel_mc
    W::Matrix{T}
    envelope::TE
-   spec::Vector{Vector{Int64}} # corr.spec TODO: this needs to be remove
+   spec::AbstractArray
    # ---------------- Temporaries 
    P::Matrix{T}
    ∂P::Matrix{T}
@@ -61,6 +72,11 @@ function BFwf1(Nel::Integer, polys; totdeg = length(polys),
 
    corr1 = SparseSymmProdDAG(spec)
    corr = corr1
+<<<<<<< HEAD
+=======
+
+   spec = Tuple.(spec)
+>>>>>>> parallel_mc
 
    # initial guess for weights 
    Q, _ = qr(randn(T, length(corr), Nel))
@@ -89,7 +105,7 @@ This function return correct Si for pooling operation.
 function onehot!(Si, i, Σ)
    Si .= 0
    for k = 1:length(Σ)
-      Si[k, spin2num(Σ[k])] = 1
+      Si[k, spin2num1d(Σ[k])] = 1
    end
    # set current electron to ϕ, also remove their contribution in the sum of ↑ or ↓ basis
    Si[i, 1] = 1 
@@ -97,6 +113,19 @@ function onehot!(Si, i, Σ)
    Si[i, 3] = 0
 end
 
+"""
+This function convert spin to corresponding integer value used in spec
+"""
+function spin2num1d(σ)
+   if σ == '↑'
+      return 2
+   elseif σ == '↓'
+      return 3
+   elseif σ == '∅'
+      return 1
+   end
+   error("illegal spin char for spin2num")
+end
 
 
 """
@@ -139,6 +168,18 @@ function evaluate(wf::BFwf1, X::AbstractVector, Σ, Pnn=nothing)
    nX = length(X)
    A = assemble_A(wf, X, Σ)
    AA = Polynomials4ML.evaluate(wf.corr, A)  # nX x length(wf.corr)
+<<<<<<< HEAD
+=======
+   
+   # the only basis to be purified are those with same spin
+   # scan through all corr basis, if they comes from same spin, remove self interation by using basis 
+   # from same spin
+   # first we have to construct coefficent for basis coming from same spin, that is in other words the coefficent
+   # matrix of the original polynomial basis, this will be pass from the argument Pnn
+   # === purification goes here === #
+   
+   # === #
+>>>>>>> parallel_mc
    Φ = wf.Φ
    mul!(Φ, unwrap(AA), wf.W) # nX x nX
    Φ = Φ .* [Σ[i] == Σ[j] for j = 1:nX, i = 1:nX] # the resulting matrix should contains two block each comes from each spin
@@ -253,7 +294,10 @@ function gradient(wf::BFwf1, X, Σ)
    # ∂A = ∂ψ/∂A = ∂ψ/∂AA * ∂AA/∂A -> use custom pullback
    ∂A = wf.∂A   # zeros(size(A))
    Polynomials4ML.pullback_arg!(∂A, ∂AA, wf.corr, unwrap(AA))
+<<<<<<< HEAD
    # Polynomials4ML._pb_evaluate!(∂A, ∂AA, wf.corr, unwrap(AA))
+=======
+>>>>>>> parallel_mc
    release!(AA)
 
    # ∂P = ∂ψ/∂P = ∂ψ/∂A * ∂A/∂P -> use custom pullback 

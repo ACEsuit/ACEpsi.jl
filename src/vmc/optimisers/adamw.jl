@@ -1,6 +1,5 @@
 using Optimisers
 
-
 mutable struct adamW <: opt
     β::Tuple
     γ::Number
@@ -15,7 +14,7 @@ function Optimization(type::adamW, wf, ps, st, sam::MHSampler, ham::SumH, α)
     st_opt = Optimisers.setup(Optimisers.AdamW(α, type.β, type.γ, type.ϵ), ps)
     st_opt, ps = Optimisers.update(st_opt, ps, g)
     res = norm(destructure(g)[1])
-    return ps, acc, λ₀, res, σ
+    return ps, acc, λ₀, res, σ, x0
 end
 
 
@@ -25,5 +24,5 @@ function Optimization_parallel(type::adamW, wf, ps, st, sam::MHSampler, ham::Sum
     st_opt = Optimisers.setup(Optimisers.AdamW(α, type.β, type.γ, type.ϵ), ps)
     st_opt, ps = Optimisers.update(st_opt, ps, g)
     res = norm(destructure(g)[1])
-    return ps, acc, λ₀, res, σ
+    return ps, acc, λ₀, res, σ, x0
 end

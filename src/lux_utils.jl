@@ -2,12 +2,12 @@ using LuxCore
 using HyperDualNumbers
 
 function replace_namedtuples(nt, rp_st, Σ)
-    if :tmp in keys(nt) || :pool in keys(nt) || length(nt) == 0
+    if :tmp in keys(nt) || :pool in keys(nt) || length(nt) == 0 || :ζ in keys(nt) 
         return (; nt...)
     else
-        for i in 1:length(nt)
+        for i in 1:length(keys(nt))
             # @show nt[i]
-            if length(nt[i]) == 0                
+            if length(nt[i]) == 0         
                 rp_st = (; rp_st..., (; keys(nt)[i] => (Σ = Σ, ))...)
             else
                 rp_st = (; rp_st..., keys(nt)[i] => replace_namedtuples(nt[i], (;), Σ))

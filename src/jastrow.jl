@@ -31,7 +31,7 @@ function evaluate(f::Jastrow, X::AbstractVector, Σ)
 
     # trans
 
-    return exp(γ)
+    return 1.0
 end
 
 
@@ -72,7 +72,7 @@ function evaluate(f::JPauliNet, X::AbstractVector, Σ)
             γ += -(1/4) / (1+norm(X[i] - X[j]))
         end
     end
-    return exp(γ)
+    return 1.0
 end
 
 struct JPauliNetLayer <: AbstractExplicitLayer 
