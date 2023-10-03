@@ -1,6 +1,6 @@
 using Polynomials4ML, Random 
 # using Polynomials4ML: OrthPolyBasis1D3T
-using Polynomials4ML: AbstractPoly4MLBasis, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd
+using Polynomials4ML: AbstractPoly4MLBasis, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, LinearLayer
 using ObjectPools: release!
 using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
@@ -85,7 +85,7 @@ function BFwf1dps_lux(Nel::Integer, Pn::AbstractPoly4MLBasis; totdeg = length(Pn
 
     _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
 
-    BFwf_chain = Chain(; trans = l_trans, diff = Lux.BranchLayer(embed_layers...), Pn = Lux.Parallel(nothing, l_Pns...), bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, hidden1 = ACEpsi.DenseLayer(Nel, length(corr1)), 
+    BFwf_chain = Chain(; trans = l_trans, diff = Lux.BranchLayer(embed_layers...), Pn = Lux.Parallel(nothing, l_Pns...), bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
                          Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
     return BFwf_chain, spec, spec1p
 end
