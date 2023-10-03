@@ -96,7 +96,7 @@ function pos(sam::MHSampler)
     return rr
 end
 
-function sampler_restart(sam::MHSampler, ps, st)
+function sampler_restart(sam::MHSampler, ps, st; batch_size = 1)
     r = pos(sam)
     T = eltype(r[1])
     r0 = sam.x0
@@ -104,7 +104,7 @@ function sampler_restart(sam::MHSampler, ps, st)
     Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     acc = zeros(T, sam.burnin)
     for i = 1 : sam.burnin
-        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
+        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st; batch_size = batch_size);
         acc[i] = mean(a)
     end
     return r0, Ψx0, mean(acc)
@@ -114,13 +114,13 @@ end
 type = "continue"
 start from the previous sampling x0
 """
-function sampler(sam::MHSampler, ps, st)
+function sampler(sam::MHSampler, ps, st; batch_size = 1)
     r0 = sam.x0
     Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     T = eltype(r0[1][1])
     acc = zeros(T, sam.lag)
     for i = 1:sam.lag
-        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st);
+        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st; batch_size = batch_size);
         acc[i] = mean(a)
     end
     return r0, Ψx0, mean(acc)
@@ -142,8 +142,8 @@ end
 function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
-                clip = 5.; batch_size = 1)
-    x, ~, acc = sampler(sam, ps, st)
+                clip = 5., batch_size = 1)
+    x, ~, acc = sampler(sam, ps, st, batch_size = batch_size)
     # Eloc = Elocal.(Ref(ham), Ref(wf), x, Ref(ps), Ref(st))
     raw_data = pmap(x; batch_size = batch_size) do d
         Elocal(ham, wf, d, ps, st)
