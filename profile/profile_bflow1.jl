@@ -1,6 +1,6 @@
 
 
-using Polynomials4ML, ACEcore, ACEpsi, ACEbase, Printf
+using Polynomials4ML, ACEpsi, ACEbase, Printf
 using ACEpsi: BFwf, gradient, evaluate, laplacian 
 using LinearAlgebra
 using BenchmarkTools
