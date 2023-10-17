@@ -6,7 +6,7 @@ using ACEpsi
 using Distributed
 using ParallelDataTransfer: @getfrom
 using SharedArrays
-using JLD # for intermediate results
+# using JLD # for intermediate results
 
 mutable struct VMC
    tol::Number
