@@ -27,18 +27,6 @@ function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::LinearLayer{false}, x:
    return val, pb
 end
 
-import Polynomials4ML: cart2spher
-function cart2spher(R::AbstractVector{T}) where {T}
-	@assert length(R) == 3
-	r_12 = R[1]^2+R[2]^2
-	r = sqrt(r_12 + R[3]^2)
-	r_2d1 = R[2]/abs(R[1])
-	sinφ, cosφ = r_2d1/sqrt(1+r_2d1^2), sign(R[1])/sqrt(1+r_2d1^2)
-	cosθ = R[3] / r
-	sinθ = sqrt(r_12) / r
-	return Polynomials4ML.SphericalCoords(r, cosφ, sinφ, cosθ, sinθ)
-end
-
 # ----------------- custom layers ------------------
 struct MaskLayer <: AbstractExplicitLayer 
    nX::Int64
