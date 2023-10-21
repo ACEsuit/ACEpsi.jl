@@ -5,7 +5,7 @@ using Optimisers
 using Polynomials4ML
 using Random
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
-using ACEpsi.AtomicOrbitals: _invmap
+using ACEpsi.AtomicOrbitals: _invmap, Nuc
 
 mutable struct VMC_multilevel
     tol::Float64

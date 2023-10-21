@@ -32,7 +32,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
    acc_opt = zeros(acc_step)
 
    verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
-   verbose && @printf("   k |  𝔼[E_L]   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
+   verbose && @printf("   k |  𝔼[E_L]   |  𝔼[E_L]/N   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
    for k = 1 : opt_vmc.MaxIter
        sam.x0 = x0
        
@@ -47,8 +47,12 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
        ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α; batch_size = batch_size)
 
        # err
-       verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
+       verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, λ₀/N, σ, res, α, acc, sam.Δt)
        err_opt[k] = λ₀
+
+      if mod(k, 10) == 0 # check point
+         save("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/Data_$k.jld", "params", ps.hidden1.W, "err_opt", err_opt)
+      end
 
        if res < opt_vmc.tol
            break;
