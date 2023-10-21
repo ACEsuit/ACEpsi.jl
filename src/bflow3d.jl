@@ -40,7 +40,7 @@ end
    T = eltype(Φ)
    A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX] 
    val::Matrix{T} = Φ .* A
-   release!(A)
+   release!(Φ)
    return val, st
 end
 
@@ -51,7 +51,7 @@ function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::MaskLayer, Φ, ps, st)
    function pb(dΦ)
       return NoTangent(), NoTangent(), dΦ[1] .* A, NoTangent(), NoTangent()
    end
-   release!(A)
+   release!(Φ)
    return (val, st), pb
 end
 
