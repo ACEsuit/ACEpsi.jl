@@ -64,6 +64,7 @@ end
 
 rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3) = begin
     @view(X[rand(1:Nels)]) .+= Δt * randn(SVector{3, eltype(X[1])}, 1)
+    @error("Incorrect implementation, should not use @view.")
     return X
 end
 
@@ -71,7 +72,6 @@ rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T) where T <: Union{d1
     X1 = deepcopy(X)
     rand_index = rand(1:Nels)
     X1[rand_index] += Δt * rand(Normal(0.0, 1.0))
-    # @view(X[rand(1:Nels)]) .+= Δt * rand(Normal(0.0, 1.0)) # need to ask what @view REALLY is
     return X1
 end
 
