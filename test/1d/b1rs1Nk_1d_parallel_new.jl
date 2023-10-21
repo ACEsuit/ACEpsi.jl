@@ -21,6 +21,7 @@ end
     using BenchmarkTools
     using HyperDualNumbers: Hyper
     using SpecialFunctions
+    using ForwardDiff: Dual
 end
 @info("Running 1dLuxCode")
 
@@ -43,7 +44,7 @@ end
     totdegree = [34]
     ord = length(totdegree)
     Pn = Polynomials4ML.RTrigBasis(maximum(totdegree))
-    trans = (x -> 2 * pi * x / L)
+    trans = (x -> (2 * pi * x / L)::Union{Float64, Dual{Nothing, Float64, 1}, Hyper{Float64}})#::typeof(x))# ::Union{Float64, Dual{Nothing, Float64, 1}, Hyper{Float64}})
 
     # @info("setting up old wf in new code")
     _get_ord = bb -> sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0 ? 1 : sum([bb[i].n .!= 1 for i = 1:length(bb)])
