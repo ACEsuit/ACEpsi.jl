@@ -6,7 +6,7 @@ using Optimisers
 using ACEpsi
 using Distributed
 using SharedArrays
-using`` JSON3
+using JSON3
 
 mutable struct VMC
    tol::Number
