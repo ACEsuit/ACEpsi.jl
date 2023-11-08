@@ -70,13 +70,3 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
    return wf, err_opt, ps
 end
 
-
-function _invmap(a::AbstractVector)
-   inva = Dict{eltype(a), Int}()
-   for i = 1:length(a) 
-      inva[a[i]] = i 
-   end
-   return inva 
-end
-
-

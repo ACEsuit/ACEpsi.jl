@@ -85,6 +85,26 @@ lux(basis::JPauliNet) = JPauliNetLayer(basis)
 (l::JPauliNetLayer)(X, ps, st) = 
       evaluate(l.basis, X, st.Σ), st
 
+##
+"""
+PsiTransformer JS factor
+https://arxiv.org/pdf/2211.13672.pdf
+"""
+struct JSPsiTrasnformer <: AbstractExplicitLayer end
+
+using LuxCore
+LuxCore.initialparameters(rng::AbstractRNG, l::JSPsiTrasnformer) = (α1 = randn(), α2 = randn())
+LuxCore.initialstates(rng::AbstractRNG, l::JSPsiTrasnformer) = NamedTuple()
+
+(l::JSPsiTrasnformer)(X, ps, st) = begin
+    Nel = size(X, 1)
+    J1 = -0.25 * sum(ps.α1 ^ 2 / (ps.α1 + norm(X[i] - X[j])) for i = 1:Nel for j = i+1:Nel if st.Σ[i] == st.Σ[j])
+    J2 = -0.5 * sum(ps.α2 ^ 2 / (ps.α2 + norm(X[i] - X[j])) for i = 1:Nel for j = i+1:Nel if st.Σ[i] ≠ st.Σ[j])
+    return J1 + J2, st
+end
+
+
+##
 
 mutable struct JCasino1dVb{T}
     Lu::T # cutoff
