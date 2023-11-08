@@ -3,6 +3,7 @@ using StaticArrays
 using Optimisers
 using Distributed: @spawnat, @fetch, @distributed
 using SharedArrays
+using Distributions
 
 export MHSampler
 """
@@ -46,7 +47,9 @@ function MHstep(r0,
                 Ψx0, 
                 Nels::Int, 
                 sam::MHSampler, ps, st; batch_size = 1)
-    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d))
+    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d)) # might have found a mistake here. Once this line is executed, rp = r0 so... (see below)
+    # rp = deepcopy(r0) # ACESchrodinger code
+    # rand_sample.(rp, Ref(Nels), Ref(sam.Δt), Ref(sam.d))
     raw_data = pmap(rp; batch_size = batch_size) do d
         sam.Ψ(d, ps, st)[1]
     end
@@ -54,19 +57,22 @@ function MHstep(r0,
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
-    r = acc .*  rp + (1.0 .- acc) .* r0
+    r = acc .*  rp + (1.0 .- acc) .* r0 # ctd: so r is the proposed position even if the move is rejected
     Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
     return r, Ψ, acc
 end
 
 rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3) = begin
     @view(X[rand(1:Nels)]) .+= Δt * randn(SVector{3, eltype(X[1])}, 1)
+    @error("Incorrect implementation, should not use @view.")
     return X
 end
 
 rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T) where T <: Union{d1, d1_lattice} = begin
-    @view(X[rand(1:Nels)]) .+= Δt * randn(1)
-    return X
+    X1 = deepcopy(X)
+    rand_index = rand(1:Nels)
+    X1[rand_index] += Δt * rand(Normal(0.0, 1.0))
+    return X1
 end
 
 """
@@ -87,11 +93,17 @@ rand_init(Δt::Number, Nel::Int, nchains::Int, d::d3) = [Δt * randn(SVector{3, 
 rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1) = [Δt * randn(Nel) for _ = 1:nchains]
 
 # same as d1 rand_init, except shifted by equally spaced lattice
-rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [Δt * randn(Nel) + d.L for _ = 1:nchains]
+rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [[x_e + randn() for x_e in d.L] for _ = 1:nchains]
 
 function sampler_restart(sam::MHSampler, ps, st; batch_size = 1)
     r0 = rand_init(sam.Δt, sam.Nel, sam.nchains, sam.d)
-    Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+    # println("Initial sample: ")
+    # @show r0
+    # Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+    raw_data = pmap(r0; batch_size = batch_size) do d
+        sam.Ψ(d, ps, st)[1]
+    end
+    Ψx0 = vcat(raw_data)
     acc = []
     for _ = 1 : sam.burnin
         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st; batch_size = batch_size);
@@ -135,7 +147,7 @@ end
 function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
-                clip = 5., batch_size = 1)
+                clip = 20., batch_size = 1) # change clipping (5 -> 20) to see what happens
     x, ~, acc = sampler(sam, ps, st; batch_size = batch_size)
     raw_data = pmap(x; batch_size = batch_size) do d
         Elocal(ham, wf, d, ps, st)

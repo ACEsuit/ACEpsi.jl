@@ -15,17 +15,9 @@ using ChainRulesCore
 using ChainRulesCore: NoTangent
 # ----------------------------------------
 # some quick hacks that we should take care in P4ML later with careful thoughts
-using ObjectPools: acquire!
+using ObjectPools: acquire!, release!
 using StrideArrays
 using ObjectPools: unwrap
-
-function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::LinearLayer{false}, x::AbstractMatrix, ps, st)
-   val = l(x, ps, st)
-   function pb(A)
-      return NoTangent(), NoTangent(), A[1] * ps.W, (W = transpose(PtrArray(A[1])) * unwrap(x),), NoTangent() #(W = transpose(A[1]) * x,), NoTangent()
-   end
-   return val, pb
-end
 
 import Polynomials4ML: cart2spher
 function cart2spher(R::AbstractVector{T}) where {T}
@@ -48,6 +40,7 @@ end
    T = eltype(Φ)
    A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX] 
    val::Matrix{T} = Φ .* A
+   release!(Φ)
    return val, st
 end
 
@@ -58,6 +51,7 @@ function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::MaskLayer, Φ, ps, st)
    function pb(dΦ)
       return NoTangent(), NoTangent(), dΦ[1] .* A, NoTangent(), NoTangent()
    end
+   release!(Φ)
    return (val, st), pb
 end
 

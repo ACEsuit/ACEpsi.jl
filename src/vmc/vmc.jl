@@ -1,12 +1,12 @@
 export VMC, gd_GradientByVMC, EmbeddingW!, _invmap, VMC_multilevel_1d
+
 using Printf
 using LinearAlgebra
 using Optimisers
 using ACEpsi
 using Distributed
-using ParallelDataTransfer: @getfrom
 using SharedArrays
-using JLD # for intermediate results
+using JSON3
 
 mutable struct VMC
    tol::Number
@@ -24,6 +24,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
 
    res, λ₀, α = 1.0, 0., opt_vmc.lr
    err_opt = zeros(opt_vmc.MaxIter)
+   σ_opt = zeros(opt_vmc.MaxIter)
    N = length(st.trans.Σ)
 
    
@@ -32,27 +33,39 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
    acc_opt = zeros(acc_step)
 
    verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
-   verbose && @printf("   k |  𝔼[E_L]   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
+   verbose && @printf("   k |  𝔼[E_L]   |  𝔼[E_L]/N   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
    for k = 1 : opt_vmc.MaxIter
-       sam.x0 = x0
+      sam.x0 = x0
        
-       # adjust Δt
-       acc_opt[mod(k,acc_step)+1] = acc
-       sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
+      # adjust Δt
+      acc_opt[mod(k,acc_step)+1] = acc
+      sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
 
-       # adjust learning rate
-       α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
+      # adjust learning rate
+      α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
 
-       # optimization
-       ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α; batch_size = batch_size)
+      # optimization
+      ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α; batch_size = batch_size)
 
-       # err
-       verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
-       err_opt[k] = λ₀
+      # err
+      verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, λ₀/N, σ, res, α, acc, sam.Δt)
+      err_opt[k] = λ₀
+      σ_opt[k] = σ
 
-       if res < opt_vmc.tol
-           break;
-       end  
+      if mod(k, 10) == 0 # save intermediate results
+         json_E = JSON3.write(err_opt)
+         json_σ = JSON3.write(σ_opt)
+         json_W = JSON3.write(ps.hidden1.W)
+         json_Dic = """{"E": $(json_E), "σ": $(json_σ), "W": $(json_W)}"""
+         open("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/Data$k.json", "w") do io
+            JSON3.write(io, JSON3.read(json_Dic))
+         end
+         # save("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/Data_$k.jld", "params", ps.hidden1.W, "err_opt", err_opt) # retiring JLD
+      end
+
+      if res < opt_vmc.tol
+         break;
+      end  
    end
    return wf, err_opt, ps
 end
@@ -66,89 +79,4 @@ function _invmap(a::AbstractVector)
    return inva 
 end
 
-# TODO: this should be implemented to recursively embed the wavefunction
-function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2)
-   readable_spec = ACEpsi.displayspec(spec, spec1p)
-   readable_spec2 = ACEpsi.displayspec(spec2, spec1p2)
-   @assert size(ps.hidden1.W, 2) == size(ps2.hidden1.W, 2)
-   @assert size(ps.hidden1.W, 1) ≤ size(ps2.hidden1.W, 1)
-   @assert all(t in readable_spec2 for t in readable_spec)
 
-   # set all parameters to zero
-   ps2.hidden1.W .= 0.0
-
-   # _map[spect] = index in readable_spec2
-   _map  = _invmap(readable_spec2)
-
-   # embed
-   for (idx, t) in enumerate(readable_spec)
-      ps2.hidden1.W[_map[t], :] = ps.hidden1.W[idx, :]
-   end
-
-   return ps2
-end
-
-function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list; ITERS = [100 for _ in wf_list], verbose = true, accMCMC = [10, [0.45, 0.55]])
-
-   # first level
-   wf = wf_list[1]
-   ps = ps_list[1]
-   st = st_list[1]
-   spec = spec_list[1]
-   spec1p = spec1p_list[1]
-
-   # burn in 
-   res, λ₀, α = 1.0, 0., opt_vmc.lr
-   err_opt = zeros(opt_vmc.MaxIter)
-
-   x0, ~, acc = sampler_restart(sam, ps, st)
-   acc_step, acc_range = accMCMC
-   acc_opt = zeros(acc_step)
-   
-
-   verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
-
-   verbose && @printf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
-   for l in 1:length(wf_list)
-      # do embeddings
-      if l > 1
-         wf = wf_list[l]
-         # embed
-         ps = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l])
-         st = st_list[l]
-         spec = spec_list[l]
-         spec1p = spec1p_list[l]
-         sam.Ψ = wf
-      end
-
-      ν = maximum(length.(spec))
-      SB = size(ps.hidden1.W, 1)
-      # optimization
-      @info("level = $l, order = $ν, size of basis = $SB")
-      opt_vmc.MaxIter = ITERS[l]
-      for k = 1 : opt_vmc.MaxIter
-         sam.x0 = x0
-         
-         # adjust Δt
-         acc_opt[mod(k,acc_step)+1] = acc
-         sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
-
-         # adjust learning rate
-         α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
-
-        # optimization
-        ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α)
-
-         # err
-         verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
-         err_opt[k] = λ₀
-
-         if res < opt_vmc.tol
-               break;
-         end  
-      end
-
-   end
-   
-   return wf, err_opt, ps
-end

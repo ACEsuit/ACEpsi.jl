@@ -1,7 +1,7 @@
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc1d, make_nlms_spec, evaluate
-using ACEpsi: BackflowPooling1d, BFwf1dps_lux, setupBFState, Jastrow
+using ACEpsi: BackflowPooling1d, BFwf1d_lux, setupBFState, Jastrow
 using ACEpsi.vmc: gradient, laplacian, grad_params
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
@@ -15,6 +15,7 @@ using BenchmarkTools
 
 using HyperDualNumbers: Hyper
 
+
 totdegree = 8
 Nel = 5
 X = randn(Nel)
@@ -23,17 +24,9 @@ hX = [Hyper(x, 0, 0, 0) for x in X]
 hX[1] = Hyper(X[1], 1, 1, 0)
 
 # Defining AtomicOrbitalsBasis
-# Pn = Polynomials4ML.legendre_basis(totdegree+1)
-# BF = BFwf1dps_lux(Nel, Pn, totdeg = totdegree)
-# ps, st = setupBFState(MersenneTwister(1234), BF, Σ)
-ord = length(totdegree)
-Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
-trans = x -> 2 * pi * x
-BF, spec, spec1p = BFwf1dps_lux(Nel, Pn; ν = 2, trans = trans, totdeg = 5)
+Pn = Polynomials4ML.legendre_basis(totdegree+1)
+BF, _ = BFwf1d_lux(Nel, Pn, totdeg = totdegree)
 ps, st = setupBFState(MersenneTwister(1234), BF, Σ)
-
-BF2, spec2, spec1p2 = BFwf1dps_lux(Nel, Pn; ν = 2, trans = trans, totdeg = 8)
-ps2, st2 = setupBFState(MersenneTwister(1234), BF2, Σ)
 
 A = BF(X, ps, st)
 hA = BF(hX, ps, st)
@@ -109,7 +102,7 @@ end
 Δ1 = ΔF(X)
 f0 = F(X)
 
-for h in  0.1.^(5:13)
+for h in  0.1.^(1:8)
    Δfh = 0.0
    for i = 1:Nel
          XΔX_add, XΔX_sub = deepcopy(X), deepcopy(X)

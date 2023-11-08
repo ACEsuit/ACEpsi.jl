@@ -28,12 +28,14 @@ function get_spec(spec1p)
     return spec[:]
 end
 
-function BFwf1d_lux(Nel::Integer, Pn::OrthPolyBasis1D3T; totdeg = 15, 
+function BFwf1d_lux(Nel::Integer, Pn; totdeg = 15, 
     ν = 3, T = Float64, 
-    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
+    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0,
+    trans = identity) 
  
     spec1p = [(n = n) for n = 1:totdeg]
 
+    l_trans = WrappedFunction(x -> trans.(x))
     l_Pn = Polynomials4ML.lux(Pn)
     # ----------- Lux connections ---------
     # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
@@ -63,9 +65,9 @@ function BFwf1d_lux(Nel::Integer, Pn::OrthPolyBasis1D3T; totdeg = 15,
     reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
  
     _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
-    BFwf_chain = Chain(; Pn = l_Pn, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
-                         bAA = corr_layer, hidden1 = DenseLayer(Nel, length(corr1)), 
-                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
-    return BFwf_chain
+    BFwf_chain = Chain(; trans = l_trans, Pn = l_Pn, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
+                         bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
+                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> (_det(x))), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
+    return BFwf_chain, spec, spec1p
 end
  
