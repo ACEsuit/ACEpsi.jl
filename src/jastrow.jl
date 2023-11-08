@@ -52,7 +52,7 @@ LuxCore.initialparameters(rng::AbstractRNG, l::JastrowLayer) = NamedTuple()
 
 
 
-## Bernie's code from Jastrow branch
+# === WIP: various JS factor from other architectures ===
 
 mutable struct JPauliNet{T}
     nuclei::Vector{Nuc{T}}

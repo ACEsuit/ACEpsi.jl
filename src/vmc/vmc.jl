@@ -1,13 +1,12 @@
 export VMC, gd_GradientByVMC, EmbeddingW!, _invmap, VMC_multilevel_1d
+
 using Printf
 using LinearAlgebra
 using Optimisers
 using ACEpsi
 using Distributed
-using ParallelDataTransfer: @getfrom
 using SharedArrays
-# using JLD # for intermediate results
-import JSON3 # for intermediate results (apparently JLD is an abomination)
+using`` JSON3
 
 mutable struct VMC
    tol::Number
@@ -36,22 +35,22 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
    verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
    verbose && @printf("   k |  𝔼[E_L]   |  𝔼[E_L]/N   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
    for k = 1 : opt_vmc.MaxIter
-       sam.x0 = x0
+      sam.x0 = x0
        
-       # adjust Δt
-       acc_opt[mod(k,acc_step)+1] = acc
-       sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
+      # adjust Δt
+      acc_opt[mod(k,acc_step)+1] = acc
+      sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
 
-       # adjust learning rate
-       α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
+      # adjust learning rate
+      α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
 
-       # optimization
-       ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α; batch_size = batch_size)
+      # optimization
+      ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α; batch_size = batch_size)
 
-       # err
-       verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, λ₀/N, σ, res, α, acc, sam.Δt)
-       err_opt[k] = λ₀
-       σ_opt[k] = σ
+      # err
+      verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, λ₀/N, σ, res, α, acc, sam.Δt)
+      err_opt[k] = λ₀
+      σ_opt[k] = σ
 
       if mod(k, 10) == 0 # save intermediate results
          json_E = JSON3.write(err_opt)
@@ -64,9 +63,9 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
          # save("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/Data_$k.jld", "params", ps.hidden1.W, "err_opt", err_opt) # retiring JLD
       end
 
-       if res < opt_vmc.tol
-           break;
-       end  
+      if res < opt_vmc.tol
+         break;
+      end  
    end
    return wf, err_opt, ps
 end
