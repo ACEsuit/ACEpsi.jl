@@ -67,7 +67,7 @@ function BFwf1d_lux(Nel::Integer, Pn; totdeg = 15,
     _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
     BFwf_chain = Chain(; trans = l_trans, Pn = l_Pn, bA = pooling_layer, reshape = WrappedFunction(reshape_func), 
                          bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
-                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
+                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> (_det(x))), prod = WrappedFunction(x -> prod(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
     return BFwf_chain, spec, spec1p
 end
  
