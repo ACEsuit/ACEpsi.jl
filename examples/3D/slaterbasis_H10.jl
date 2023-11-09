@@ -26,14 +26,13 @@ using HyperDualNumbers: Hyper
 
 end 
 @everywhere begin
-Nel = 4
+Nel = 10
 X = randn(SVector{3, Float64}, Nel)
-Σ = [↑,↑,↓,↓]
-nuclei = [ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)]
-##
-
+Σ = [↑,↑,↑,↑,↑,↓,↓,↓,↓,↓]
+spacing = 1.0
+nuclei = [Nuc(SVector(0.0,0.0,(i-1/2-Nel/2) * spacing), 1.0) for i = 1:Nel]
 spec = [(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 1), (n1 = 3, n2 = 1, l = 0)]
-n1 = 3
+n1 = 2
 Pn = Polynomials4ML.legendre_basis(n1+1)
 Ylmdegree = 2
 totdegree = 20
@@ -41,12 +40,11 @@ totdegree = 20
 Dn = SlaterBasis(ζ)
 bYlm = RYlmBasis(Ylmdegree)
 
-totdegree = [30,30,30]
-ν = [1,1,2]
-MaxIters = [100,100,2000]
-_spec = [spec[1:3], spec, spec]
-#_spec = [spec[1:i] for i = 4:length(spec)]
-#_spec = length(ν)>length(spec) ? reduce(vcat, [_spec, [spec[1:end] for i = 1:length(ν) - length(spec)]]) : _spec
+totdegree = [30, 30, 30, 30, 30]
+ν = [1, 1, 1, 1,2]
+MaxIters = [50,  100, 100, 200,200]
+_spec = [spec[1:i] for i = 1:length(spec)]
+_spec = length(ν)>length(spec) ? reduce(vcat, [_spec, [spec[1:end] for i = 1:length(ν) - length(spec)]]) : _spec
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν)
 
 ham = SumH(nuclei)
@@ -56,21 +54,23 @@ end
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
                     st_list, spec_list, spec1p_list, specAO_list, batch_size = 500)
 
-# Eref = -14.667
-# HF   = -14.573
 
-# -14.12954986600700, var = 0.08884, 2p+js, ord = 1, size of basis = 5, 25 parameters
-# -14.60038627341732, var = 0.03319, 2p+js, ord = 2, size of basis = 70, 285 parameters
-
-# -14.493397693794488, var = 0.05635, 3s+js, ord = 1, size of basis = 6, 30 parameters
-# -14.627047427906787, var = 0.01082, 3s+js, ord = 2, size of basis = 99, 401 parameters
-# -14.631736047589962, var = 0.00883, 3s+js, ord = 2, size of basis = 99, 400 parameters
+# a = -19.28968253968254 R-R term 
 
 
-# -14.368884109589212, var = 0.00935, 3s+js+1s*2, ord = 2, size of basis = 133, 539 parameters
+# -23.443315039682542: CBS UHF
+# -23.722102539682542: CBS MRCI+Q (benchmark used in ferminet)
 
-# -14.626306117451355, var = 0.01229, 3p+js, ord = 1, size of basis = 9, 43 parameters
-# -14.628261819128742, var = 0.01130, 3p+js, ord = 2, size of basis = 216, 871 parameters
+# -23.5694, var: 0.01857, ord = 1, 1s, 2s, 2p + js
+# -23.6509, var: 0.01257, ord = 2, 1s, 2s, 2p + js
+
+# -23.6083, var: 0.01951, ord = 1, 1s, 2s, 2p, 3s + js
+# -23.6462, var: 0.01358, ord = 2, 1s, 2s, 2p, 3s + js, basis: 9090
+
+# -23.6052,  var: 0.02280, ord = 1, 1s, 2s, 2p, 3s, 3p + js
+# -23.6057, var: 0.03082, ord = 2, 1s, 2s, 2p, 3s, 3p + js, basis: 20385
+
+# -23.6122, var: 0.02630, ord = 1, 1s, 2s, 2p, 3s, 3p, 3d + js
 
 
 

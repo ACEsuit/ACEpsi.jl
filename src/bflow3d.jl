@@ -86,7 +86,7 @@ end
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
-   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
+   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, js = JPauliNet(nuclei)) 
 
    spec1p = make_nlms_spec(bRnl, bYlm; 
                           totaldegree = totdeg)
@@ -120,17 +120,13 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
    corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
 
-   #js = Jastrow(nuclei)
-   #jastrow_layer = ACEpsi.lux(js)
+   jastrow_layer = ACEpsi.lux(js)
 
-   #reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
-
-   #_det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * length(nuclei) * length(prodbasis_layer.sparsebasis))), 
                         bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
-                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
-   # return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
-   return BFwf_chain, spec, spec1p
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x))) #, logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
+   #return Chain(; js = jastrow_layer, logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
 end
 
 

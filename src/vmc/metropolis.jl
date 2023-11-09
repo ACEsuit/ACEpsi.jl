@@ -130,7 +130,7 @@ end
 Rayleigh quotient by VMC using Metropolis sampling
 """
 function rq_MC(Ψ, sam::MHSampler, ham::SumH, ps, st; batch_size = 1)
-    r, ~, acc = sampler(sam, ps, st, batch_size = batch_size);
+    r, ~, acc = sampler_restart(sam, ps, st, batch_size = batch_size);
     raw_data = pmap(r; batch_size = batch_size) do d
         Elocal(ham, Ψ, d, ps, st)
     end

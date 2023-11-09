@@ -59,7 +59,7 @@ bRnl = AtomicOrbitalsRadials(Pn, Dn, spec)
 bYlm = RYlmBasis(Ylmdegree)
 
 ord = 1
-wf, spec, spec1p = BFwf_chain, spec, spec1p  = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = ord)
+wf, spec, spec1p = BFwf_chain, spec, spec1p  = ACEpsi.mBFwf_sto(Nel, bRnl, bYlm, nuclei, 2; totdeg = totdegree, ν = ord)
 
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ) # ps.hidden1.W: Nels * basis
 p, = destructure(ps)
@@ -67,76 +67,9 @@ length(p)
 
 ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)
-opt_vmc = VMC(4000, 0.015, ACEpsi.vmc.adamW(); lr_dc = 100.0)
+opt_vmc = VMC(5000, 0.015, ACEpsi.vmc.adamW(); lr_dc = 100.0)
 end
-wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st, batch_size = 1000)
+wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st, batch_size = 200)
 
-
-"""
-
-sam.Ψ = wf
-sam.lag = 200000
-sam.nchains = 20000
-r = ACEpsi.vmc.pos(sam)
-r0 = [sam.Δt * randn(SVector{3, Float64}, sam.Nel) + r for _ = 1:sam.nchains]
-sam.x0 = r0
-r0 = sam.x0
-raw_data = pmap(r0; batch_size = 2000) do d
-    sam.Ψ(d, ps, st)[1]
-end
-Ψx0 = vcat(raw_data)
-T = eltype(r0[1][1])
-acc = zeros(T, sam.lag)
-for i = 1:sam.lag
-    if i % 100 == 0
-        println(i)
-        r0, Ψx0, a = ACEpsi.vmc.MHstep(r0, Ψx0, sam.Nel, sam, ps, st, batch_size = 2000);
-        acc[i] = mean(a)
-    end
-end
-acc = mean(acc)
-r = r0
-raw_data = pmap(r; batch_size = 2000) do d
-    ACEpsi.vmc.Elocal(ham, sam.Ψ, d, ps, st)
-end
-Eloc = vcat(raw_data)
-val = sum(Eloc) / length(Eloc)
-var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc)-1)))
-
-
-sam.lag = 50000
-acc = zeros(T, sam.lag)
-for i = 1:sam.lag
-    if i % 100 == 0
-        println(i)
-        r0, Ψx0, a = ACEpsi.vmc.MHstep(r0, Ψx0, sam.Nel, sam, ps, st, batch_size = 2000);
-        acc[i] = mean(a)
-    end
-end
-acc = mean(acc)
-r = r0
-raw_data = pmap(r; batch_size = 2000) do d
-    ACEpsi.vmc.Elocal(ham, sam.Ψ, d, ps, st)
-end
-Eloc = vcat(raw_data)
-val = sum(Eloc) / length(Eloc)
-var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc)-1)))
-"""
-a = 0 
-for i = 1:length(nuclei)-1
-    for j = i+1:length(nuclei)
-        a+=nuclei[i].charge * nuclei[j].charge/norm(nuclei[i].rr - nuclei[j].rr)
-    end
-end
-println(val + a)
-println(var)
 ## FCI: -23.1140: ord = 2: -23.3829
-## UHF: -23.0414: ord = 1: -23.03884237
-Err = err_opt
-err_opt = err_opt[end]
-per = 0.2
-err1 = zero(err_opt)
-for i = 1:length(err_opt)
-    err1[i] = sum(err_opt[Int(ceil(i-per  * i)):i])/length(err_opt[Int(ceil(i-per  * i)):i])
-end
-err1
+## UHF: -23.0414: ord = 1: -23.0432
