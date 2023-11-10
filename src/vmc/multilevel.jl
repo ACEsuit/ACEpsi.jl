@@ -6,6 +6,7 @@ using Polynomials4ML
 using Random
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec, mBFwf, mBFwf_sto
 using ACEpsi.AtomicOrbitals: _invmap
+using Plots
 
 mutable struct VMC_multilevel
     tol::Float64
@@ -115,6 +116,11 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     err_opt = [zeros(opt_vmc.MaxIter[i]) for i = 1:length(opt_vmc.MaxIter)]
 
     x0, ~, acc = sampler_restart(sam, ps, st, batch_size = batch_size)
+
+    x = reduce(vcat,reduce(vcat,x0))
+    display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
+
+
     acc_step, acc_range = accMCMC
     acc_opt = zeros(acc_step)
     
@@ -157,7 +163,10 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
  
           # optimization
           ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, batch_size = batch_size)
- 
+          if k % 10 == 0
+            x = reduce(vcat,reduce(vcat,x0))
+            display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
+          end
           # err
           verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
           err_opt[l][k] = λ₀

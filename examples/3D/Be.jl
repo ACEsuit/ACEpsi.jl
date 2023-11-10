@@ -1,6 +1,6 @@
 using Distributed
 
-N_procs = 10
+N_procs = 8
 
 if nprocs() == 1
     addprocs(N_procs - 1, exeflags="--project=$(Base.active_project())")
@@ -23,7 +23,6 @@ using Printf
 using LinearAlgebra
 using BenchmarkTools
 using HyperDualNumbers: Hyper
-
 end 
 @everywhere begin
 Nel = 4
@@ -45,8 +44,6 @@ totdegree = [30,30,30]
 ν = [1,1,2]
 MaxIters = [100,100,2000]
 _spec = [spec[1:3], spec, spec]
-#_spec = [spec[1:i] for i = 4:length(spec)]
-#_spec = length(ν)>length(spec) ? reduce(vcat, [_spec, [spec[1:end] for i = 1:length(ν) - length(spec)]]) : _spec
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν)
 
 ham = SumH(nuclei)

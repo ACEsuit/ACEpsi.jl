@@ -48,9 +48,6 @@ function evaluate(f::JPauliNet, X::AbstractVector, Σ, b::Vector{<:TT}) where {T
             γ -= 1/4 / (1 + norm(X[i] - X[j]))
         end
     end
-    for i = 1:Nel, j = 1:length(f.nuclei)
-        γ -= -2/ (1+norm(X[i] - f.nuclei[j].rr))
-    end
     return exp(γ)
 end
 
