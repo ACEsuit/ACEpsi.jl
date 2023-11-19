@@ -151,6 +151,38 @@ end
 
 # TODO: this should be implemented to recursively embed the wavefunction
 function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2)
+   @assert length(spec2[1]) - length(spec[1]) <= 1
+   if length(spec[1]) < length(spec2[1])
+      if length(spec[1]) == 1
+         spec1 = [[i[1], 3] for i in spec] # 3 <-> (1, ∅) 
+      else
+         spec1 = [[i[1], 3, i[2:end]...] for i in spec]
+      end # so that spec1 obeys how basis labels are constructed in BFwfTrig_lux
+   else
+      spec1 = spec
+   end
+  #  @show spec1;
+   readable_spec1 = ACEpsi.displayspec(spec1, spec1p2)
+   readable_spec2 = ACEpsi.displayspec(spec2, spec1p2)
+   @assert size(ps.hidden1.W, 1) == size(ps2.hidden1.W, 1)
+   @assert size(ps.hidden1.W, 2) ≤ size(ps2.hidden1.W, 2)
+   @assert all(t in readable_spec2 for t in readable_spec1)
+
+   # set all parameters to zero
+   ps2.hidden1.W .= 0.0
+
+   # _map[spect] = index in readable_spec2
+   _map  = _invmap(readable_spec2)
+
+   # embed
+   for (idx, t) in enumerate(readable_spec1)
+      ps2.hidden1.W[:, _map[t]] = ps.hidden1.W[:, idx]
+   end
+
+   return ps2
+end
+
+function EmbeddingW_J!(ps, ps2, spec, spec2, spec1p, spec1p2)
     @assert length(spec2[1]) - length(spec[1]) <= 1
     if length(spec[1]) < length(spec2[1])
        if length(spec[1]) == 1
@@ -164,19 +196,19 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2)
    #  @show spec1;
     readable_spec1 = ACEpsi.displayspec(spec1, spec1p2)
     readable_spec2 = ACEpsi.displayspec(spec2, spec1p2)
-    @assert size(ps.hidden1.W, 1) == size(ps2.hidden1.W, 1)
-    @assert size(ps.hidden1.W, 2) ≤ size(ps2.hidden1.W, 2)
+    @assert size(ps.to_be_prod.layer_1.hidden1.W, 1) == size(ps2.to_be_prod.layer_1.hidden1.W, 1)
+    @assert size(ps.to_be_prod.layer_1.hidden1.W, 2) ≤ size(ps2.to_be_prod.layer_1.hidden1.W, 2)
     @assert all(t in readable_spec2 for t in readable_spec1)
  
     # set all parameters to zero
-    ps2.hidden1.W .= 0.0
+    ps2.to_be_prod.layer_1.hidden1.W .= 0.0
  
     # _map[spect] = index in readable_spec2
     _map  = _invmap(readable_spec2)
  
     # embed
     for (idx, t) in enumerate(readable_spec1)
-       ps2.hidden1.W[:, _map[t]] = ps.hidden1.W[:, idx]
+       ps2.to_be_prod.layer_1.hidden1.W[:, _map[t]] = ps.to_be_prod.layer_1.hidden1.W[:, idx]
     end
  
     return ps2

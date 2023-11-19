@@ -93,7 +93,7 @@ https://arxiv.org/pdf/2211.13672.pdf
 struct JSPsiTrasnformer <: AbstractExplicitLayer end
 
 using LuxCore
-LuxCore.initialparameters(rng::AbstractRNG, l::JSPsiTrasnformer) = (α1 = randn(), α2 = randn())
+LuxCore.initialparameters(rng::AbstractRNG, l::JSPsiTrasnformer) = (α1 = 0.0, α2 = 0.0)
 LuxCore.initialstates(rng::AbstractRNG, l::JSPsiTrasnformer) = NamedTuple()
 
 (l::JSPsiTrasnformer)(X, ps, st) = begin
