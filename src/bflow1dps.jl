@@ -218,7 +218,7 @@ end
 function BFJwfTrig_lux(Nel::Integer, Pn::AbstractPoly4MLBasis, J; totdeg = length(Pn),
     ν = 3, T = Float64, trans = x -> x,
     sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0,
-    Jastrow_chain = JSPsiTrasnformer()
+    Jastrow_chain = JSPsiTransformer()
     ) 
  
     # create as much as we can first, and then filter later
@@ -269,11 +269,10 @@ function BFJwfTrig_lux(Nel::Integer, Pn::AbstractPoly4MLBasis, J; totdeg = lengt
 
     _det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
 
-    BFwf_chain = Chain(; diff = Lux.BranchLayer(embed_layers...), Pn = Lux.Parallel(nothing, l_Pns...), bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), # hidden1 = ACEpsi.DenseLayer(Nel, length(corr1)), 
+    BFwf_chain = Chain(; Pn = Lux.Parallel(nothing, l_Pns...), bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), # hidden1 = ACEpsi.DenseLayer(Nel, length(corr1)), 
                          Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
 
-    # BFJwf = Chain(; trans = l_trans, diff = Lux.BranchLayer(embed_layers...), to_be_prod = Lux.BranchLayer(BFwf_chain, Jastrow_chain), Sum = WrappedFunction(x -> x[1] + x[2][1]))
-    BFJwf = Chain(; trans = l_trans, to_be_prod = Lux.BranchLayer(BFwf_chain, Jastrow_chain), Sum = WrappedFunction(x -> x[1] + x[2]))
-
+    BFJwf = Chain(; trans = l_trans, diff = Lux.BranchLayer(embed_layers...), to_be_prod = Lux.BranchLayer(BFwf_chain, Jastrow_chain), Sum = WrappedFunction(x -> x[1] + x[2][1]))
+    
     return BFJwf, spec, spec1p
 end

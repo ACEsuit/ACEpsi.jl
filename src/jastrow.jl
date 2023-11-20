@@ -90,13 +90,13 @@ lux(basis::JPauliNet) = JPauliNetLayer(basis)
 PsiTransformer JS factor
 https://arxiv.org/pdf/2211.13672.pdf
 """
-struct JSPsiTrasnformer <: AbstractExplicitLayer end
+struct JSPsiTransformer <: AbstractExplicitLayer end
 
 using LuxCore
-LuxCore.initialparameters(rng::AbstractRNG, l::JSPsiTrasnformer) = (α1 = 0.0, α2 = 0.0)
-LuxCore.initialstates(rng::AbstractRNG, l::JSPsiTrasnformer) = NamedTuple()
+LuxCore.initialparameters(rng::AbstractRNG, l::JSPsiTransformer) = (α1 = 0.0, α2 = 0.0)
+LuxCore.initialstates(rng::AbstractRNG, l::JSPsiTransformer) = NamedTuple()
 
-(l::JSPsiTrasnformer)(X, ps, st) = begin
+(l::JSPsiTransformer)(X, ps, st) = begin
     Nel = size(X, 1)
     J1 = -0.25 * sum(ps.α1 ^ 2 / (ps.α1 + norm(X[i] - X[j])) for i = 1:Nel for j = i+1:Nel if st.Σ[i] == st.Σ[j])
     J2 = -0.5 * sum(ps.α2 ^ 2 / (ps.α2 + norm(X[i] - X[j])) for i = 1:Nel for j = i+1:Nel if st.Σ[i] ≠ st.Σ[j])
@@ -113,22 +113,30 @@ mutable struct JCasino1dVb{T}
     L::T # cell-size
 end
 
-function _getXineqj(Xs)
-    T = eltype(Xs[1])
+_getXineqj(Xs) = (Nel = length(Xs); [Xs[i][j] for i = 1:Nel for j = 1:Nel if i ≠ j])
+
+import ChainRulesCore: rrule
+using ChainRulesCore: NoTangent
+
+function rrule(::typeof(_getXineqj), Xs)
     Nel = length(Xs)
-    allXineqj = Zygote.Buffer(zeros(T, Nel * (Nel - 1)))
-    idx = 0
-    for j = 1:Nel
-        for i = 1:Nel
-            if i ≠ j
-                idx += 1
-                allXineqj[idx] = Xs[i][j]
-            end
-        end
+    val = [Xs[i][j] for i = 1:Nel for j = 1:Nel if i ≠ j]
+
+    function pb(Δ)
+        T = eltype(Δ)
+        ∂Xs = ntuple(i -> begin
+            ∂Xsi = zeros(T, Nel)
+            ∂Xsi[1:i-1] = Δ[((i - 1) * Nel + 2 - i: i * Nel -i)][1:i-1]
+            ∂Xsi[i+1:end] = Δ[((i - 1) * Nel + 2 - i: i * Nel -i)][i:end]
+            ∂Xsi
+        end,
+        Nel)
+        return NoTangent(), ∂Xs
     end
-    @assert idx == Nel * (Nel - 1)
-    return copy(allXineqj)
+
+    return val, pb
 end
+
 
 ## CASINO trainable Jastrow for jellium
 function JCasinoChain(J::JCasino1dVb)
@@ -138,10 +146,9 @@ function JCasinoChain(J::JCasino1dVb)
     # cos 
     Np = J.Np
     l_trig = Polynomials4ML.lux(RTrigBasis(Np))
-    getXineqj = WrappedFunction(Xs -> _getXineqj(Xs))
 
     #l_trigs = Tuple(collect(l_trig for _ = 2:2:2*Np+1)) 
-    CosChain = Chain(; getXineqj_cos = getXineqj, SINCOS = l_trig, getcos = WrappedFunction(x -> x[:, 2:2:2*Np+1])) # picking out only cosines
+    CosChain = Chain(; getXineqj_cos = WrappedFunction(Xs -> _getXineqj(Xs)), SINCOS = l_trig, getcos = WrappedFunction(x -> x[:, 2:2:2*Np+1])) # picking out only cosines
     @assert length(2:2:2*Np+1) == Np
 
     # cusp?
@@ -153,14 +160,23 @@ function JCasinoChain(J::JCasino1dVb)
     # cut-off
     Lu = J.Lu
     
-    ab_trans = Lux.WrappedFunction(x -> abs.(x)) # not sure if CASINO used absolute value or not to feed into monimials
+    # === old one === 
+    # ab_trans = Lux.WrappedFunction(x -> abs.(x)) # not sure if CASINO used absolute value or not to feed into monimials
     # Θ(x) = x < zero(eltype(x)) ? zero(eltype(x)) : one(eltype(x)) # Heaviside
-    # approxθ(x) = 0.5 + 0.5 * tanh(10.0 * x)
-    # cut = Lux.WrappedFunction(x -> Θ.(Lu .- x) .* ((x .- Lu) .^ 3))
+    # # θ(x) = 0.5 + 0.5 * tanh(10.0 * x) # smooth Heaviside
+    # cut_layer = Lux.WrappedFunction(x -> Θ.(Lu .- x) .* ((x .- Lu) .^ 3))
 
-    # cut = WrappedFunction(x -> (x .< Lu) .* ((x .- Lu) .^ 3))
+    # # we need to "unstransform" coordinates
+    # cusp_cut_Chain = Chain(; getXineqj_mono = getXineqj, abs = ab_trans , untrans = WrappedFunction(x -> x .* L ./ (2pi)), to_be_prod = Lux.BranchLayer(l_mono, cut_layer), prod = WrappedFunction(x -> x[1] .* x[2]))
+
+    ##
+    Θ(x) = x < zero(eltype(x)) ? zero(eltype(x)) : one(eltype(x)) # Heaviside
+    # θ(x) = 0.5 + 0.5 * tanh(10.0 * x) # smooth Heaviside
+    cut_layer = Lux.WrappedFunction(x -> Θ.(Lu .- x) .* ((x .- Lu) .^ 3))
+
     # we need to "unstransform" coordinates
-    cusp_cut_Chain = Chain(; getXineqj_mono = getXineqj, abs = ab_trans , untrans = WrappedFunction(x -> x .* L ./ (2pi)), to_be_prod = l_mono)# , prod = WrappedFunction(x -> x[1] .* x[2]))
+    cusp_cut_Chain = Chain(; getXineqj_mono = WrappedFunction(Xs -> _getXineqj(Xs)) , untrans = WrappedFunction(x -> norm.(x) .* L ./ (2pi)), to_be_prod = Lux.BranchLayer(l_mono, cut_layer), prod = WrappedFunction(x -> x[1] .* x[2]))
 
-    return Chain(; combine = Lux.BranchLayer(CosChain, cusp_cut_Chain), pool_and_clean = WrappedFunction(x -> (hcat(sum(x[1], dims = 1), sum(x[2], dims = 1)))), hidden_J = LinearLayer(Np+Nu+1, 1))
+    # return Chain(; combine = Lux.BranchLayer(CosChain, cusp_cut_Chain), pool_and_clean = WrappedFunction(x -> (hcat(sum(x[1], dims = 1), sum(x[2], dims = 1)))), hidden_J = LinearLayer(Np+Nu+1, 1))
+    return Chain(; combine = Lux.BranchLayer(CosChain, cusp_cut_Chain), hiddenJS = Lux.Parallel(nothing, LinearLayer(Np, 1), LinearLayer(Nu + 1, 1)), poolJS = WrappedFunction(x -> sum(sum.(x))))
 end
