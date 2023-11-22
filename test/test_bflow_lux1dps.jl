@@ -16,7 +16,7 @@ using BenchmarkTools
 
 using HyperDualNumbers: Hyper
 
-totdegree = [34]
+totdegree = [15, 5]
 Nel = 30
 rs = 1 # Wigner-Seitz radius r_s for 1D = 1/(2ρ); where ρ = N/L
 ρ = 1 / (2 * rs) # (average density)
@@ -31,7 +31,16 @@ hX[1] = Hyper(X[1], 1, 1, 0)
 ord = length(totdegree)
 Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
 trans = x -> 2*pi*x/L
-BF, spec, spec1p = ACEpsi.BFwfTrig_lux(Nel, Pn; ν = ord, trans = trans, totdeg = totdegree[1])
+_get_ord = bb -> sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0 ? 1 : sum([bb[i].n .!= 1 for i = 1:length(bb)])
+sd_admissible_func(ord,Deg) = bb -> (all([length(bb) == ord]) # must be of order ord (this truncation is allowed only because 1 is included in the basis expanding body-order 1), 
+# && (all([sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0]) # all of the basis in bb must be (1, σ)
+    # || 
+    && all([sum([ceil(((bb[i].n)-1)/2) for i = 2:length(bb)]) <= ceil((Deg[_get_ord(bb)]-1)/2)])#) # if the wave# of the basis is less than the max wave#
+    && (bb[1].s == '∅') # ensure b-order=1 are of empty spin (can be deleted because I have enforced it in BFwfTrig_lux)
+    && all([b.s != '∅' for b in bb[2:end] if b.n != 1]) # ensure (non-cst) b-order>1 term are of of non-empty spin
+    && all([b.s == '∅' for b in bb[2:end] if b.n == 1])) # ensure cst is of ∅ spin to avoid repeats, e.g [(2,∅),(1,↑)] == [(2,∅),(1,↓)], but notice δ_σ↑ + δ_σ↓ == 1
+sd_admissible = sd_admissible_func(ord, totdegree)
+BF, spec, spec1p = ACEpsi.BFwfTrig_lux(Nel, Pn; ν = ord, trans = trans,  totdeg = totdegree[1], sd_admissible = sd_admissible)
 ps, st = setupBFState(MersenneTwister(1234), BF, Σ)
 
 ## check spec if needed

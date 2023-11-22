@@ -55,9 +55,9 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
       if mod(k, 10) == 0 # save intermediate results
          json_E = JSON3.write(err_opt)
          json_σ = JSON3.write(σ_opt)
-         json_W = JSON3.write(ps.hidden1.W)
-         # json_α = JSON3.write(ps.to_be_prod.layer_2) # need to change whenever using Jastrow
-         json_α = JSON3.write("no Jastrow")
+         json_W = JSON3.write(ps.to_be_prod.layer_1.hidden1.W)
+         json_α = JSON3.write(ps.to_be_prod.layer_2.hiddenJS) # need to change whenever using Jastrow
+         # json_α = JSON3.write("no Jastrow")
          json_Dic = """{"E": $(json_E), "σ": $(json_σ), "W": $(json_W), "α": $(json_α)}"""
          open("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/Data$k.json", "w") do io
             JSON3.write(io, JSON3.read(json_Dic))
