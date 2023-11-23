@@ -176,10 +176,10 @@ function JCasinoChain(J::JCasino1dVb)
     
 
     ## we need to "unstransform" coordinates
-    # cusp_cut_Chain = Chain(; getXineqj_mono = WrappedFunction(Xs -> _getXineqj(Xs)) , untrans = WrappedFunction(x -> norm.(x) .* L ./ (2pi)), to_be_prod = Lux.BranchLayer(l_mono, cut_layer), prod = WrappedFunction(x -> x[1] .* x[2]))
+    cusp_cut_Chain = Chain(; getXineqj_mono = WrappedFunction(Xs -> _getXineqj(Xs)) , untrans = WrappedFunction(x -> norm.(x) .* L ./ (2pi)), to_be_prod = Lux.BranchLayer(l_mono, cut_layer), prod = WrappedFunction(x -> x[1] .* x[2]))
 
     ## no abs-val version
-    cusp_cut_Chain = Chain(; getXineqj_mono = WrappedFunction(Xs -> _getXineqj(Xs)) , untrans = WrappedFunction(x -> x .* L ./ (2pi)), to_be_prod = Lux.BranchLayer(l_mono, cut_layer), prod = WrappedFunction(x -> x[1] .* x[2]))
+    # cusp_cut_Chain = Chain(; getXineqj_mono = WrappedFunction(Xs -> _getXineqj(Xs)) , untrans = WrappedFunction(x -> x .* L ./ (2pi)), to_be_prod = Lux.BranchLayer(l_mono, cut_layer), prod = WrappedFunction(x -> x[1] .* x[2]))
 
     # return Chain(; combine = Lux.BranchLayer(CosChain, cusp_cut_Chain), pool_and_clean = WrappedFunction(x -> (hcat(sum(x[1], dims = 1), sum(x[2], dims = 1)))), hidden_J = LinearLayer(Np+Nu+1, 1))
     return Chain(; combine = Lux.BranchLayer(CosChain, cusp_cut_Chain), hiddenJS = Lux.Parallel(nothing, LinearLayer(Np, 1), LinearLayer(Nu + 1, 1)), poolJS = WrappedFunction(x -> sum(sum.(x))))

@@ -272,7 +272,7 @@ function BFJwfTrig_lux(Nel::Integer, Pn::AbstractPoly4MLBasis, J; totdeg = lengt
     BFwf_chain = Chain(; Pn = Lux.Parallel(nothing, l_Pns...), bA = pooling_layer, reshape = WrappedFunction(reshape_func), bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), # hidden1 = ACEpsi.DenseLayer(Nel, length(corr1)), 
                          Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> _det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))))
 
-    BFJwf = Chain(; trans = l_trans, diff = Lux.BranchLayer(embed_layers...), to_be_prod = Lux.BranchLayer(BFwf_chain, Jastrow_chain), Sum = WrappedFunction(x -> x[1] + x[2][1]))
+    BFJwf = Chain(; trans = l_trans, diff = Lux.BranchLayer(embed_layers...), to_be_prod = Lux.BranchLayer(BFwf_chain, Jastrow_chain), Sum = WrappedFunction(x -> x[1] + 2*x[2][1]))
     
     return BFJwf, spec, spec1p
 end
