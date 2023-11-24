@@ -86,7 +86,9 @@ end
 
 function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
    ν = 3, T = Float64, 
-   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, js = JPauliNet(nuclei)) 
+   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+   js = JPauliNet(nuclei), 
+   P = 10) 
 
    spec1p = make_nlms_spec(bRnl, bYlm; 
                           totaldegree = totdeg)
@@ -99,6 +101,8 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
    pooling = BackflowPooling(aobasis_layer)
    pooling_layer = ACEpsi.lux(pooling)
+   #P = length(nuclei) * length(prodbasis_layer.sparsebasis)
+   tucker_layer = ACEpsi.TuckerLayer(P, Nel, length(nuclei), length(pooling.basis.prodbasis.sparsebasis))
 
    spec1p = get_spec(nuclei, spec1p)
    # define sparse for n-correlations
@@ -122,11 +126,11 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
 
    jastrow_layer = ACEpsi.lux(js)
 
-   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * length(nuclei) * length(prodbasis_layer.sparsebasis))), 
+   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, TK = tucker_layer,
+                        reshape = myReshapeLayer((Nel, 3 * P)), 
                         bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
-                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x))) #, logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
    return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
-   #return Chain(; js = jastrow_layer, logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
 end
 
 

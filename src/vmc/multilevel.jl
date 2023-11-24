@@ -93,6 +93,10 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
                 ps2.branch.js.b .= ps.branch.js.b
             end
         end
+        if :TK in keys(ps.branch.bf)
+            ps2.branch.bf.TK.W .= 0
+            ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],1:size(ps.branch.bf.TK.W)[4]] .= ps.branch.bf.TK.W
+        end
     end
     return ps2
 end

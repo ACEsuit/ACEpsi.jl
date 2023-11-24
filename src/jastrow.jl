@@ -37,7 +37,7 @@ end
 ## γ(R) := ∑_{i<j} -c_{ij}/(1+|r_i-r_j|)
 ## c_{ij} = 1/2 if antiparallel, 1/4 if parallel
 
-function evaluate(f::JPauliNet, X::AbstractVector, Σ, b::Vector{<:TT}) where {TT}
+function evaluate(f::JPauliNet, X::AbstractVector, Σ) where {TT}
     Nel = size(X, 1)
     T = promote_type(eltype(X[1]))
     γ = zero(T)
@@ -57,7 +57,7 @@ end
  
 lux(basis::JPauliNet) = JPauliNetLayer(basis)
  
-LuxCore.initialparameters(rng::AbstractRNG, l::JPauliNetLayer) = (b = rand(3), )
+LuxCore.initialparameters(rng::AbstractRNG, l::JPauliNetLayer) = NamedTuple()
 
 (l::JPauliNetLayer)(X, ps, st) = 
-      evaluate(l.basis, X, st.Σ, ps.b), st
+      evaluate(l.basis, X, st.Σ), st
