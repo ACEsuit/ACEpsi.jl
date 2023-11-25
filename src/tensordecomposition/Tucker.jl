@@ -1,12 +1,19 @@
-import ChainRulesCore: rrule
+import ChainRulesCore: rrule, NoTangent
 using LuxCore
+using LuxCore: AbstractExplicitLayer
 using Random
-using LinearAlgebra: mul!
 using StrideArrays
-using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META
+using LinearAlgebra: mul!
 using ObjectPools: acquire!
+using Polynomials4ML: release!
+using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META
 
 export TuckerLayer
+
+
+mutable struct Tucker <: Tensor_Decomposition
+    P::Integer
+end
 
 """
 `struct Tucker` : 
@@ -18,9 +25,9 @@ export TuckerLayer
 
 """
 struct TuckerLayer <: AbstractExplicitLayer 
-   P::Integer
-   N::Integer
-   M::Integer # M
+   P::Integer # reduced dimension
+   N::Integer # number of electron
+   M::Integer # number of nuclei
    K::Integer # spec1p
    @reqfields()
 end
