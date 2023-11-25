@@ -19,14 +19,6 @@ using ObjectPools: acquire!
 using StrideArrays
 using ObjectPools: unwrap
 
-function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::LinearLayer{false}, x::AbstractMatrix, ps, st)
-   val = l(x, ps, st)
-   function pb(A)
-      return NoTangent(), NoTangent(), A[1] * ps.W, (W = transpose(PtrArray(A[1])) * unwrap(x),), NoTangent() #(W = transpose(A[1]) * x,), NoTangent()
-   end
-   return val, pb
-end
-
 # ----------------- custom layers ------------------
 struct MaskLayer <: AbstractExplicitLayer 
    nX::Int64

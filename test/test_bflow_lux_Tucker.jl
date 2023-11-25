@@ -229,3 +229,24 @@ end
 #Fp = w -> ΔF(X, re(w))
 #dFp = w -> ∇ΔF(X, re(w))
 #fdtest(Fp, dFp, W0)
+
+# # === old ===
+# # 30.261 μs (226 allocations: 16.72 KiB)
+
+# # 265.789 μs (1081 allocations: 412.14 KiB)
+
+# # 210.337 μs (1428 allocations: 127.22 KiB)
+
+# @btime F(X)
+# @btime dF(X)
+# @btime ΔF(X)
+
+# # === tullio ===
+
+# 8.861 μs (34 allocations: 2.86 KiB)
+# 185.166 μs (507 allocations: 360.23 KiB)
+# 68.112 μs (276 allocations: 39.84 KiB) ≈ eval * Nel * 3
+
+# @btime F(X)
+# @btime dF(X)
+# @btime ΔF(X)
