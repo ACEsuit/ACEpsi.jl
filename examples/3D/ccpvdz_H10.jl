@@ -57,10 +57,11 @@ bYlm = RYlmBasis(Ylmdegree)
 totdegree = [30, 30, 30]
 ν = [1, 1, 1]
 MaxIters = [150, 200, 200]
+_TD = [ACEpsi.No_Decomposition(),ACEpsi.No_Decomposition(),ACEpsi.No_Decomposition()]
 spec = [(n1 = 1, n2 = 1, l = 0), (n1 = 1, n2 = 2, l = 0), (n1 = 2, n2 = 1, l = 1)]
 _spec = [spec[1:i] for i = 1:length(spec)]
 _spec = length(ν)>length(spec) ? reduce(vcat, [_spec, [spec[1:end] for i = 1:length(ν) - length(spec)]]) : _spec
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν)
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 2000, nchains = 2000)

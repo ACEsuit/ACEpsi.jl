@@ -42,9 +42,10 @@ bYlm = RYlmBasis(Ylmdegree)
 
 totdegree = [30,30,30]
 ν = [1,1,2]
-MaxIters = [100,100,2000]
+MaxIters = [100,100,200]
 _spec = [spec[1:3], spec, spec]
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν)
+_TD = [ACEpsi.Tucker(5),ACEpsi.Tucker(6),ACEpsi.Tucker(7)]
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)

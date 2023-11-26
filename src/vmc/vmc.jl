@@ -16,15 +16,17 @@ VMC(MaxIter::Int, lr::Float64, type; tol = 1.0e-3, lr_dc = 50.0) = VMC(tol, MaxI
         
 function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH, 
                 wf, ps, st; 
-                ν = 1, verbose = true, accMCMC = [10, [0.45, 0.55]], batch_size = 1)
+                ν = 1, verbose = true, density = false, accMCMC = [10, [0.45, 0.55]], batch_size = 1)
 
     res, λ₀, α = 1.0, 0., opt_vmc.lr
     err_opt = zeros(opt_vmc.MaxIter)
 
     x0, ~, acc = sampler_restart(sam, ps, st, batch_size = batch_size) 
-    x = reduce(vcat,reduce(vcat,x0))
-    display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
-
+    density && begin 
+        x = reduce(vcat,reduce(vcat,x0))
+        display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
+    end
+    
     acc_step, acc_range = accMCMC
     acc_opt = zeros(acc_step)
 
@@ -42,10 +44,13 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
 
         # optimization
         ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, batch_size = batch_size)
-        if k % 10 == 0
-            x = reduce(vcat,reduce(vcat,x0))
-            display(histogram!(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
+        density && begin 
+            if k % 10 == 0
+                x = reduce(vcat,reduce(vcat,x0))
+                display(histogram!(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
+            end
         end
+        
         # err
         verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
         err_opt[k] = λ₀
