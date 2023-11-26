@@ -17,11 +17,12 @@ include("tensordecomposition/TD.jl")
 include("bflow3d.jl")
 include("backflowpooling.jl")
 
-# experimental wfs
-include("experimental/mbflow3d.jl")
-
 # lux utils for bflow
 include("lux_utils.jl")
+
+# experimental wfs
+include("experimental/mbflow3d.jl")
+include("experimental/mmultilevel.jl")
 
 # vmc
 include("vmc/opt.jl")
