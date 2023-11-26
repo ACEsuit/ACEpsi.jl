@@ -15,9 +15,10 @@ include("atomicorbitals/atomicorbitals.jl")
 include("jastrow.jl")
 include("tensordecomposition/TD.jl")
 include("bflow3d.jl")
-include("mbflow3d.jl")
-
 include("backflowpooling.jl")
+
+# experimental wfs
+include("experimental/mbflow3d.jl")
 
 # lux utils for bflow
 include("lux_utils.jl")
