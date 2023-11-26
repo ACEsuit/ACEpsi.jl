@@ -58,7 +58,7 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
 
     if :TK in keys(ps.branch.bf)
         ps2.branch.bf.TK.W .= 0
-        ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],:,1:size(ps.branch.bf.TK.W)[5]] .= ps.branch.bf.TK.W
+        ps2.branch.bf.TK.W[:,1:size(ps.branch.bf.TK.W)[2],:,1:size(ps.branch.bf.TK.W)[4]] .= ps.branch.bf.TK.W
     end
     return ps2
 end

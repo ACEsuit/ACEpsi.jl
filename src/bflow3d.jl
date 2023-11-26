@@ -181,7 +181,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 15,
    pooling_layer = ACEpsi.lux(pooling)
     
    # P <= length(nuclei) * length(prodbasis_layer.sparsebasis)
-   tucker_layer = ACEpsi.TD.TuckerLayer(TD.P, Nel, length(nuclei), length(pooling.basis.prodbasis.sparsebasis))
+   tucker_layer = ACEpsi.TD.TuckerLayer(TD.P, length(nuclei), length(pooling.basis.prodbasis.sparsebasis))
 
    spec1p = get_spec(TD)
    # define sparse for n-correlations
