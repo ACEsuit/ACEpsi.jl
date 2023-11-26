@@ -60,16 +60,17 @@ spec = ACEpsi.AtomicOrbitals.get_spec(aobasis_layer, spec1p)
 @info("Test evaluation by manual construction")
 using LinearAlgebra: norm 
 bYlm_ = RYlmBasis(totdegree)
-Nnlm = length(aobasis_layer.prodbasis.layers.ϕnlms.basis.spec)
+Nnlm = length(aobasis_layer.prodbasis.sparsebasis)
 Nnuc = length(aobasis_layer.nuclei)
 
 for I = 1:Nnuc 
+   local Rnl
    XI = X .- Ref(aobasis_layer.nuclei[I].rr)
    xI = norm.(XI)
    Rnl = evaluate(bRnl, xI)
    Ylm = evaluate(bYlm_, XI)
    for k = 1:Nnlm 
-      nlm = aobasis_layer.prodbasis.layers.ϕnlms.basis.spec[k]
+      nlm = aobasis_layer.prodbasis.sparsebasis.spec[k]
       iR = nlm[1]
       iY = nlm[2]
 

@@ -1,25 +1,24 @@
-using Polynomials4ML, Random 
+using Polynomials4ML, Random, ACEpsi
 using Polynomials4ML: OrthPolyBasis1D3T, LinearLayer, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
 using Polynomials4ML.Utils: gensparse
 using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
-import ForwardDiff
-using ACEpsi.AtomicOrbitals: make_nlms_spec
-using ACEpsi.TD: No_Decomposition, Tucker
-using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
-using ACEpsi
 using LuxCore: AbstractExplicitLayer
-using LuxCore
-using Lux
 using Lux: Chain, WrappedFunction, BranchLayer
-using ChainRulesCore
 using ChainRulesCore: NoTangent
 # ----------------------------------------
 # some quick hacks that we should take care in P4ML later with careful thoughts
 using ObjectPools: acquire!
 using StrideArrays
 using ObjectPools: unwrap
+using Lux
 
+using ACEpsi.AtomicOrbitals: make_nlms_spec
+using ACEpsi.TD: No_Decomposition, Tucker
+using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 # ----------------- custom layers ------------------
+import ChainRulesCore: rrule
+import ForwardDiff
+
 struct MaskLayer <: AbstractExplicitLayer 
    nX::Int64
 end
@@ -28,16 +27,18 @@ end
    T = eltype(Φ)
    A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX] 
    val::Matrix{T} = Φ .* A
+   release!(Φ)
    return val, st
 end
 
-function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::MaskLayer, Φ, ps, st) 
+function rrule(::typeof(Lux.apply), l::MaskLayer, Φ, ps, st) 
    T = eltype(Φ)
    A::Matrix{Bool} = [st.Σ[i] == st.Σ[j] for j = 1:l.nX, i = 1:l.nX]
    val::Matrix{T} = Φ .* A
    function pb(dΦ)
       return NoTangent(), NoTangent(), dΦ[1] .* A, NoTangent(), NoTangent()
    end
+   release!(Φ)
    return (val, st), pb
 end
 
@@ -51,7 +52,7 @@ end
    return reshape(unwrap(x), r.dims), st
 end
 
-function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::myReshapeLayer{N}, X, ps, st) where {N}
+function rrule(::typeof(LuxCore.apply), l::myReshapeLayer{N}, X, ps, st) where {N}
    val = l(X, ps, st)
    function pb(dϕnlm) # dA is of a tuple (dAmat, st), dAmat is of size (Nnuc, Nel, Nnlm)
       A = reshape(unwrap(dϕnlm[1]), size(X))
@@ -79,6 +80,7 @@ function get_spec(nuclei, spec1p)
 
    return spec[:]
 end
+
 
 function displayspec(spec, spec1p)
    nicespec = []

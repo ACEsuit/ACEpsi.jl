@@ -1,10 +1,12 @@
 using ACEpsi.AtomicOrbitals: AtomicOrbitalsBasisLayer
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
-using ChainRulesCore
 using ChainRulesCore: NoTangent
+
 using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META
 using ObjectPools: acquire!
+
+import ChainRulesCore: rrule
 
 mutable struct BackflowPooling
    basis::AtomicOrbitalsBasisLayer
@@ -86,7 +88,7 @@ function evaluate(pooling::BackflowPooling, ϕnlm::AbstractArray, Σ::AbstractVe
 end
 
 # --------------------- connect with ChainRule
-function ChainRulesCore.rrule(::typeof(evaluate), pooling::BackflowPooling, ϕnlm, Σ::AbstractVector) 
+function rrule(::typeof(evaluate), pooling::BackflowPooling, ϕnlm, Σ::AbstractVector) 
    A = pooling(ϕnlm, Σ)
    function pb(∂A)
       return NoTangent(), NoTangent(), _pullback_evaluate(∂A, pooling, ϕnlm, Σ), NoTangent()
