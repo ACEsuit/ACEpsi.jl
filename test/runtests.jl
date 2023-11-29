@@ -7,4 +7,5 @@ using Test
     @testset "BFwf" begin include("test_bflow.jl") end
     @testset "BFwf_lux" begin include("test_bflow_lux.jl") end
     @testset "BFwf_lux_tucker" begin include("test_bflow_lux_Tucker.jl") end
+    @testset "BFwf_lux_attention" begin include("test_bflow_lux_attention.jl") end
 end

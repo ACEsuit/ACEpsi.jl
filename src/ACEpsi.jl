@@ -14,6 +14,7 @@ include("envelope.jl")
 include("atomicorbitals/atomicorbitals.jl")
 include("jastrow.jl")
 include("tensordecomposition/TD.jl")
+include("attention/attention.jl")
 include("bflow3d.jl")
 include("backflowpooling.jl")
 

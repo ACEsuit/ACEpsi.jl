@@ -14,6 +14,7 @@ using Lux
 
 using ACEpsi.AtomicOrbitals: make_nlms_spec
 using ACEpsi.TD: No_Decomposition, Tucker
+using ACEpsi.Attention: No_attention, self_attention
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 # ----------------- custom layers ------------------
 import ChainRulesCore: rrule
@@ -94,7 +95,7 @@ end
 
 
 # ----------------- usual BF without tensor decomposition ------------------
-function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::No_Decomposition; totdeg = 15, 
+function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::No_Decomposition, AT::No_attention; totdeg = 15, 
    ν = 3, T = Float64, 
    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
    js = JPauliNet(nuclei)) 
@@ -143,12 +144,59 @@ BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei;
          totdeg = 15, ν = 3, T = Float64, 
          sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
          js = JPauliNet(nuclei)) = 
-         BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, No_Decomposition(); 
+         BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, No_Decomposition(), No_attention(); 
          totdeg = totdeg, ν = ν, T = T, 
          sd_admissible = sd_admissible,
          js = js) 
 
 ## 
+function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::No_Decomposition, AT::self_attention; totdeg = 15, 
+   ν = 3, T = Float64, 
+   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+   js = JPauliNet(nuclei)) 
+
+   spec1p = make_nlms_spec(bRnl, bYlm; 
+                          totaldegree = totdeg)
+
+   # ----------- Lux connections ---------
+   # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
+   prodbasis_layer = ACEpsi.AtomicOrbitals.ProductBasisLayer(spec1p, bRnl, bYlm)
+   aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer, nuclei)
+
+   # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
+   pooling = BackflowPooling(aobasis_layer)
+   pooling_layer = ACEpsi.lux(pooling)
+    
+   spec1p = get_spec(nuclei, spec1p)
+   # define sparse for n-correlations
+   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+   default_admissible = bb -> (length(bb) == 0) || (sum(b.n1 - 1 for b in bb ) <= totdeg)
+
+   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
+                        minvv = fill(0, ν), 
+                        maxvv = fill(length(spec1p), ν), 
+                        ordered = true)
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+   
+   # further restrict
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+   
+   # define n-correlation
+   corr1 = Polynomials4ML.SparseSymmProd(spec)
+
+   # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
+   corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
+
+   attention_layer = ACEpsi.Attention.AttentionLayer(Nel, AT.D)
+
+   jastrow_layer = ACEpsi.lux(js)
+
+   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * length(nuclei) * length(prodbasis_layer.sparsebasis))), 
+                        bAA = corr_layer, at = attention_layer,
+                        hidden1 = LinearLayer(length(corr1), Nel), 
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
+end
 
 # ----------------- Tucker BFwf_chain -----------------
 function get_spec(TD::Tucker)  
@@ -163,7 +211,7 @@ function get_spec(TD::Tucker)
    return spec[:]
 end
 
-function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 15, 
+function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker, AT::No_attention; totdeg = 15, 
    ν = 3, T = Float64, 
    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
    js = JPauliNet(nuclei)) 
@@ -212,4 +260,63 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 15,
    return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
 end
 
+BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker; 
+         totdeg = 15, ν = 3, T = Float64, 
+         sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+         js = JPauliNet(nuclei)) = 
+         BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD, No_attention(); 
+         totdeg = totdeg, ν = ν, T = T, 
+         sd_admissible = sd_admissible,
+         js = js) 
+
 ##
+function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker, AT::self_attention; totdeg = 15, 
+   ν = 3, T = Float64, 
+   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+   js = JPauliNet(nuclei)) 
+
+   spec1p = make_nlms_spec(bRnl, bYlm; 
+                          totaldegree = totdeg)
+
+   # ----------- Lux connections ---------
+   # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
+   prodbasis_layer = ACEpsi.AtomicOrbitals.ProductBasisLayer(spec1p, bRnl, bYlm)
+   aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer, nuclei)
+
+   # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
+   pooling = BackflowPooling(aobasis_layer)
+   pooling_layer = ACEpsi.lux(pooling)
+    
+   # P <= length(nuclei) * length(prodbasis_layer.sparsebasis)
+   tucker_layer = ACEpsi.TD.TuckerLayer(TD.P, length(nuclei), length(pooling.basis.prodbasis.sparsebasis))
+
+   spec1p = get_spec(TD)
+   # define sparse for n-correlations
+   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+   default_admissible = bb -> (length(bb) == 0) || (sum(b.P - 1 for b in bb ) <= totdeg)
+
+   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
+                        minvv = fill(0, ν), 
+                        maxvv = fill(length(spec1p), ν), 
+                        ordered = true)
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+   
+   # further restrict
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+   
+   # define n-correlation
+   corr1 = Polynomials4ML.SparseSymmProd(spec)
+
+   # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
+   corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
+
+   attention_layer = ACEpsi.Attention.AttentionLayer(Nel, AT.D)
+   jastrow_layer = ACEpsi.lux(js)
+
+   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, TK = tucker_layer,
+                        reshape = myReshapeLayer((Nel, 3 * TD.P)), 
+                        bAA = corr_layer, at = attention_layer,
+                        hidden1 = LinearLayer(length(corr1), Nel), 
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
+end
