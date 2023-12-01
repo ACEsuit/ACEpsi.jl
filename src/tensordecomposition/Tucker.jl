@@ -41,7 +41,9 @@ _valtype(l::TuckerLayer, x::AbstractArray, ps)  = promote_type(eltype(x), eltype
 
 function (l::TuckerLayer)(x::AbstractArray, ps, st)
     #@tullio out[i, j, p] := ps.W[j, p, m, k] * x[i, j, m, k]
-    out = ntuple(i -> (@tullio out[i, j, p] := ps.W[i, j, p, m, k] * x[i, j, m, k] (m in 1:l.M, k in 1:l.K)), l.Nel)
+    #out = ntuple(a -> (@tullio out[i, j, p] := ps.W[a, j, p, m, k] * x[i, j, m, k] (m in 1:l.M, k in 1:l.K)), l.Nel)
+    A = @tullio out[a, i, j, p] := ps.W[a, j, p, m, k] * x[i, j, m, k] (m in 1:l.M, k in 1:l.K)
+    out = ntuple(a -> reshape(A[a,:,:,:], l.Nel, :), l.Nel)
     ignore_derivatives() do
         release!(x)
     end

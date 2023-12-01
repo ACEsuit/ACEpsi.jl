@@ -257,7 +257,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 15,
    jastrow_layer = ACEpsi.lux(js)
 
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, TK = tucker_layer,
-                        reshape = Lux.Parallel(nothing, (myReshapeLayer((Nel, 3 * TD.P)) for i = 1:Nel)...), 
+                        #reshape = Lux.Parallel(nothing, (myReshapeLayer((Nel, 3 * TD.P)) for i = 1:Nel)...), 
                         bAA = Lux.Parallel(nothing, (deepcopy(corr_layer) for i = 1:Nel)...), 
                         hidden1 = Lux.Parallel(nothing, (LinearLayer(length(corr1), 1) for i = 1:Nel)...),
                         l_concat = WrappedFunction(x -> hcat(x...)),

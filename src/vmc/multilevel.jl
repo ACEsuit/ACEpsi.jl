@@ -32,20 +32,29 @@ end
 function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
     readable_spec = displayspec(spec, spec1p)
     readable_spec2 = displayspec(spec2, spec1p2)
-    @assert size(ps.branch.bf.hidden1.W, 1) == size(ps2.branch.bf.hidden1.W, 1)
-    @assert size(ps.branch.bf.hidden1.W, 2) ≤ size(ps2.branch.bf.hidden1.W, 2)
+    #@assert size(ps.branch.bf.hidden1.W, 1) == size(ps2.branch.bf.hidden1.W, 1)
+    #@assert size(ps.branch.bf.hidden1.W, 2) ≤ size(ps2.branch.bf.hidden1.W, 2)
+    @assert size(ps.branch.bf.hidden1.layer_1.W, 1) == size(ps2.branch.bf.hidden1.layer_1.W, 1)
+    @assert size(ps.branch.bf.hidden1.layer_1.W, 2) ≤ size(ps2.branch.bf.hidden1.layer_1.W, 2)
+
     @assert all(t in readable_spec2 for t in readable_spec)
     @assert all(t in specAO2 for t in specAO)
  
     # set all parameters to zero
-    ps2.branch.bf.hidden1.W .= 0.0
+    #ps2.branch.bf.hidden1.W .= 0.0
+    for i in keys(ps.branch.bf.hidden1)
+        ps2.branch.bf.hidden1[i].W .= 0.0
+    end
 
     # _map[spect] = index in readable_spec2
     _map  = _invmap(readable_spec2)
     _mapAO  = _invmapAO(specAO2)
     # embed
     for (idx, t) in enumerate(readable_spec)
-        ps2.branch.bf.hidden1.W[:, _map[t]] = ps.branch.bf.hidden1.W[:, idx]
+        #ps2.branch.bf.hidden1.W[:, _map[t]] = ps.branch.bf.hidden1.W[:, idx]
+        for i in keys(ps.branch.bf.hidden1)
+            ps2.branch.bf.hidden1[i].W[:, _map[t]] = ps.branch.bf.hidden1[i].W[:, idx]
+        end
     end
     if :ϕnlm in keys(ps.branch.bf)
         if :ζ in keys(ps.branch.bf.ϕnlm)
@@ -58,7 +67,8 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
 
     if :TK in keys(ps.branch.bf)
         ps2.branch.bf.TK.W .= 0
-        ps2.branch.bf.TK.W[:,1:size(ps.branch.bf.TK.W)[2],:,1:size(ps.branch.bf.TK.W)[4]] .= ps.branch.bf.TK.W
+        # W = randn(rng, l.Nel, 3, l.P, l.M, l.K)
+        ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],:,1:size(ps.branch.bf.TK.W)[5]] .= ps.branch.bf.TK.W
     end
     return ps2
 end
@@ -108,10 +118,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
        end
        ν = maximum(length.(spec))
        if :hidden1 in keys(ps.branch.bf)
-            _basis_size = size(ps.branch.bf.hidden1.W, 2)
-            @info("level = $l, order = $ν, size of basis = $_basis_size")
-       elseif :hidden1 in keys(ps.branch.bf.Pds.layer_1)
-            _basis_size = size(ps.branch.bf.Pds.layer_1.hidden1.W, 2)
+            _basis_size = size(ps.branch.bf.hidden1[1].W, 2)
             @info("level = $l, order = $ν, size of basis = $_basis_size")
        else 
             @info("level = $l, order = $ν")
