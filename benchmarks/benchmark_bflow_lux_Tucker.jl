@@ -41,8 +41,10 @@ bRnl = AtomicOrbitalsRadials(Pn, Dn, spec)
 bYlm = RYlmBasis(Ylmdegree)
 
 # setup state
-BFwf_chain, spec, spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei, Tucker(5); totdeg = totdegree, ν = 2)
+BFwf_chain, spec, spec1p = ACEpsi.BFwf_lux(Nel, bRnl, bYlm, nuclei, Tucker(5); totdeg = totdegree, ν = 2)
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
+out, st = BFwf_chain(X, ps, st)
+
 
 @btime BFwf_chain($X, $ps, $st)
 @btime gradient($BFwf_chain, $X, $ps, $st)
@@ -62,6 +64,6 @@ end
 
 @profview let  BFwf_chain = BFwf_chain, X = X, ps =  ps, st = st
    for i = 1:10_000
-      laplacian(X, ps, st)
+      laplacian(BFwf_chain, X, ps, st)
    end
 end
