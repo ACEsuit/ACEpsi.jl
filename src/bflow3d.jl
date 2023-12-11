@@ -1,20 +1,23 @@
-using LinearAlgebra: det
+using Polynomials4ML, Random, ACEpsi
+using Polynomials4ML: OrthPolyBasis1D3T, LinearLayer, PooledSparseProduct, SparseSymmProdDAG, SparseSymmProd, release!
+using Polynomials4ML.Utils: gensparse
+using LinearAlgebra: qr, I, logabsdet, pinv, mul!, dot , tr, det
 using LuxCore: AbstractExplicitLayer
 using Lux: Chain, WrappedFunction, BranchLayer
 using ChainRulesCore: NoTangent
+# ----------------------------------------
+# some quick hacks that we should take care in P4ML later with careful thoughts
+using ObjectPools: acquire!
+using StrideArrays
+using ObjectPools: unwrap
+using Lux
 
-using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 using ACEpsi.AtomicOrbitals: make_nlms_spec
-using Polynomials4ML: LinearLayer, PooledSparseProduct, SparseSymmProd
-using Polynomials4ML.Utils: gensparse
-using ObjectPools: release!
-
-using Polynomials4ML, Random, ACEpsi, Lux, ChainRulesCore
-
-import ForwardDiff
-
+using ACEpsi.TD: No_Decomposition, Tucker
+using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 # ----------------- custom layers ------------------
 import ChainRulesCore: rrule
+import ForwardDiff
 
 struct MaskLayer <: AbstractExplicitLayer 
    nX::Int64
@@ -39,6 +42,8 @@ function rrule(::typeof(Lux.apply), l::MaskLayer, Φ, ps, st)
    return (val, st), pb
 end
 
+##
+
 struct myReshapeLayer{N} <: AbstractExplicitLayer
    dims::NTuple{N, Int}
 end
@@ -47,7 +52,7 @@ end
    return reshape(unwrap(x), r.dims), st
 end
 
-function rrule(::typeof(Lux.apply), l::myReshapeLayer{N}, X, ps, st) where {N}
+function rrule(::typeof(LuxCore.apply), l::myReshapeLayer{N}, X, ps, st) where {N}
    val = l(X, ps, st)
    function pb(dϕnlm) # dA is of a tuple (dAmat, st), dAmat is of size (Nnuc, Nel, Nnlm)
       A = reshape(unwrap(dϕnlm[1]), size(X))
@@ -56,7 +61,9 @@ function rrule(::typeof(Lux.apply), l::myReshapeLayer{N}, X, ps, st) where {N}
    return val, pb
 end
 
-# ----------------- wf utils ------------------
+##
+
+# ----------------- utils ------------------
 function get_spec(nuclei, spec1p) 
    spec = []
    Nnuc = length(nuclei)
@@ -74,6 +81,7 @@ function get_spec(nuclei, spec1p)
    return spec[:]
 end
 
+
 function displayspec(spec, spec1p)
    nicespec = []
    for k = 1:length(spec)
@@ -82,10 +90,14 @@ function displayspec(spec, spec1p)
    return nicespec
 end
 
-# ---------------- BFlux ----------------------
-function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15, 
+##
+
+
+# ----------------- usual BF without tensor decomposition ------------------
+function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::No_Decomposition; totdeg = 15, 
    ν = 3, T = Float64, 
-   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0) 
+   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+   js = JPauliNet(nuclei)) 
 
    spec1p = make_nlms_spec(bRnl, bYlm; 
                           totaldegree = totdeg)
@@ -98,7 +110,7 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
    pooling = BackflowPooling(aobasis_layer)
    pooling_layer = ACEpsi.lux(pooling)
-
+    
    spec1p = get_spec(nuclei, spec1p)
    # define sparse for n-correlations
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
@@ -119,15 +131,138 @@ function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; totdeg = 15,
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
    corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
 
-   #js = Jastrow(nuclei)
-   #jastrow_layer = ACEpsi.lux(js)
+   jastrow_layer = ACEpsi.lux(js)
 
-   #reshape_func = x -> reshape(x, (size(x, 1), prod(size(x)[2:end])))
-
-   #_det = x -> size(x) == (1, 1) ? x[1,1] : det(Matrix(x))
    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * length(nuclei) * length(prodbasis_layer.sparsebasis))), 
                         bAA = corr_layer, hidden1 = LinearLayer(length(corr1), Nel), 
-                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
-   # return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
-   return BFwf_chain, spec, spec1p
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
 end
+
+BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei; 
+         totdeg = 15, ν = 3, T = Float64, 
+         sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+         js = JPauliNet(nuclei)) = 
+         BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, No_Decomposition(); 
+         totdeg = totdeg, ν = ν, T = T, 
+         sd_admissible = sd_admissible,
+         js = js) 
+
+## 
+
+# ----------------- Tucker BFwf_chain -----------------
+function get_spec(TD::Tucker)  
+   spec = Array{Any}(undef, (3, TD.P))
+ 
+   for k = 1:TD.P
+      for (is, s) in enumerate(extspins())
+            spec[is, k] = (s=s, P = k)
+      end
+   end
+ 
+   return spec[:]
+end
+
+# function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 15, 
+#    ν = 3, T = Float64, 
+#    sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+#    js = JPauliNet(nuclei)) 
+
+#    spec1p = make_nlms_spec(bRnl, bYlm; 
+#                           totaldegree = totdeg)
+
+#    # ----------- Lux connections ---------
+#    # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
+#    prodbasis_layer = ACEpsi.AtomicOrbitals.ProductBasisLayer(spec1p, bRnl, bYlm)
+#    aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer, nuclei)
+
+#    # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
+#    pooling = BackflowPooling(aobasis_layer)
+#    pooling_layer = ACEpsi.lux(pooling)
+    
+#    # P <= length(nuclei) * length(prodbasis_layer.sparsebasis)
+#    tucker_layer = ACEpsi.TD.TuckerLayer(TD.P, length(nuclei), length(pooling.basis.prodbasis.sparsebasis))
+
+#    spec1p = get_spec(TD)
+#    # define sparse for n-correlations
+#    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+#    default_admissible = bb -> (length(bb) == 0) || (sum(b.P - 1 for b in bb ) <= totdeg)
+
+#    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
+#                         minvv = fill(0, ν), 
+#                         maxvv = fill(length(spec1p), ν), 
+#                         ordered = true)
+#    spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+   
+#    # further restrict
+#    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+   
+#    # define n-correlation
+#    corr1 = Polynomials4ML.SparseSymmProd(spec)
+
+#    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
+#    corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
+
+#    jastrow_layer = ACEpsi.lux(js)
+
+#    BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, TK = tucker_layer,
+#                         reshape = Lux.Parallel(nothing, (myReshapeLayer((Nel, 3 * TD.P)) for i = 1:Nel)...), 
+#                         bAA = Lux.Parallel(nothing, (deepcopy(corr_layer) for i = 1:Nel)), hidden1 = LinearLayer(length(corr1), Nel), 
+#                         Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
+#    return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
+# end
+
+
+
+function BFwf_lux(Nel::Integer, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 15, 
+   ν = 3, T = Float64, 
+   sd_admissible = bb -> prod(b.s != '∅' for b in bb) == 0, 
+   js = JPauliNet(nuclei)) 
+
+   spec1p = make_nlms_spec(bRnl, bYlm; 
+                          totaldegree = totdeg)
+
+   # ----------- Lux connections ---------
+   # AtomicOrbitalsBasis: (X, Σ) -> (length(nuclei), nX, length(spec1))
+   prodbasis_layer = ACEpsi.AtomicOrbitals.ProductBasisLayer(spec1p, bRnl, bYlm)
+   aobasis_layer = ACEpsi.AtomicOrbitals.AtomicOrbitalsBasisLayer(prodbasis_layer, nuclei)
+
+   # BackFlowPooling: (length(nuclei), nX, length(spec1 from totaldegree)) -> (nX, 3, length(nuclei), length(spec1))
+   pooling = BackflowPooling(aobasis_layer)
+   pooling_layer = ACEpsi.lux(pooling)
+    
+   # P <= length(nuclei) * length(prodbasis_layer.sparsebasis)
+   tucker_layer = ACEpsi.TD.TuckerLayer(TD.P, length(nuclei), length(pooling.basis.prodbasis.sparsebasis), Nel)
+
+   spec1p = get_spec(TD)
+   # define sparse for n-correlations
+   tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+   default_admissible = bb -> (length(bb) == 0) || (sum(b.P - 1 for b in bb ) <= totdeg)
+
+   specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
+                        minvv = fill(0, ν), 
+                        maxvv = fill(length(spec1p), ν), 
+                        ordered = true)
+   spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+   
+   # further restrict
+   spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+   
+   # define n-correlation
+   corr1 = Polynomials4ML.SparseSymmProd(spec)
+
+   # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
+   corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
+
+   jastrow_layer = ACEpsi.lux(js)
+
+   BFwf_chain = Chain(; ϕnlm = aobasis_layer, bA = pooling_layer, TK = tucker_layer,
+                        #reshape = Lux.Parallel(nothing, (myReshapeLayer((Nel, 3 * TD.P)) for i = 1:Nel)...), 
+                        bAA = Lux.Parallel(nothing, (deepcopy(corr_layer) for i = 1:Nel)...), 
+                        hidden1 = Lux.Parallel(nothing, (LinearLayer(length(corr1), 1) for i = 1:Nel)...),
+                        l_concat = WrappedFunction(x -> hcat(x...)),
+                        Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x -> det(x)))
+   return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p
+end
+
+##

@@ -2,6 +2,8 @@
 using Polynomials4ML, ACEbase, Printf, ACEpsi 
 using ACEpsi: BFwf1, gradient, laplacian
 using LinearAlgebra
+using Test
+using Printf
 
 
 function lap_test(f, Δf, X)
@@ -95,7 +97,6 @@ function _fdtest(F, Σ, dF, x::AbstractVector; h0 = 1.0, verbose=true)
  end
 ##
 
-const ↑, ↓, ∅ = '↑','↓','∅'
 Nel = 5
 polys = legendre_basis(8)
 wf = BFwf1(Nel, polys; ν = 3)
@@ -106,10 +107,6 @@ wf(X, Σ)
 g = gradient(wf, X, Σ)
 
 ##
-
-using LinearAlgebra
-using Printf
-
 @info("Fd test of gradient w.r.t. X")
 @test _fdtest(wf, Σ, g, X)
 

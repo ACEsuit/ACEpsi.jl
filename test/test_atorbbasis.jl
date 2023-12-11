@@ -64,6 +64,7 @@ Nnlm = length(aobasis_layer.prodbasis.sparsebasis)
 Nnuc = length(aobasis_layer.nuclei)
 
 for I = 1:Nnuc 
+   local Rnl
    XI = X .- Ref(aobasis_layer.nuclei[I].rr)
    xI = norm.(XI)
    Rnl = evaluate(bRnl, xI)
@@ -83,7 +84,7 @@ for I = 1:Nnuc
                a2 = Rnl[i, iR] * Ylm[i, iY]
             end
             # println("(i=$i, σ=$s, I=$I, n=$(nlm.n), l=$(nlm.l), m=$(nlm.m)) -> ", abs(a1 - a2))
-            print_tf(@test a1 ≈ a2)
+            print_tf(@test norm(a1 - a2) < 1e-12)
          end
       end
    end

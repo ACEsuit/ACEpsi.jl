@@ -54,22 +54,21 @@ Pn = Polynomials4ML.legendre_basis(n1+1)
 Dn = STO_NG((ζ, D))
 bYlm = RYlmBasis(Ylmdegree)
 
-totdegree = [30, 30, 30]
-ν = [1, 1, 1]
-MaxIters = [150, 200, 200]
-_TD = [ACEpsi.No_Decomposition(),ACEpsi.No_Decomposition(),ACEpsi.No_Decomposition()]
+totdegree = [30, 30, 30, 30]
+ν = [1, 1, 1, 1]
+MaxIters = [100, 200, 200, 2000]
+Nbf = [1,1,1,2]
 spec = [(n1 = 1, n2 = 1, l = 0), (n1 = 1, n2 = 2, l = 0), (n1 = 2, n2 = 1, l = 1)]
 _spec = [spec[1:i] for i = 1:length(spec)]
 _spec = length(ν)>length(spec) ? reduce(vcat, [_spec, [spec[1:end] for i = 1:length(ν) - length(spec)]]) : _spec
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν, _TD)
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = ACEpsi.vmc.mwf_multilevel(Nel, Σ, nuclei, Nbf, Dn, Pn, bYlm, _spec, totdegree, ν)
 
 ham = SumH(nuclei)
-sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 2000, nchains = 2000)
+sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)
 opt_vmc = VMC_multilevel(MaxIters, 0.015, ACEpsi.vmc.adamW(); lr_dc = 100.0)
 end
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
                     st_list, spec_list, spec1p_list, specAO_list, batch_size = 200)
 
-
 ## MRCI+Q: -23.5092
-## UHF:    -23.2997
+## UHF:    -23.2997 # -23.2495439362175, -23.25486888572957

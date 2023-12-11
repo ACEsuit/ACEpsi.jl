@@ -18,11 +18,11 @@ SR(ϵ1::Number, ϵ2::Number) = SR(ϵ1, ϵ2, QGT())
 
 _destructure(ps) = destructure(ps)[1]
 
-function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α)
+function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α; batch_size = 200)
     ϵ1 = type.ϵ1
     ϵ2 = type.ϵ2
 
-    g, acc, λ₀, σ = grad_sr(type._sr_type, wf, ps, st, sam, ham, ϵ1, ϵ2)
+    g, acc, λ₀, σ = grad_sr(type._sr_type, wf, ps, st, sam, ham, ϵ1, ϵ2, batch_size = batch_size)
     res = norm(g)
 
     p, s = destructure(ps)
@@ -35,8 +35,8 @@ end
 # O_kl = ∂ln ψθ(x_k)/∂θ_l : N_ps × N_sample
 # Ō_k = 1/N_sample ∑_i=1^N_sample O_ki : N_ps × 1
 # ΔO_ki = O_ki - Ō_k -> ΔO_ki/sqrt(N_sample)
-function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH)
-    λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham)
+function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
+    λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
     dps = grad_params.(Ref(wf), x0, Ref(ps), Ref(st))
     O = 1/2 * reshape(_destructure(dps), (length(_destructure(ps)),sam.nchains))
     Ō = mean(O, dims =2)
@@ -44,8 +44,8 @@ function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH)
     return λ₀, σ, E, acc, ΔO
 end
 
-function grad_sr(_sr_type::QGT, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number)
-    λ₀, σ, E, acc, ΔO = Jacobian_O(wf, ps, st, sam, ham)
+function grad_sr(_sr_type::QGT, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
+    λ₀, σ, E, acc, ΔO = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
     g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
@@ -57,8 +57,8 @@ function grad_sr(_sr_type::QGT, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Numb
     return g, acc, λ₀, σ
 end
 
-function grad_sr(_sr_type::QGTJacobian, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number)
-    λ₀, σ, E, acc, ΔO = Jacobian_O(wf, ps, st, sam, ham)
+function grad_sr(_sr_type::QGTJacobian, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
+    λ₀, σ, E, acc, ΔO = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
     g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
@@ -82,8 +82,8 @@ function grad_sr(_sr_type::QGTJacobian, wf, ps, st, sam::MHSampler, ham::SumH, �
     return g, acc, λ₀, σ
 end
 
-function grad_sr(_sr_type::QGTOnTheFly, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number)
-    λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham)
+function grad_sr(_sr_type::QGTOnTheFly, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
+    λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
 
     # w = O * v 
     function jvp(v::AbstractVector, wf, ps::NamedTuple, x0)
