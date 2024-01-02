@@ -49,7 +49,7 @@ wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(N
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 10, nchains = 20)
-opt_vmc = VMC_multilevel(MaxIters, 0.2, ACEpsi.vmc.adamW(); lr_dc = 50.0)
+opt_vmc = VMC_multilevel(MaxIters, 0.2, ACEpsi.vmc.SR(); lr_dc = 50.0)
 end
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
                     st_list, spec_list, spec1p_list, specAO_list, batch_size = 50)

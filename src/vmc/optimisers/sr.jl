@@ -22,7 +22,7 @@ function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α; batch
     ϵ1 = type.ϵ1
     ϵ2 = type.ϵ2
 
-    g, acc, λ₀, σ = grad_sr(type._sr_type, wf, ps, st, sam, ham, ϵ1, ϵ2, batch_size = batch_size)
+    g, acc, λ₀, σ, x0 = grad_sr(type._sr_type, wf, ps, st, sam, ham, ϵ1, ϵ2, batch_size = batch_size)
     res = norm(g)
 
     p, s = destructure(ps)
@@ -41,11 +41,11 @@ function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
     O = 1/2 * reshape(_destructure(dps), (length(_destructure(ps)),sam.nchains))
     Ō = mean(O, dims =2)
     ΔO = (O .- Ō)/sqrt(sam.nchains)
-    return λ₀, σ, E, acc, ΔO
+    return λ₀, σ, E, acc, ΔO, x0
 end
 
 function grad_sr(_sr_type::QGT, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
-    λ₀, σ, E, acc, ΔO = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
+    λ₀, σ, E, acc, ΔO, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
     g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
@@ -54,11 +54,11 @@ function grad_sr(_sr_type::QGT, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Numb
     S[diagind(S)] .*= (1+ϵ1)
     S[diagind(S)] .+= ϵ2
     g = S \ g0
-    return g, acc, λ₀, σ
+    return g, acc, λ₀, σ, x0
 end
 
 function grad_sr(_sr_type::QGTJacobian, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
-    λ₀, σ, E, acc, ΔO = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
+    λ₀, σ, E, acc, ΔO, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
     g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
@@ -79,7 +79,7 @@ function grad_sr(_sr_type::QGTJacobian, wf, ps, st, sam::MHSampler, ham::SumH, �
     end
     LM_S = LinearMap(Svp!, size(ΔO)[1]; issymmetric=true, ismutating=true)
     g = gmres(LM_S, g0)
-    return g, acc, λ₀, σ
+    return g, acc, λ₀, σ, x0
 end
 
 function grad_sr(_sr_type::QGTOnTheFly, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
