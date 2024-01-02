@@ -45,7 +45,7 @@ totdegree = [30,30,30]
 ν = [1,1,2]
 MaxIters = [100,100,500]
 _spec = [spec[1:3], spec[1:4], spec]
-_TD = [ACEpsi.Tucker(5),ACEpsi.Tucker(6),ACEpsi.Tucker(7)]
+_TD = [ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition()]
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν, _TD)
 
 ham = SumH(nuclei)

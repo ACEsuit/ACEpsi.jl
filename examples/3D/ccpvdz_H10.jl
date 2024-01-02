@@ -57,7 +57,7 @@ bYlm = RYlmBasis(Ylmdegree)
 totdegree = [30, 30, 30]
 ν = [1, 1, 1]
 MaxIters = [150, 200, 200]
-_TD = [ACEpsi.No_Decomposition(),ACEpsi.No_Decomposition(),ACEpsi.No_Decomposition()]
+_TD = [ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition()]
 spec = [(n1 = 1, n2 = 1, l = 0), (n1 = 1, n2 = 2, l = 0), (n1 = 2, n2 = 1, l = 1)]
 _spec = [spec[1:i] for i = 1:length(spec)]
 _spec = length(ν)>length(spec) ? reduce(vcat, [_spec, [spec[1:end] for i = 1:length(ν) - length(spec)]]) : _spec

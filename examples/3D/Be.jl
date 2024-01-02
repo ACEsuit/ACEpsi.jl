@@ -44,15 +44,15 @@ totdegree = [30,30,30]
 ν = [1,1,2]
 MaxIters = [100,100,200]
 _spec = [spec[1:3], spec, spec]
-_TD = [ACEpsi.Tucker(5),ACEpsi.Tucker(6),ACEpsi.Tucker(7)]
+_TD = [ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition()]
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
-sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 1000, nchains = 2000)
+sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 10, nchains = 20)
 opt_vmc = VMC_multilevel(MaxIters, 0.2, ACEpsi.vmc.adamW(); lr_dc = 50.0)
 end
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, batch_size = 500)
+                    st_list, spec_list, spec1p_list, specAO_list, batch_size = 50)
 
 # Eref = -14.667
 # HF   = -14.573
