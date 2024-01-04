@@ -18,7 +18,7 @@ mutable struct VMC_multilevel
     utype::uptype
 end
 
-VMC_multilevel(MaxIter::Vector{Int}, lr::Float64, type; tol = 1.0e-3, lr_dc = 50.0) = VMC_multilevel(tol, MaxIter, lr, lr_dc, type, _continue());
+VMC_multilevel(MaxIter::Vector{Int}, lr::Float64, type; tol = 1.0e-3, lr_dc = 50.0) = VMC_multilevel(tol, MaxIter, lr, lr_dc, type, _initial());
      
 # TODO: this should be implemented to recursively embed the wavefunction
 
@@ -63,14 +63,14 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
        # do embeddings
        if l > 1
             wf = wf_list[l]
-            # embed for ps
             p, s = destructure(ps)
-            ps = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l])
             # embed for mt and vt
             ips = s(collect(1:length(p)))
             ips = EmbeddingP!(ips, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l])
             index, = destructure(ips) 
             mₜ, vₜ = updatep(opt_vmc.type, opt_vmc.utype, ps_list[l], index, mₜ, vₜ )
+            # embed for ps
+            ps = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l])
             st = st_list[l]
             spec = spec_list[l]
             specAO = specAO_list[l]
@@ -196,8 +196,6 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
     end
     return wf, spec, spec1p, _spec, ps, st
 end
-
-
 
 function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
     readable_spec = displayspec(spec, spec1p)
