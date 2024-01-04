@@ -16,8 +16,10 @@ VMC(MaxIter::Int, lr::Float64, type; tol = 1.0e-3, lr_dc = 50.0) = VMC(tol, MaxI
         
 function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH, 
                 wf, ps, st; 
-                ν = 1, verbose = true, density = false, accMCMC = [10, [0.45, 0.55]], batch_size = 1)
+                ν = 1, verbose = true, density = false, 
+                accMCMC = [10, [0.45, 0.55]], batch_size = 1)
 
+    mₜ, vₜ = initp(opt_vmc.type, ps_list[1])
     res, λ₀, α = 1.0, 0., opt_vmc.lr
     err_opt = zeros(opt_vmc.MaxIter)
 
@@ -43,7 +45,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
         α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
 
         # optimization
-        ps, acc, λ₀, res, σ, x0 = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, batch_size = batch_size)
+        ps, acc, λ₀, res, σ, x0, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)
         density && begin 
             if k % 10 == 0
                 x = reduce(vcat,reduce(vcat,x0))
@@ -61,5 +63,3 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
     end
     return wf, err_opt, ps
 end
-
-

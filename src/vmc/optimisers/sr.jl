@@ -7,30 +7,29 @@ using ObjectPools: acquire!
 # stochastic reconfiguration
 
 mutable struct SR <: opt
-    ϵ1::Number
-    ϵ2::Number
+    ϵ₁::Number
+    ϵ₂::Number
+    β₁::Number
+    β₂::Number
     _sr_type::sr_type
+    st::Scalar_type
+    nt::Norm_type
 end
 
-SR() = SR(0., 0.01, QGT())
-
-SR(ϵ1::Number, ϵ2::Number) = SR(ϵ1, ϵ2, QGT())
+SR() = SR(0.0, 0.1, 0.95, 0.0, QGT(), scale_invariant(), norm_constraint(1.0))
 
 _destructure(ps) = destructure(ps)[1]
 
-function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α; batch_size = 200)
-    ϵ1 = type.ϵ1
-    ϵ2 = type.ϵ2
-
-    g, acc, λ₀, σ, x0 = grad_sr(type._sr_type, wf, ps, st, sam, ham, ϵ1, ϵ2, batch_size = batch_size)
+function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α, mₜ, vₜ, t; batch_size = 200)
+    g, acc, λ₀, σ, x0, mₜ, vₜ = grad_sr(type._sr_type, type, wf, ps, st, sam, ham, mₜ, vₜ, t, batch_size = batch_size)
     res = norm(g)
 
     p, s = destructure(ps)
     p = p - α * g
     ps = s(p)
-    return ps, acc, λ₀, res, σ, x0
+    return ps, acc, λ₀, res, σ, x0, mₜ, vₜ
 end
-   
+
 
 # O_kl = ∂ln ψθ(x_k)/∂θ_l : N_ps × N_sample
 # Ō_k = 1/N_sample ∑_i=1^N_sample O_ki : N_ps × 1
@@ -44,19 +43,88 @@ function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
     return λ₀, σ, E, acc, ΔO, x0
 end
 
-function grad_sr(_sr_type::QGT, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
+function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH, mₜ, vₜ, t; batch_size = 200)
     λ₀, σ, E, acc, ΔO, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
     g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
     # Sx = g0
     S = ΔO * ΔO'
-    S[diagind(S)] .*= (1+ϵ1)
-    S[diagind(S)] .+= ϵ2
-    g = S \ g0
-    return g, acc, λ₀, σ, x0
+    # momentum
+    vₜ = momentum(vₜ, S, type.β₁)
+
+    # Scale Regularization
+    vₜ, g0 = scale_regularization(vₜ, g0, type.st)
+
+    # damping: S_ij = S_ij + eps δ_ij
+    vₜ[diagind(vₜ)] .*= (1+type.ϵ₁)
+    vₜ[diagind(vₜ)] .+= type.ϵ₂
+    #vₜ = vₜ + type.ϵ₁ * max(0.1, 100*0.9^t) * Diagonal(diag(vₜ)) + type.ϵ₂ * max(0.1, 100*0.9^t) * Diagonal(diag(one(S)))
+
+    g = vₜ \ g0
+    # momentum for g 
+    mₜ = momentum(mₜ, g, type.β₂)
+  
+    # norm_constraint
+    ϵ = norm_constraint(vₜ, g0, g, type.nt, 1.0)
+    g *= ϵ
+    return g, acc, λ₀, σ, x0, mₜ, vₜ
 end
 
+function initp(_opt::SR, ps::NamedTuple)
+    p, = destructure(ps)
+    _l = length(p)
+    vₜ = zeros(_l, _l)
+    mₜ = zeros(_l)
+    return mₜ, vₜ
+end
+
+function updatep(_opt::SR, _utype::_initial, ps, index, mₜ, vₜ)   
+    nmₜ, nvₜ = initp(_opt, ps)
+    return nmₜ, nvₜ
+end
+
+function updatep(_opt::SR, _utype::_continue, ps, index, mₜ, vₜ)   
+    nmₜ, nvₜ = initp(_opt, ps)
+    nmₜ[index .> 0] .= mₜ
+    nvₜ[index .> 0, index .> 0] .= vₜ
+    nvₜ[diagind(nvₜ)] .= vₜ[1,1]
+    return nmₜ, nvₜ
+end
+
+function scale_regularization(vₜ::AbstractMatrix, g0::AbstractVector, st::scale_invariant)
+    # S_ij = S_ij/sqrt(S_ii ⋅ S_jj)
+    diag_vₜ = sqrt.(diag(vₜ))
+    vₜ = vₜ ./ diag_vₜ ./ diag_vₜ'
+  
+    # g_i = g_i/sqrt(S_ii)
+    g0 = g0 ./ diag_vₜ
+    return vₜ, g0
+end
+  
+function scale_regularization(vₜ::AbstractMatrix, g0::AbstractVector, st::no_scale)
+    return vₜ, g0
+end
+  
+function norm_constraint(vₜ::AbstractMatrix, g::AbstractVector, g0::AbstractVector, nt::no_constraint, ϵ::Number)
+  return 1.0
+end
+
+function norm_constraint(vₜ::AbstractMatrix, g::AbstractVector, g0::AbstractVector, nt::norm_constraint, ϵ::Number)
+  a = sqrt(nt.c/ (g' * g0))
+  ϵ = min(1.0, a)
+  return ϵ
+end
+
+function momentum(m::AbstractVector, g::AbstractVector, b::Number)
+  return b * m + (1-b) * g
+end
+
+function momentum(vₜ::AbstractMatrix, S::AbstractMatrix, b::Number)
+  return b * vₜ + (1-b) * S
+end
+
+"""
 function grad_sr(_sr_type::QGTJacobian, wf, ps, st, sam::MHSampler, ham::SumH, ϵ1::Number, ϵ2::Number; batch_size = 200)
     λ₀, σ, E, acc, ΔO, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
     g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
@@ -125,3 +193,4 @@ function grad_sr(_sr_type::QGTOnTheFly, wf, ps, st, sam::MHSampler, ham::SumH, �
     g = gmres(LM_S, g0)
     return g, acc, λ₀, σ
 end
+"""
