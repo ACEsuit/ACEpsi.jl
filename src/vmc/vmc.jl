@@ -34,6 +34,10 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
 
     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
     verbose && @printf("   k |  𝔼[E_L]   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
+    if :hidden in keys(ps.branch.bf.hidden.layer_1)
+        _basis_size = size(ps.branch.bf.hidden.layer_1.hidden.W, 2)
+        @info("size of basis = $_basis_size")
+    end
     for k = 1 : opt_vmc.MaxIter
         sam.x0 = x0
         

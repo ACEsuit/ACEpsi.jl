@@ -29,26 +29,25 @@ end
 """
 struct TuckerLayer <: AbstractExplicitLayer 
    P::Integer # reduced dimension
-   M::Integer # number of nuclei
    K::Integer # spec1p
    Nel::Integer # number of electrons
    @reqfields()
 end
 
-TuckerLayer(P::Integer, M::Integer, K::Integer, Nel::Integer) = TuckerLayer(P, M, K, Nel, _make_reqfields()...)
+TuckerLayer(P::Integer, K::Integer, Nel::Integer) = TuckerLayer(P, K, Nel, _make_reqfields()...)
 
 _valtype(l::TuckerLayer, x::AbstractArray, ps)  = promote_type(eltype(x), eltype(ps.W))
 
 function (l::TuckerLayer)(x::AbstractArray, ps, st)
     #@tullio out[i, j, p] := ps.W[j, p, m, k] * x[i, j, m, k]
     #out = ntuple(a -> (@tullio out[i, j, p] := ps.W[a, j, p, m, k] * x[i, j, m, k] (m in 1:l.M, k in 1:l.K)), l.Nel)
-    A = @tullio out[a, i, j, p] := ps.W[a, j, p, m, k] * x[i, j, m, k] (m in 1:l.M, k in 1:l.K)
-    out = ntuple(a -> reshape(A[a,:,:,:], l.Nel, :), l.Nel)
+    A = @tullio out[a, i, j, p] := ps.W[a, j, p, k] * x[i, j, k] (k in 1:l.K)
+    #out = ntuple(a -> reshape(A[a,:,:,:], l.Nel, :), l.Nel)
     ignore_derivatives() do
         release!(x)
     end
-    return out, st
+    return A, st
 end
 
-LuxCore.initialparameters(rng::AbstractRNG, l::TuckerLayer) = ( W = randn(rng, l.Nel, 3, l.P, l.M, l.K), )
+LuxCore.initialparameters(rng::AbstractRNG, l::TuckerLayer) = ( W = randn(rng, l.Nel, 3, l.P, l.K), )
 LuxCore.initialstates(rng::AbstractRNG, l::TuckerLayer) = NamedTuple()

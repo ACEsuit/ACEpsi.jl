@@ -1,18 +1,17 @@
 using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
-using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
-using ACEpsi.vmc: gradient, laplacian, grad_params
+using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
+using ACEpsi.vmc: gradient, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
 using Zygote
-using Optimisers # mainly for the destrcuture(ps) function
+using Optimisers
 using Random
 using Printf
 using LinearAlgebra
 using BenchmarkTools
-
 using HyperDualNumbers: Hyper
 
 function grad_test2(f, df, X::AbstractVector)
@@ -27,37 +26,36 @@ function grad_test2(f, df, X::AbstractVector)
    end
 end
 
-Rnldegree = n1 = 2
-Ylmdegree = 3
-totdegree = 3
-Nel = 2
-X = randn(SVector{3, Float64}, Nel)
-Σ = rand(spins(), Nel)
-nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:3 ]
-
 # wrap it as HyperDualNumbers
 x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
 hX = [x2dualwrtj(x, 0) for x in X]
 hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
 
-##
+n1 = Rnldegree = 2
+totdegree = 2
+Nel = 4
+X = randn(SVector{3, Float64}, Nel)
+Σ = [↑,↑,↓,↓]
+nuclei = [Nuc(SVector(0.0,0.0,-3.015/2), 2.0), Nuc(SVector(0.0,0.0,3.015/2), 1.0),Nuc(SVector(0.0,0.0,4.015/2), 1.0)]
 
 # Defining AtomicOrbitalsBasis
-n2 = 2
+n2 = 1
 Pn = Polynomials4ML.legendre_basis(n1+1)
-spec = [(n1 = n1, n2 = n2, l = l) for n1 = 1:n1 for n2 = 1:n2 for l = 0:n1-1] 
-ζ = rand(length(spec))
-Dn = GaussianBasis(ζ)
-bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
-bYlm = RYlmBasis(Ylmdegree)
+Ylmdegree = 2
+spec = [[(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 1)], [(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 2)]]
+speclist = [1,2,2]
 
-# setup state
-BFwf_chain, spec, spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei; totdeg = totdegree, ν = 2)
-ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
-
+bYlm = RRlmBasis(Ylmdegree)
+bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(spec[i]))), spec[speclist[i]]) for i = 1:length(spec)]
+ν = 2    
+Nbf = 3
+BFwf_chain, spec, spec1p = wf, spec, spec1p = BFwf_lux(Nel, Nbf, speclist, bRnl, bYlm, nuclei, ACEpsi.TD.Tucker(3))
 ##
 
 @info("Test evaluate")
+A1 = BFwf_chain(X, ps, st)
+hA1 = BFwf_chain(hX, ps, st)
+
 A1 = BFwf_chain(X, ps, st)
 hA1 = BFwf_chain(hX, ps, st)
 

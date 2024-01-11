@@ -32,7 +32,7 @@ bYlm = RRlmBasis(Ylmdegree)
 bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(spec[i]))), spec[speclist[i]]) for i = 1:length(spec)]
 ν = 2    
 Nbf = 3
-BFwf_chain, spec, spec1p = wf, spec, spec1p = BFwf_lux(Nel, Nbf, speclist, bRnl, bYlm, nuclei, ACEpsi.TD.No_Decomposition())
+BFwf_chain, spec, spec1p = wf, spec, spec1p = BFwf_lux(Nel, Nbf, speclist, bRnl, bYlm, nuclei, ACEpsi.TD.Tucker(3))#ACEpsi.TD.No_Decomposition())
 
 ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
 wf(X, ps, st)
@@ -58,7 +58,6 @@ hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
 @info("Test evaluate")
 A1 = BFwf_chain(X, ps, st)
 hA1 = BFwf_chain(hX, ps, st)
-
 print_tf(@test hA1[1].value ≈ A1[1])
 
 println()

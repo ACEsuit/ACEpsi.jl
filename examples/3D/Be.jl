@@ -31,7 +31,7 @@ X = randn(SVector{3, Float64}, Nel)
 nuclei = [ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)]
 ##
 
-spec = [(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 1), (n1 = 3, n2 = 1, l = 0)]
+spec = [[(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 1), (n1 = 3, n2 = 1, l = 0)]]
 n1 = 3
 Pn = Polynomials4ML.legendre_basis(n1+1)
 Ylmdegree = 2
@@ -42,17 +42,30 @@ bYlm = RYlmBasis(Ylmdegree)
 
 totdegree = [30,30,30]
 ν = [1,1,2]
-MaxIters = [100,100,200]
-_spec = [spec[1:3], spec, spec]
+MaxIters = [10,10,20]
+_spec = [[spec[1][1:3]], spec, spec]
 _TD = [ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition()]
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, totdegree, ν, _TD)
+Nbf = [1,1,2]
+speclist = [1]
+
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 10, nchains = 20)
 opt_vmc = VMC_multilevel(MaxIters, 0.2, ACEpsi.vmc.SR(); lr_dc = 50.0)
+
+BFwf_chain = wf_list[1]
+st = st_list[1]
+ps = ps_list[1]
+x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
+hX = [x2dualwrtj(x, 0) for x in X]
+hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
+A1 = BFwf_chain(X, ps, st)
+hA1 = BFwf_chain(hX, ps, st)
+p = Zygote.gradient(p -> BFwf_chain(X, p, st)[1], ps)[1]
 end
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, batch_size = 50)
+                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, batch_size = 50)
 
 # Eref = -14.667
 # HF   = -14.573

@@ -4,8 +4,8 @@ using LinearAlgebra
 using Optimisers
 using Polynomials4ML
 using Random
-using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec, mBFwf, mBFwf_sto
-using ACEpsi.AtomicOrbitals: _invmap
+using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
+using ACEpsi.AtomicOrbitals: _invmap, Nuc, make_nlms_spec
 using ACEpsi.TD: Tensor_Decomposition, No_Decomposition, Tucker
 using Plots
 
@@ -30,7 +30,7 @@ function _invmapAO(a::AbstractVector)
     return inva 
 end
 
-function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list, specAO_list; 
+function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list, specAO_list, Nlm_list; 
                                         verbose = true, density = false, 
                                         accMCMC = [10, [0.45, 0.55]], 
                                         batch_size = 1)
@@ -41,6 +41,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     spec = spec_list[1]
     spec1p = spec1p_list[1]
     specAO = specAO_list[1]
+    Nlm = Nlm_list[1]
     mₜ, vₜ = initp(opt_vmc.type, ps_list[1])
     sam.Ψ = wf
     # burnin 
@@ -66,29 +67,26 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             p, s = destructure(ps)
             # embed for mt and vt
             ips = s(collect(1:length(p)))
-            ips = EmbeddingP!(ips, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l])
+            ips = EmbeddingP!(ips, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l], Nlm, Nlm_list[l])
             index, = destructure(ips) 
             mₜ, vₜ = updatep(opt_vmc.type, opt_vmc.utype, ps_list[l], index, mₜ, vₜ )
             # embed for ps
-            ps = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l])
+            ps = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l], Nlm, Nlm_list[l])
             st = st_list[l]
+            Nlm = Nlm_list[l]
             spec = spec_list[l]
             specAO = specAO_list[l]
             spec1p = spec1p_list[l]
             sam.Ψ = wf
        end
        ν = maximum(length.(spec))
-       if :hidden1 in keys(ps.branch.bf)
-            _basis_size = size(ps.branch.bf.hidden1.W, 2)
-            @info("level = $l, order = $ν, size of basis = $_basis_size")
-       elseif :hidden1 in keys(ps.branch.bf.Pds.layer_1)
-            _basis_size = size(ps.branch.bf.Pds.layer_1.hidden1.W, 2)
+       if :hidden in keys(ps.branch.bf.hidden.layer_1)
+            _basis_size = size(ps.branch.bf.hidden.layer_1.hidden.W, 2)
             @info("level = $l, order = $ν, size of basis = $_basis_size")
        else 
             @info("level = $l, order = $ν")
        end
        # optimization
-       
        for k = 1 : opt_vmc.MaxIter[l]
           sam.x0 = x0
           
@@ -124,19 +122,36 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     return wf_list, err_opt, ps_list
 end
 
-# sto_ng
+function dropnames(namedtuple::NamedTuple, names::Tuple{Vararg{Symbol}}) 
+    keepnames = Base.diff_names(Base._nt_names(namedtuple), names)
+    return NamedTuple{keepnames}(namedtuple)
+ end
+
+# slaterbasis
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
-                        Dn::STO_NG,
-                        Pn::OrthPolyBasis1D3T,  
-                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
-                        _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
-                        totdegree::Vector{Int}, 
-                        ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
+    Dn::SlaterBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
+    _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
     level = length(ν)
-    wf, spec, spec1p, ps, st = [], [], [], [], []
+    Nlm, wf, spec, spec1p, ps, st = [], [], [], [], [], []
     for i = 1:level
-        bRnl = AtomicOrbitalsRadials(Pn, Dn, _spec[i])
-        _wf, _spec1, _spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
+        bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(_spec[i][j]))), _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
+
+        Nnuc = length(speclist)
+        spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
+        _spec1idx = []
+        for j = 1:Nnuc
+            spec1 = make_nlms_spec(bRnl[speclist[j]], bYlm, totaldegree = totdegree[i])
+            spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
+            spec_Rnl = natural_indices(bRnl[speclist[j]]); inv_Rnl = _invmap(spec_Rnl)
+            for (z, b) in enumerate(spec1)
+                spec1idx[z] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
+            end
+            push!(_spec1idx, spec1idx)
+        end
+        sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
+        push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
+        _wf, _spec1, _spec1p = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
         push!(spec, _spec1)
@@ -144,24 +159,19 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
         push!(ps, _ps)
         push!(st, _st)
     end
-    return wf, spec, spec1p, _spec, ps, st
+    return wf, spec, spec1p, _spec, ps, st, Nlm
 end
 
 # gaussianbasis
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
-                        Dn::GaussianBasis,
-                        Pn::OrthPolyBasis1D3T,  
-                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
-                        _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
-                        totdegree::Vector{Int}, 
-                        ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
+    Dn::GaussianBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
+    _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
     level = length(ν)
     wf, spec, spec1p, ps, st = [], [], [], [], []
     for i = 1:level
-        ζ = ones(Float64,length(_spec[i]))
-        Dn = GaussianBasis(ζ)
-        bRnl = AtomicOrbitalsRadials(Pn, Dn, _spec[i])
-        _wf, _spec1, _spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
+        bRnl = [AtomicOrbitalsRadials(Pn, GaussianBasis(10 * rand(length(_spec[i][j]))), _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
+        _wf, _spec1, _spec1p = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
         push!(spec, _spec1)
@@ -172,21 +182,15 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
     return wf, spec, spec1p, _spec, ps, st
 end
 
-# slaterbasis
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
-                        Dn::SlaterBasis,
-                        Pn::OrthPolyBasis1D3T,  
-                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
-                        _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
-                        totdegree::Vector{Int}, 
-                        ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
+    Dn::Vector{Vector{STO_NG}}, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
+    _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
     level = length(ν)
     wf, spec, spec1p, ps, st = [], [], [], [], []
     for i = 1:level
-        ζ = ones(Float64,length(_spec[i]))
-        Dn = SlaterBasis(ζ)
-        bRnl = AtomicOrbitalsRadials(Pn, Dn, _spec[i])
-        _wf, _spec1, _spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
+        bRnl = [AtomicOrbitalsRadials(Pn, Dn[i][speclist[j]], _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
+        _wf, _spec1, _spec1p = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
         push!(spec, _spec1)
@@ -197,113 +201,94 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
     return wf, spec, spec1p, _spec, ps, st
 end
 
-function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
+function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm, Nlm2)
     readable_spec = displayspec(spec, spec1p)
     readable_spec2 = displayspec(spec2, spec1p2)
-    @assert size(ps.branch.bf.hidden1.W, 1) == size(ps2.branch.bf.hidden1.W, 1)
-    @assert size(ps.branch.bf.hidden1.W, 2) ≤ size(ps2.branch.bf.hidden1.W, 2)
+    @assert size(ps.branch.bf.hidden.layer_1.hidden.W, 1) == size(ps2.branch.bf.hidden.layer_1.hidden.W, 1)
+    @assert size(ps.branch.bf.hidden.layer_1.hidden.W, 2) ≤ size(ps2.branch.bf.hidden.layer_1.hidden.W, 2)
     @assert all(t in readable_spec2 for t in readable_spec)
-    @assert all(t in specAO2 for t in specAO)
- 
+    @assert length(specAO) == length(specAO2)
+    for i = 1:length(specAO)
+        @assert all(t in specAO2[i] for t in specAO[i])
+    end
+
     # set all parameters to zero
-    ps2.branch.bf.hidden1.W .= 0.0
+    for i in keys(ps2.branch.bf.hidden)
+        ps2.branch.bf.hidden[i].hidden.W .= 0.0
+    end
 
     # _map[spect] = index in readable_spec2
     _map  = _invmap(readable_spec2)
-    _mapAO  = _invmapAO(specAO2)
     # embed
-    for (idx, t) in enumerate(readable_spec)
-        ps2.branch.bf.hidden1.W[:, _map[t]] = ps.branch.bf.hidden1.W[:, idx]
-    end
-    if :ϕnlm in keys(ps.branch.bf)
-        if :ζ in keys(ps.branch.bf.ϕnlm)
-            ps2.branch.bf.ϕnlm.ζ .= 1.0
-            for (idx, t) in enumerate(specAO)
-                ps2.branch.bf.ϕnlm.ζ[_mapAO[t]] = ps.branch.bf.ϕnlm.ζ[idx]
-            end
+    for i in keys(ps.branch.bf.hidden)
+        for (idx, t) in enumerate(readable_spec)
+            ps2.branch.bf.hidden[i].hidden.W[:, _map[t]] = ps.branch.bf.hidden[i].hidden.W[:, idx]
         end
     end
     if :Pds in keys(ps.branch.bf)
-        for i in keys(ps.branch.bf.Pds)
-            ps2.branch.bf.Pds[i].ζ .= 1.0
-            for (idx, t) in enumerate(specAO)
-                ps2.branch.bf.Pds[i].ζ[_mapAO[t]] = ps.branch.bf.Pds[i].ζ[idx]
+        for i = 1:length(specAO2)
+            ps2.branch.bf.Pds.ζ[i] .= 1.0
+            _mapAO = _invmapAO(specAO2[i])  
+            for (idx, t) in enumerate(specAO[i])
+                ps2.branch.bf.Pds.ζ[i][_mapAO[t]] = ps.branch.bf.Pds.ζ[i][idx]
+            end
+        end
+    end
+
+    if :TK in keys(ps2.branch.bf)
+        ps2.branch.bf.TK.W .= 0.0
+        W = ps.branch.bf.TK.W
+        idx = []
+        for ii = 1:length(Nlm2)
+            for k = 1:Nlm[ii]
+                push!(idx, _ind(ii, k, Nlm2))
+            end
+        end
+        ps2.branch.bf.TK.W[:,:,1:size(W)[3],idx] .= W
+    end
+    return ps2
+end
+
+function _ind(ii::Integer, k::Integer, Nnlm::Vector{TI}) where {TI} 
+    return sum(Nnlm[1:ii-1]) + k
+end
+
+function EmbeddingP!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm, Nlm2)
+    readable_spec = displayspec(spec, spec1p)
+    readable_spec2 = displayspec(spec2, spec1p2)
+    @assert size(ps.branch.bf.hidden.layer_1.hidden.W, 1) == size(ps2.branch.bf.hidden.layer_1.hidden.W, 1)
+    @assert size(ps.branch.bf.hidden.layer_1.hidden.W, 2) ≤ size(ps2.branch.bf.hidden.layer_1.hidden.W, 2)
+    @assert all(t in readable_spec2 for t in readable_spec)
+    for i = 1:length(specAO)
+        @assert all(t in specAO2[i] for t in specAO[i])
+    end
+
+    # set all parameters to zero
+    for i in keys(ps2.branch.bf.hidden)
+        ps2.branch.bf.hidden[i].hidden.W .= 0.0
+    end
+
+    # _map[spect] = index in readable_spec2
+    _map  = _invmap(readable_spec2)
+    # embed
+    for i in keys(ps.branch.bf.hidden)
+        for (idx, t) in enumerate(readable_spec)
+            ps2.branch.bf.hidden[i].hidden.W[:, _map[t]] = ps.branch.bf.hidden[i].hidden.W[:, idx]
+        end
+    end
+    if :Pds in keys(ps.branch.bf)
+        for i = 1:length(specAO2)
+            ps2.branch.bf.Pds.ζ[i] .= 0.0
+            _mapAO = _invmapAO(specAO2[i])  
+            for (idx, t) in enumerate(specAO[i])
+                ps2.branch.bf.Pds.ζ[i][_mapAO[t]] = ps.branch.bf.Pds.ζ[i][idx]
             end
         end
     end
 
     if :TK in keys(ps.branch.bf)
-        ps2.branch.bf.TK.W .= 0
-        ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],:,1:size(ps.branch.bf.TK.W)[5]] .= ps.branch.bf.TK.W
+        ps2.branch.bf.TK.W .= 0.0
+        ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],1:size(ps.branch.bf.TK.W)[4]] .= ps.branch.bf.TK.W
     end
     return ps2
-end
-
-function EmbeddingP!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
-    readable_spec = displayspec(spec, spec1p)
-    readable_spec2 = displayspec(spec2, spec1p2)
-    @assert size(ps.branch.bf.hidden1.W, 1) == size(ps2.branch.bf.hidden1.W, 1)
-    @assert size(ps.branch.bf.hidden1.W, 2) ≤ size(ps2.branch.bf.hidden1.W, 2)
-    @assert all(t in readable_spec2 for t in readable_spec)
-    @assert all(t in specAO2 for t in specAO)
- 
-    # set all parameters to zero
-    ps2.branch.bf.hidden1.W .= 0.0
-
-    # _map[spect] = index in readable_spec2
-    _map  = _invmap(readable_spec2)
-    _mapAO  = _invmapAO(specAO2)
-    # embed
-    for (idx, t) in enumerate(readable_spec)
-        ps2.branch.bf.hidden1.W[:, _map[t]] = ps.branch.bf.hidden1.W[:, idx]
-    end
-    if :ϕnlm in keys(ps.branch.bf)
-        if :ζ in keys(ps.branch.bf.ϕnlm)
-            ps2.branch.bf.ϕnlm.ζ .= 0.0
-            for (idx, t) in enumerate(specAO)
-                ps2.branch.bf.ϕnlm.ζ[_mapAO[t]] = ps.branch.bf.ϕnlm.ζ[idx]
-            end
-        end
-    end
-    if :Pds in keys(ps.branch.bf)
-        for i in keys(ps.branch.bf.Pds)
-            ps2.branch.bf.Pds[i].ζ .= 0.0
-            for (idx, t) in enumerate(specAO)
-                ps2.branch.bf.Pds[i].ζ[_mapAO[t]] = ps.branch.bf.Pds[i].ζ[idx]
-            end
-        end
-    end
-
-    if :TK in keys(ps.branch.bf)
-        ps2.branch.bf.TK.W .= 0
-        ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],:,1:size(ps.branch.bf.TK.W)[5]] .= ps.branch.bf.TK.W
-    end
-    return ps2
-end
-
-
-
-
-
-# slaterbasis
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
-                        Dn::SlaterBasis,
-                        Pn::OrthPolyBasis1D3T,  
-                        bYlm::Vector,
-                        _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
-                        totdegree::Vector{Int}, 
-                        ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
-    level = length(ν)
-    wf, spec, spec1p, ps, st = [], [], [], [], []
-    for i = 1:level
-        bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(_spec[i]))), _spec[i]) for i = 1:length(nuclei)]
-        _wf, _spec1, _spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
-        _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
-        push!(wf, _wf)
-        push!(spec, _spec1)
-        push!(spec1p, _spec1p)
-        push!(ps, _ps)
-        push!(st, _st)
-    end
-    return wf, spec, spec1p, _spec, ps, st
 end
