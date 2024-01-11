@@ -28,10 +28,11 @@ end
 Nel = 4
 X = randn(SVector{3, Float64}, Nel)
 Σ = [↑,↑,↓,↓]
-nuclei = [ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)]
+nuclei = [Nuc(SVector(0.0,0.0,-1.5), 3.0), Nuc(SVector(0.0,0.0,1.5), 1.0)]
 ##
 
-spec = [[(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 1), (n1 = 3, n2 = 1, l = 0)]]
+spec = [[(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 1), (n1 = 3, n2 = 1, l = 0)], 
+        [(n1 = 1, n2 = 1, l = 0), (n1 = 2, n2 = 1, l = 0), (n1 = 1, n2 = 1, l = 1)]]
 n1 = 3
 Pn = Polynomials4ML.legendre_basis(n1+1)
 Ylmdegree = 2
@@ -43,10 +44,10 @@ bYlm = RRlmBasis(Ylmdegree)
 totdegree = [30,30,30]
 ν = [1,1,2]
 MaxIters = [10,10,20]
-_spec = [[spec[1][1:3]], spec, spec]
+_spec = [[spec[1][1:3], spec[2]], spec, spec]
 _TD = [ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition()]
 Nbf = [1,1,2]
-speclist = [1]
+speclist = [1,2]
 
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 

@@ -33,7 +33,7 @@ bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(spec[i]))), spec[
 ν = 2    
 Nbf = 3
 BFwf_chain, spec, spec1p = wf, spec, spec1p = BFwf_lux(Nel, Nbf, speclist, bRnl, bYlm, nuclei, ACEpsi.TD.Tucker(3))#ACEpsi.TD.No_Decomposition())
-
+wf = BFwf_chain
 ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
 wf(X, ps, st)
 

@@ -132,7 +132,6 @@ end
 lux(basis::BackflowPooling) = BackflowPoolingLayer(basis)
 
 initialparameters(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxparams(rng, l.basis)
-
 initialstates(rng::AbstractRNG, l::BackflowPoolingLayer) = _init_luxstate(rng, l.basis)
 
 

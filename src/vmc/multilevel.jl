@@ -44,6 +44,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     Nlm = Nlm_list[1]
     mₜ, vₜ = initp(opt_vmc.type, ps_list[1])
     sam.Ψ = wf
+    ν = 1
     # burnin 
     res, λ₀, α = 1.0, 0., opt_vmc.lr
     err_opt = [zeros(opt_vmc.MaxIter[i]) for i = 1:length(opt_vmc.MaxIter)]
@@ -79,12 +80,13 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             spec1p = spec1p_list[l]
             sam.Ψ = wf
        end
-       ν = maximum(length.(spec))
+       v = maximum(length.(spec))
+       _Nbf = length(keys(ps.branch.bf.hidden))
        if :hidden in keys(ps.branch.bf.hidden.layer_1)
             _basis_size = size(ps.branch.bf.hidden.layer_1.hidden.W, 2)
-            @info("level = $l, order = $ν, size of basis = $_basis_size")
+            @info("level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
        else 
-            @info("level = $l, order = $ν")
+            @info("level = $l, order = $v, number of bfs = $_Nbf")
        end
        # optimization
        for k = 1 : opt_vmc.MaxIter[l]

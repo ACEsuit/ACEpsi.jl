@@ -159,7 +159,6 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{SlaterBasis{T}
    ∂X = Tuple([zero(X[z]) for z = 1:Nnuc])
    ∂ζ = [zero(l.bRnl[i].Dn.ζ) for i = 1:length(l.bRnl)]
    function pb(Δ)
-      println(Δ)
       for z = 1:Nnuc
          n = l.speclist[z]
          ∂BB = Polynomials4ML._pullback_evaluate(Δ[1][z], l.sparsebasis[n], (bRnl[z], bYlm[:,:,z]))
