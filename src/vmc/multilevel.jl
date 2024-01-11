@@ -128,7 +128,7 @@ end
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
                         Dn::STO_NG,
                         Pn::OrthPolyBasis1D3T,  
-                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis},
+                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
                         _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
                         totdegree::Vector{Int}, 
                         ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
@@ -151,7 +151,7 @@ end
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
                         Dn::GaussianBasis,
                         Pn::OrthPolyBasis1D3T,  
-                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis},
+                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
                         _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
                         totdegree::Vector{Int}, 
                         ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
@@ -176,7 +176,7 @@ end
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
                         Dn::SlaterBasis,
                         Pn::OrthPolyBasis1D3T,  
-                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis},
+                        bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
                         _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
                         totdegree::Vector{Int}, 
                         ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
@@ -223,6 +223,14 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
             end
         end
     end
+    if :Pds in keys(ps.branch.bf)
+        for i in keys(ps.branch.bf.Pds)
+            ps2.branch.bf.Pds[i].ζ .= 1.0
+            for (idx, t) in enumerate(specAO)
+                ps2.branch.bf.Pds[i].ζ[_mapAO[t]] = ps.branch.bf.Pds[i].ζ[idx]
+            end
+        end
+    end
 
     if :TK in keys(ps.branch.bf)
         ps2.branch.bf.TK.W .= 0
@@ -257,10 +265,45 @@ function EmbeddingP!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2)
             end
         end
     end
+    if :Pds in keys(ps.branch.bf)
+        for i in keys(ps.branch.bf.Pds)
+            ps2.branch.bf.Pds[i].ζ .= 0.0
+            for (idx, t) in enumerate(specAO)
+                ps2.branch.bf.Pds[i].ζ[_mapAO[t]] = ps.branch.bf.Pds[i].ζ[idx]
+            end
+        end
+    end
 
     if :TK in keys(ps.branch.bf)
         ps2.branch.bf.TK.W .= 0
         ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],:,1:size(ps.branch.bf.TK.W)[5]] .= ps.branch.bf.TK.W
     end
     return ps2
+end
+
+
+
+
+
+# slaterbasis
+function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
+                        Dn::SlaterBasis,
+                        Pn::OrthPolyBasis1D3T,  
+                        bYlm::Vector,
+                        _spec::Vector{Vector{NamedTuple{(:n1, :n2, :l), Tuple{Int64, Int64, Int64}}}}, 
+                        totdegree::Vector{Int}, 
+                        ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
+    level = length(ν)
+    wf, spec, spec1p, ps, st = [], [], [], [], []
+    for i = 1:level
+        bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(_spec[i]))), _spec[i]) for i = 1:length(nuclei)]
+        _wf, _spec1, _spec1p = BFwf_lux(Nel, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
+        _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
+        push!(wf, _wf)
+        push!(spec, _spec1)
+        push!(spec1p, _spec1p)
+        push!(ps, _ps)
+        push!(st, _st)
+    end
+    return wf, spec, spec1p, _spec, ps, st
 end

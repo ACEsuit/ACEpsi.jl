@@ -17,7 +17,7 @@ mutable struct SR <: opt
 end
 
 #SR() = SR(0., 0.01, 0.0, 0.0, QGT(), no_scale(), no_constraint())
-SR() = SR(0.0, 0.01, 0.95, 0.0, QGT(), no_scale(), norm_constraint(1.0))
+SR() = SR(0.0, 1e-4, 0.95, 0.0, QGT(), no_scale(), no_constraint())
 
 _destructure(ps) = destructure(ps)[1]
 
