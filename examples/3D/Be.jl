@@ -52,14 +52,8 @@ wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_mu
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, Δt = 0.5, burnin = 10, nchains = 20)
-opt_vmc = VMC_multilevel(MaxIters, 0.2, ACEpsi.vmc.adamW(); lr_dc = 50.0)
+opt_vmc = VMC_multilevel(MaxIters, 0.2, ACEpsi.vmc.SR(); lr_dc = 50.0)
 
-x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
-BFwf_chain = wf_list[3]
-A1 = BFwf_chain(X, ps_list[3], st_list[3])
-hX = [x2dualwrtj(x, 0) for x in X]
-hA1 = BFwf_chain(hX, ps_list[3], st_list[3])
-p = Zygote.gradient(p -> BFwf_chain(X, p, st_list[3])[1], ps_list[3])[1]
 end
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
                     st_list, spec_list, spec1p_list, specAO_list, Nlm_list, batch_size = 50)

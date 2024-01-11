@@ -68,7 +68,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             p, s = destructure(ps)
             # embed for mt and vt
             ips = s(collect(1:length(p)))
-            ips = EmbeddingP!(ips, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l], Nlm, Nlm_list[l])
+            ips = EmbeddingW!(ips, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l], Nlm, Nlm_list[l]; c = 0.0)
             index, = destructure(ips) 
             mₜ, vₜ = updatep(opt_vmc.type, opt_vmc.utype, ps_list[l], index, mₜ, vₜ )
             # embed for ps
@@ -203,7 +203,7 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
     return wf, spec, spec1p, _spec, ps, st
 end
 
-function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm, Nlm2)
+function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm, Nlm2; c = 1.0)
     readable_spec = displayspec(spec, spec1p)
     readable_spec2 = displayspec(spec2, spec1p2)
     @assert size(ps.branch.bf.hidden.layer_1.hidden.W, 1) == size(ps2.branch.bf.hidden.layer_1.hidden.W, 1)
@@ -222,14 +222,25 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm
     # _map[spect] = index in readable_spec2
     _map  = _invmap(readable_spec2)
     # embed
-    for i in keys(ps.branch.bf.hidden)
-        for (idx, t) in enumerate(readable_spec)
-            ps2.branch.bf.hidden[i].hidden.W[:, _map[t]] = ps.branch.bf.hidden[i].hidden.W[:, idx]
+    Nbf1 = length(keys(ps.branch.bf.hidden))
+    Nbf2 = length(keys(ps2.branch.bf.hidden))
+    for (ii, i) in enumerate(keys(ps.branch.bf.hidden))
+        if ii <= length(Nbf1) - 1
+            for (idx, t) in enumerate(readable_spec)
+                ps2.branch.bf.hidden[i].hidden.W[:, _map[t]] = ps.branch.bf.hidden[i].hidden.W[:, idx]
+            end
+        else
+            for j = keys(ps2.branch.bf.hidden)[ii:end]
+                for (idx, t) in enumerate(readable_spec)
+                    ps2.branch.bf.hidden[j].hidden.W[:, _map[t]] = 1/(Nbf2 - Nbf1 + 1)* ps.branch.bf.hidden[i].hidden.W[:, idx]
+                end
+            end
         end
     end
+
     if :Pds in keys(ps.branch.bf)
         for i = 1:length(specAO2)
-            ps2.branch.bf.Pds.ζ[i] .= 1.0
+            ps2.branch.bf.Pds.ζ[i] .= c
             _mapAO = _invmapAO(specAO2[i])  
             for (idx, t) in enumerate(specAO[i])
                 ps2.branch.bf.Pds.ζ[i][_mapAO[t]] = ps.branch.bf.Pds.ζ[i][idx]
@@ -253,44 +264,4 @@ end
 
 function _ind(ii::Integer, k::Integer, Nnlm::Vector{TI}) where {TI} 
     return sum(Nnlm[1:ii-1]) + k
-end
-
-function EmbeddingP!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm, Nlm2)
-    readable_spec = displayspec(spec, spec1p)
-    readable_spec2 = displayspec(spec2, spec1p2)
-    @assert size(ps.branch.bf.hidden.layer_1.hidden.W, 1) == size(ps2.branch.bf.hidden.layer_1.hidden.W, 1)
-    @assert size(ps.branch.bf.hidden.layer_1.hidden.W, 2) ≤ size(ps2.branch.bf.hidden.layer_1.hidden.W, 2)
-    @assert all(t in readable_spec2 for t in readable_spec)
-    for i = 1:length(specAO)
-        @assert all(t in specAO2[i] for t in specAO[i])
-    end
-
-    # set all parameters to zero
-    for i in keys(ps2.branch.bf.hidden)
-        ps2.branch.bf.hidden[i].hidden.W .= 0.0
-    end
-
-    # _map[spect] = index in readable_spec2
-    _map  = _invmap(readable_spec2)
-    # embed
-    for i in keys(ps.branch.bf.hidden)
-        for (idx, t) in enumerate(readable_spec)
-            ps2.branch.bf.hidden[i].hidden.W[:, _map[t]] = ps.branch.bf.hidden[i].hidden.W[:, idx]
-        end
-    end
-    if :Pds in keys(ps.branch.bf)
-        for i = 1:length(specAO2)
-            ps2.branch.bf.Pds.ζ[i] .= 0.0
-            _mapAO = _invmapAO(specAO2[i])  
-            for (idx, t) in enumerate(specAO[i])
-                ps2.branch.bf.Pds.ζ[i][_mapAO[t]] = ps.branch.bf.Pds.ζ[i][idx]
-            end
-        end
-    end
-
-    if :TK in keys(ps.branch.bf)
-        ps2.branch.bf.TK.W .= 0.0
-        ps2.branch.bf.TK.W[:,:,1:size(ps.branch.bf.TK.W)[3],1:size(ps.branch.bf.TK.W)[4]] .= ps.branch.bf.TK.W
-    end
-    return ps2
 end
