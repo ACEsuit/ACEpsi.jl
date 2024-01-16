@@ -20,18 +20,23 @@ VMC(MaxIter::Int, lr::Number, type; tol = 1.0e-3, lr_dc = 50.0) = VMC(tol, MaxIt
         
 function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH, 
                wf, ps, st, 
-               ν = 1, verbose = true, accMCMC = [10, [0.45, 0.55]]; batch_size = 1)
+               ν = 1, verbose = true, accMCMC = [10, [0.45, 0.55]]; batch_size = 1, x0 = nothing)
 
    res, λ₀, α = 1.0, 0., opt_vmc.lr
    err_opt = zeros(opt_vmc.MaxIter)
    σ_opt = zeros(opt_vmc.MaxIter)
    N = length(st.trans.Σ)
 
-   
-   x0, ~, acc = sampler_restart(sam, ps, st; batch_size = batch_size)
+   if isnothing(x0)
+      x0, ~, acc = sampler_restart(sam, ps, st; batch_size = batch_size)
+   else
+      acc = 0.0 # if samples from previous run avaialable
+   end
+
    acc_step, acc_range = accMCMC
    acc_opt = zeros(acc_step)
 
+   
    verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
    verbose && @printf("   k |  𝔼[E_L]   |  𝔼[E_L]/N   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
    for k = 1 : opt_vmc.MaxIter
@@ -58,7 +63,8 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
          json_W = JSON3.write(ps.hidden1.W)
          # json_α = JSON3.write(ps.to_be_prod.layer_2) # need to change whenever using Jastrow
          json_α = JSON3.write("no Jastrow")
-         json_Dic = """{"E": $(json_E), "σ": $(json_σ), "W": $(json_W), "α": $(json_α)}"""
+         json_x0 = JSON3.write(x0)
+         json_Dic = """{"E": $(json_E), "σ": $(json_σ), "W": $(json_W), "x0": $(json_x0), "α": $(json_α)}"""
          open("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/Data$k.json", "w") do io
             JSON3.write(io, JSON3.read(json_Dic))
          end
@@ -69,6 +75,6 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
          break;
       end  
    end
-   return wf, err_opt, ps
+   return wf, err_opt, ps, x0
 end
 
