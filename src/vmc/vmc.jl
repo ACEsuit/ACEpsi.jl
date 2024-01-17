@@ -19,7 +19,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
                 ν = 1, verbose = true, density = false, 
                 accMCMC = [10, [0.45, 0.55]], batch_size = 1)
 
-    mₜ, vₜ = initp(opt_vmc.type, ps_list[1])
+    mₜ, vₜ = initp(opt_vmc.type, ps)
     res, λ₀, α = 1.0, 0., opt_vmc.lr
     err_opt = zeros(opt_vmc.MaxIter)
 

@@ -170,9 +170,24 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
     totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
     level = length(ν)
-    wf, spec, spec1p, ps, st = [], [], [], [], []
+    Nlm, wf, spec, spec1p, ps, st = [], [], [], [], [], []
     for i = 1:level
-        bRnl = [AtomicOrbitalsRadials(Pn, GaussianBasis(10 * rand(length(_spec[i][j]))), _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
+        bRnl = [AtomicOrbitalsRadials(Pn, Gaussian(10 * rand(length(_spec[i][j]))), _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
+
+        Nnuc = length(speclist)
+        spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
+        _spec1idx = []
+        for j = 1:Nnuc
+            spec1 = make_nlms_spec(bRnl[speclist[j]], bYlm, totaldegree = totdegree[i])
+            spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
+            spec_Rnl = natural_indices(bRnl[speclist[j]]); inv_Rnl = _invmap(spec_Rnl)
+            for (z, b) in enumerate(spec1)
+                spec1idx[z] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
+            end
+            push!(_spec1idx, spec1idx)
+        end
+        sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
+        push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
         _wf, _spec1, _spec1p = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
@@ -181,17 +196,31 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
         push!(ps, _ps)
         push!(st, _st)
     end
-    return wf, spec, spec1p, _spec, ps, st
+    return wf, spec, spec1p, _spec, ps, st, Nlm
 end
 
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
-    Dn::Vector{Vector{STO_NG}}, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
+    Dn::STO_NG, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
     totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}) where {T, TT<:Tensor_Decomposition}
     level = length(ν)
-    wf, spec, spec1p, ps, st = [], [], [], [], []
+    Nlm, wf, spec, spec1p, ps, st = [], [], [], [], [], []
     for i = 1:level
-        bRnl = [AtomicOrbitalsRadials(Pn, Dn[i][speclist[j]], _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
+        bRnl = [AtomicOrbitalsRadials(Pn, Dn, _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
+        Nnuc = length(speclist)
+        spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
+        _spec1idx = []
+        for j = 1:Nnuc
+            spec1 = make_nlms_spec(bRnl[speclist[j]], bYlm, totaldegree = totdegree[i])
+            spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
+            spec_Rnl = natural_indices(bRnl[speclist[j]]); inv_Rnl = _invmap(spec_Rnl)
+            for (z, b) in enumerate(spec1)
+                spec1idx[z] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
+            end
+            push!(_spec1idx, spec1idx)
+        end
+        sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
+        push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
         _wf, _spec1, _spec1p = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i])
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
@@ -200,7 +229,7 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
         push!(ps, _ps)
         push!(st, _st)
     end
-    return wf, spec, spec1p, _spec, ps, st
+    return wf, spec, spec1p, _spec, ps, st, Nlm
 end
 
 function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm, Nlm2; c = 1.0)
@@ -239,11 +268,13 @@ function EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm
     end
 
     if :Pds in keys(ps.branch.bf)
-        for i = 1:length(specAO2)
-            ps2.branch.bf.Pds.ζ[i] .= c
-            _mapAO = _invmapAO(specAO2[i])  
-            for (idx, t) in enumerate(specAO[i])
-                ps2.branch.bf.Pds.ζ[i][_mapAO[t]] = ps.branch.bf.Pds.ζ[i][idx]
+        if :ζ in keys(ps.branch.bf.Pds)
+            for i = 1:length(specAO2)
+                ps2.branch.bf.Pds.ζ[i] .= c
+                _mapAO = _invmapAO(specAO2[i])  
+                for (idx, t) in enumerate(specAO[i])
+                    ps2.branch.bf.Pds.ζ[i][_mapAO[t]] = ps.branch.bf.Pds.ζ[i][idx]
+                end
             end
         end
     end

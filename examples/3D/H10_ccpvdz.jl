@@ -1,6 +1,6 @@
 using Distributed
 
-N_procs = 8
+N_procs = 10
 
 if nprocs() == 1
     addprocs(N_procs - 1, exeflags="--project=$(Base.active_project())")
@@ -23,66 +23,51 @@ using Printf
 using LinearAlgebra
 using BenchmarkTools
 using HyperDualNumbers: Hyper
+
 end 
-
 @everywhere begin
-Nel = 4
-X = randn(SVector{3, Float64}, Nel)
-Σ = [↑,↑,↓,↓]
-nuclei = [ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)]
-
-spec_Be = [(n1 = 1, n2 = 1, l = 0), 
-        (n1 = 1, n2 = 2, l = 0), 
-        (n1 = 1, n2 = 3, l = 0), 
-        (n1 = 1, n2 = 1, l = 1), 
-        (n1 = 1, n2 = 2, l = 1), 
-        (n1 = 2, n2 = 1, l = 0), 
-        (n1 = 2, n2 = 2, l = 0), 
-        (n1 = 2, n2 = 3, l = 0), 
-        (n1 = 2, n2 = 1, l = 1), 
-        (n1 = 2, n2 = 2, l = 1), 
-        (n1 = 3, n2 = 1, l = 0), 
-        (n1 = 3, n2 = 2, l = 0), 
-        (n1 = 3, n2 = 3, l = 0), 
-        (n1 = 3, n2 = 1, l = 1), 
-        (n1 = 3, n2 = 2, l = 1), 
-        (n1 = 4, n2 = 1, l = 0),
-        (n1 = 4, n2 = 1, l = 1),
-        (n1 = 5, n2 = 1, l = 0),
-        (n1 = 5, n2 = 1, l = 1),
-        (n1 = 1, n2 = 1, l = 2),
-        (n1 = 2, n2 = 1, l = 2),
-        (n1 = 3, n2 = 1, l = 2)
-        ]
-spec = [ spec_Be ]
-
-n1 = 5
-Pn = Polynomials4ML.legendre_basis(n1+1)
-Ylmdegree = 2
+n1 = Rnldegree = 2
+Ylmdegree = 1
 totdegree = 20
-ζ = 8.0 * rand(length(spec))
-Dn = SlaterBasis(ζ)
-bYlm = RRlmBasis(Ylmdegree)
+Nel = 10
+X = randn(SVector{3, Float64}, Nel)
+Σ = [↑,↑,↑,↑,↑,↓,↓,↓,↓,↓]
+spacing = 1.0
+nuclei = [Nuc(SVector(0.0,0.0,(i-1/2-Nel/2) * spacing), 1.0) for i = 1:Nel]
+# Ref: http://www.grant-hill.group.shef.ac.uk/ccrepo/hydrogen/hbasis.php
+# (4s,1p) -> [2s,1p]
+# H    S
+#      1.301000E+01           1.968500E-02           0.000000E+00
+#      1.962000E+00           1.379770E-01           0.000000E+00
+#      4.446000E-01           4.781480E-01           0.000000E+00
+#      1.220000E-01           5.012400E-01           1.000000E+00
+# H    P
+#      7.270000E-01           1.0000000
 
-totdegree = [30, 30, 30, 30]
-ν = [1, 1, 2, 2]
-MaxIters = [400, 800, 1600, 3200]
+ζ = [[1.301000E+01, 1.962000E+00, 4.446000E-01, 1.220000E-01], [1.220000E-01], [7.270000E-01]]
+D = [[1.968500E-02, 1.379770E-01, 4.781480E-01, 5.012400E-01], [1.0000000], [1.0000000]]
+D[1] = [(2 * ζ[1][i]/pi)^(3/4) * D[1][i] for i = 1:length(ζ[1])]
 
-_spec = [ [ spec[1][1:8]], 
-          [ spec[1][1:13]], 
-          [ spec[1][1:13]], 
-          [ spec[1][1:15]]
-        ]
+Pn = Polynomials4ML.legendre_basis(n1+1)
+Dn = STO_NG((ζ, D))
+bYlm = RYlmBasis(Ylmdegree)
+spec = [[(n1 = 1, n2 = 1, l = 0), (n1 = 1, n2 = 2, l = 0), (n1 = 2, n2 = 1, l = 1)]]
+Nbf = [1, 1, 1, 1]
+speclist  = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
-
+totdegree = [30, 30, 30]
+ν = [1, 1, 2]
+MaxIters = [400, 800, 1600]
 _TD = [ACEpsi.TD.No_Decomposition(),
        ACEpsi.TD.No_Decomposition(),
-       ACEpsi.TD.No_Decomposition(),
-       ACEpsi.TD.No_Decomposition()]
+       ACEpsi.TD.No_Decomposition()
+      ]
 
-Nbf = [1, 1, 1, 1]
+_spec = [ [ spec[1][1:2]], 
+          [ spec[1]], 
+          [ spec[1]]
+        ]
 
-speclist  = [1]
 
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
@@ -91,7 +76,6 @@ sam = MHSampler(wf_list[1], Nel, nuclei,
                 Δt = 0.08, 
                 burnin  = 1000, 
                 nchains = 2000)
-
 
 lr_0  = 0.2
 lr_dc = 1000.0
@@ -120,14 +104,10 @@ print_tf(@test hA.value ≈ A)
 Zygote.gradient(x -> wf(x, ps, st)[1], X)
 p = Zygote.gradient(p -> wf(X, p, st)[1], ps)
 laplacian(wf, X, ps, st)
-    
 end
-
-
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
                     st_list, spec_list, spec1p_list, specAO_list, Nlm_list, batch_size = 50,
                     accMCMC = [10, [0.4,0.7]])
 
-# Eref = -14.667
-# HF   = -14.573
-# -14.659279472727713
+## MRCI+Q: -23.5092
+## UHF:    -23.2997
