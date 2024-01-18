@@ -79,7 +79,7 @@ F(X) = BFwf_chain(X, ps, st)[1]
 
 @info("Test ∇ψ w.r.t. X")
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
-y, st = Lux.apply(BFwf_chain, X, ps, st)
+#y, st = Lux.apply(BFwf_chain, X, ps, st)
 
 F(X) = BFwf_chain(X, ps, st)[1]
 dF(X) = Zygote.gradient(x -> BFwf_chain(x, ps, st)[1], X)[1]

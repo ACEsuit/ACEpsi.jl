@@ -27,7 +27,6 @@ end
 @everywhere begin
 n1 = Rnldegree = 1
 Ylmdegree = 0
-totdegree = 20
 Nel = 10
 X = randn(SVector{3, Float64}, Nel)
 Σ = [↑,↑,↑,↑,↑,↓,↓,↓,↓,↓]
@@ -61,10 +60,11 @@ bYlm = RYlmBasis(Ylmdegree)
 Nbf = 1
 speclist = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
-ord = 1
-wf, spec, spec1p = BFwf_chain, spec, spec1p  = BFwf_lux(Nel, Nbf, speclist, bRnl, bYlm, nuclei, ACEpsi.TD.No_Decomposition(); totdeg = totdegree, ν = ord)
+totdegree = 30
+cluster = 3
+ord = 2
+wf, spec, spec1p, disspec = BFwf_chain, spec, spec1p, disspec = BFwf_lux(Nel, Nbf, speclist, bRnl, bYlm, nuclei, ACEpsi.TD.No_Decomposition(), ACEpsi.Cluster._bf_orbital(); totdeg = totdegree, cluster = cluster, ν = ord)
 ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
-
 ham = SumH(nuclei)
 sam = MHSampler(wf, Nel, nuclei, 
                 Δt = 0.3, 
@@ -95,7 +95,7 @@ Zygote.gradient(x -> wf(x, ps, st)[1], X)
 p = Zygote.gradient(p -> wf(X, p, st)[1], ps)
 laplacian(wf, X, ps, st)
 end
-wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st, batch_size = 50)
+#wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st, batch_size = 50)
 
 ## FCI: -23.1140: ord = 2: -23.3829
-## UHF: -23.0414: ord = 1: -23.03884237
+## UHF: -23.0414: ord = 1: -23.042633833000387
