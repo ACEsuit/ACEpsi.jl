@@ -1,4 +1,4 @@
-export EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, gd_GradientByVMC_multilevel
+export EmbeddingW!, EmbeddingWignerW!, _invmap, VMC_multilevel, wf_multilevel, gd_GradientByVMC_multilevel, wf_multilevel_Trig
 using Printf
 using LinearAlgebra
 using Optimisers
@@ -246,31 +246,31 @@ function EmbeddingW_J!(ps, ps2, spec, spec2, spec1p, spec1p2)
    return ps2
 end
 
-# function wf_multilevel_Trig(Nel::Int, Σ::Vector{Char}, trans, 
-#     trigdegree::Vector{Int}, 
-#     totdegrees::Vector{Int},
-#     ν::Vector{Int},
-#     sd_admissible_func) where {T}
-#     level = length(trigdegree)
-#     # init a list of wf
-#     wf = []
-#     spec = []
-#     spec1p = []
-#     ps = []
-#     st = []
-#     for i = 1:level
-#         Pn = Polynomials4ML.RTrigBasis(totdegrees[i]) 
-#         _sd_admissible = sd_admissible_func(ν[i], totdegrees[i][1]) # assume B=1 always give the largest degree
-#         _wf, _spec, _spec1p = BFwfTrig_lux(Nel, Pn; ν = ν[i], trans = trans, totdeg = totdegree[1], sd_admissible = _sd_admissible)
-#         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
-#         push!(wf, _wf)
-#         push!(spec, _spec)
-#         push!(spec1p, _spec1p)
-#         push!(ps, _ps)
-#         push!(st, _st)
-#     end
-#     return wf, spec, spec1p, ps, st
-# end
+function wf_multilevel_Trig(Nel::Int, Σ::Vector{Char}, trans, 
+    trigdegree::Vector{Int}, 
+    totdegrees::Vector{Int},
+    ν::Vector{Int},
+    sd_admissible_func) where {T}
+    level = length(trigdegree)
+    # init a list of wf
+    wf = []
+    spec = []
+    spec1p = []
+    ps = []
+    st = []
+    for i = 1:level
+        Pn = Polynomials4ML.RTrigBasis(totdegrees[i][1]) 
+        _sd_admissible = sd_admissible_func(ν[i], totdegrees[i]) # assume B=1 always give the largest degree
+        _wf, _spec, _spec1p = BFwfTrig_lux(Nel, Pn; ν = ν[i], trans = trans, totdeg = totdegree[1], sd_admissible = _sd_admissible)
+        _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
+        push!(wf, _wf)
+        push!(spec, _spec)
+        push!(spec1p, _spec1p)
+        push!(ps, _ps)
+        push!(st, _st)
+    end
+    return wf, spec, spec1p, ps, st
+end
 
 # function VMC_multilevel_1d(opt_vmc::VMC, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list; ITERS = [100 for _ in wf_list], verbose = true, accMCMC = [10, [0.45, 0.55]])
 
