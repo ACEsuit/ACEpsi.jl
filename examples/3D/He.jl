@@ -75,20 +75,20 @@ _spec = [ [ spec[1][1:8]],
         ]
 
 
-_TD = [ACEpsi.TD.Tucker(3),
-       ACEpsi.TD.Tucker(3),
-       ACEpsi.TD.Tucker(3),
-       ACEpsi.TD.Tucker(3)]
+_TD = [ACEpsi.TD.Tucker(15),
+        ACEpsi.TD.Tucker(15),
+        ACEpsi.TD.Tucker(15),
+        ACEpsi.TD.Tucker(15)]
 
 Nbf = [1, 1, 1, 1]
 
 speclist  = [1]
 
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, 
-                Δt = 0.08, 
+                Δt = 0.4, 
                 burnin  = 1000, 
                 nchains = 2000)
 
@@ -123,9 +123,8 @@ laplacian(wf, X, ps, st)
     
 end
 
-
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, batch_size = 50,
+                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list, batch_size = 50,
                     accMCMC = [10, [0.4,0.7]])
 
-# Eref = -2.9037247 He: -2.903052379995745
+# Eref = -2.9037247 He: -2.903052379995745, -2.893577421

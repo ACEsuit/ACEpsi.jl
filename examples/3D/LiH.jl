@@ -109,7 +109,7 @@ Nbf = [1, 1, 1, 1]
 
 speclist  = [1, 2]
 
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, 
@@ -149,7 +149,7 @@ end
 
 
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, batch_size = 50,
+                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list, batch_size = 50,
                     accMCMC = [10, [0.4,0.7]])
 
 # -9.065525

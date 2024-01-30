@@ -45,15 +45,9 @@ spec_Be = [(n1 = 1, n2 = 1, l = 0),
         (n1 = 3, n2 = 2, l = 0), 
         (n1 = 3, n2 = 3, l = 0), 
         (n1 = 3, n2 = 1, l = 1), 
-        (n1 = 3, n2 = 2, l = 1), 
-        (n1 = 4, n2 = 1, l = 0),
-        (n1 = 4, n2 = 1, l = 1),
-        (n1 = 5, n2 = 1, l = 0),
-        (n1 = 5, n2 = 1, l = 1),
-        (n1 = 1, n2 = 1, l = 2),
-        (n1 = 2, n2 = 1, l = 2),
-        (n1 = 3, n2 = 1, l = 2)
+        (n1 = 3, n2 = 2, l = 1)
         ]
+
 spec = [ spec_Be ]
 
 n1 = 5
@@ -66,8 +60,8 @@ bYlm = RRlmBasis(Ylmdegree)
 
 totdegree = [30, 30, 30, 30]
 ν = [1, 1, 2, 2]
-MaxIters = [400, 800, 1600, 3200]
 
+MaxIters = [100, 200, 400, 10000]
 _spec = [ [ spec[1][1:8]], 
           [ spec[1][1:13]], 
           [ spec[1][1:13]], 
@@ -79,22 +73,20 @@ _TD = [ACEpsi.TD.No_Decomposition(),
        ACEpsi.TD.No_Decomposition(),
        ACEpsi.TD.No_Decomposition(),
        ACEpsi.TD.No_Decomposition()]
-
 Nbf = [1, 1, 1, 1]
-
 speclist  = [1]
 
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, 
-                Δt = 0.08, 
+                Δt = 0.2, 
                 burnin  = 1000, 
                 nchains = 2000)
 
 
 lr_0  = 0.2
-lr_dc = 1000.0
+lr_dc = 500.0
 epsilon = 0.001
 kappa_S = 0.95
 kappa_m = 0.
@@ -123,11 +115,14 @@ laplacian(wf, X, ps, st)
     
 end
 
-
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, batch_size = 50,
+                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list, batch_size = 20,
                     accMCMC = [10, [0.4,0.7]])
 
 # Eref = -14.667
 # HF   = -14.573
 # -14.659279472727713
+# 2
+# 4: -14.63291131
+# 8: -14.63363348
+# 12

@@ -48,7 +48,7 @@ function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm,
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
    corr_layer = Polynomials4ML.lux(corr1)
 
-   l_hidden = Tuple(collect(Chain(; hidden = LinearLayer(length(corr1), Nel; use_cache = false), Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x::Matrix -> det(x))) for i = 1:Nbf))
+   l_hidden = Tuple(collect(Chain(; hidden1 = LinearLayer(length(corr1), Nel; use_cache = false), Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x::Matrix -> det(x))) for i = 1:Nbf))
    jastrow_layer = ACEpsi.lux(js)
 
    BFwf_chain = Chain(; diff = embed_layer, Pds = prodbasis_layer, 

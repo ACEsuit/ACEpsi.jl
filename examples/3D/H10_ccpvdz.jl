@@ -69,7 +69,7 @@ _spec = [ [ spec[1][1:2]],
         ]
 
 
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD; js = ACEpsi.Jastrow(nuclei))
 
 ham = SumH(nuclei)
 sam = MHSampler(wf_list[1], Nel, nuclei, 
@@ -78,7 +78,7 @@ sam = MHSampler(wf_list[1], Nel, nuclei,
                 nchains = 2000)
 
 lr_0  = 0.2
-lr_dc = 1000.0
+lr_dc = 400.0
 epsilon = 0.001
 kappa_S = 0.95
 kappa_m = 0.
@@ -106,7 +106,7 @@ p = Zygote.gradient(p -> wf(X, p, st)[1], ps)
 laplacian(wf, X, ps, st)
 end
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, batch_size = 50,
+                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list, batch_size = 50,
                     accMCMC = [10, [0.4,0.7]])
 
 ## MRCI+Q: -23.5092

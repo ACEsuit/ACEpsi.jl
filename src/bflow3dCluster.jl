@@ -46,15 +46,15 @@ function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm,
    corr1 = Polynomials4ML.SparseSymmProd(spec)
 
    # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
-   corr_layer = Polynomials4ML.lux(corr1)
+   corr_layer = Polynomials4ML.lux(corr1; use_cache = false)
    index, disspec = sparse(spec, spec1p, Nel, nuc)
 
-   l_hidden = Tuple(collect(Chain(; hidden = Lux.Parallel(nothing, (LinearLayer(length(disspec[j]), 1) for j = 1:Nel)...), l_concat = WrappedFunction(x -> hcat(x...)), Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x::Matrix -> det(x))) for i = 1:Nbf))
+   l_hidden = Tuple(collect(Chain(; hidden1 = Lux.Parallel(nothing, (LinearLayer(length(disspec[j]), 1; use_cache = false) for j = 1:Nel)...), l_concat = WrappedFunction(x -> hcat(x...)), Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x::Matrix -> det(x))) for i = 1:Nbf))
    jastrow_layer = ACEpsi.lux(js)
 
    BFwf_chain = Chain(; diff = embed_layer, Pds = prodbasis_layer, 
                         bA = pooling_layer, reshape = ACEpsi.myReshapeLayer((Nel, 3 * sum(length.(prodbasis_layer.sparsebasis)))), 
-                        bAA = corr_layer, bf = WrappedFunction(A -> Tuple([A[:, index[i]] for i = 1:Nel])), 
+                        bAA = corr_layer, bf_orbital = WrappedFunction(A -> Tuple([A[:, index[i]] for i = 1:Nel])), 
                         hidden = BranchLayer(l_hidden...),
                         sum = WrappedFunction(sum))
    return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p, disspec
@@ -63,33 +63,31 @@ end
 get_charge(nuc::Nuc) = Int(nuc.charge)
 
 function get_nuc(nuclei::Vector{Nuc{T}}, N::TN) where {T, TN <: Integer}
-    nuc = cumsum(get_charge.(nuclei))
-    out = zeros(Int, N); out[1] = 1; t = 1
-    if N > 1
-       for i in 2:N
-           if cumsum(out[1:i-1])[1] == nuc[t]
-               t = t+1
-           end
-           out[i] = t
-       end
+    nuc = get_charge.(nuclei)
+    out = [ones(Int64, nuc[i]) for i = 1:length(nuc)]
+    _out = [out[1]]
+    t = 0
+    for i = 2:length(out)
+        t += sum(out[i-1])
+        push!(_out, out[i] .+ Ref(t))
     end
-    out[end] = length(nuc)
+    out = reduce(vcat, _out)
     return out
 end
 
 function sparse(spec, spec1p, Nel::Integer, nuc)
-   disspec = displayspec(spec, spec1p)
-   _spec = []
-   index = []
-   for i = 1:Nel
+    disspec = displayspec(spec, spec1p)
+    _spec = []
+    index = []
+    for i = 1:Nel
         push!(_spec, [;])
         push!(index, [;])
         for (j, bb) in enumerate(disspec)
-            if sum([(bb[z].s == '∅') && bb[z].I == nuc[i] for z = 1:length(bb)]) > 0
+            if sum([(bb[z].s == '∅') && abs(bb[z].I - nuc[i]) <= 0 for z = 1:length(bb)]) > 0
                 push!(index[i], j)
                 push!(_spec[i], bb)
             end
         end
-   end
-   return index, _spec
+    end
+    return index, _spec
 end

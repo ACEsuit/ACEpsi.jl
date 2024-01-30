@@ -54,10 +54,9 @@ function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH,
     # Scale Regularization
     vₜ, g0 = scale_regularization(vₜ, g0, type.st)
     # damping: S_ij = S_ij + eps δ_ij
-    vₜ[diagind(vₜ)] .*= (1+type.ϵ₁)
+    vₜ[diagind(vₜ)] .*= (1 + type.ϵ₁ * max(0.001, 0.999^t) )
     vₜ[diagind(vₜ)] .+= type.ϵ₂
     #vₜ = vₜ + type.ϵ₁ * max(0.1, 100*0.9^t) * Diagonal(diag(vₜ)) + type.ϵ₂ * max(0.1, 100*0.9^t) * Diagonal(diag(one(S)))
-
     g = vₜ \ g0
     # momentum for g 
     mₜ = momentum(mₜ, g, type.β₂)
