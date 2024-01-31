@@ -43,7 +43,7 @@ Nbf = [1,2,3]
 
 _TD = [ACEpsi.TD.Tucker(2),ACEpsi.TD.Tucker(3),ACEpsi.TD.Tucker(4)]
 #_TD = [ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition(),ACEpsi.TD.No_Decomposition()]
-wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
 for i = 1:length(ν) - 1
     l = i
@@ -51,11 +51,18 @@ for i = 1:length(ν) - 1
     spec = spec_list[l]
     spec1p = spec1p_list[l]
     specAO = specAO_list[l]
+    dispec = dist_list[l]
     wf = wf_list[l]
     st = st_list[l]
     Nlm = Nlm_list[l]
     l = i + 1
-    ps2 = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l], Nlm, Nlm_list[l])
+    ps2 = ps_list[l]
+    spec2 = spec_list[l]
+    spec1p2 = spec1p_list[l]
+    specAO2 = specAO_list[l]
+    Nlm2 = Nlm_list[l]
+    dispec2 = dist_list[l]
+    ps2 = EmbeddingW!(ps, ps2, spec, spec2, spec1p, spec1p2, specAO, specAO2, Nlm, Nlm2, dispec, dispec2)
     wf2 = wf_list[l]
     st2 = st_list[l]
     wf(X, ps, st)

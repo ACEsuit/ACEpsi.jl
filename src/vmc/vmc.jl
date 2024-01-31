@@ -19,7 +19,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
                 ν = 1, verbose = true, density = false, 
                 accMCMC = [10, [0.45, 0.55]], batch_size = 1)
 
-    mₜ, vₜ = initp(opt_vmc.type, ps_list[1])
+    mₜ, vₜ = initp(opt_vmc.type, ps)
     res, λ₀, α = 1.0, 0., opt_vmc.lr
     err_opt = zeros(opt_vmc.MaxIter)
 
@@ -34,7 +34,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
 
     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
     verbose && @printf("   k |  𝔼[E_L]   |  V[E_L] |   res   |   LR    |accRate|   Δt  |free_memory  \n")
-    _basis_size = size(ps.branch.bf.hidden.layer_1.hidden.W, 2)
+    _basis_size = ACEpsi._size(ps)
     _Nbf = length(keys(ps.branch.bf.hidden))
     @info("size of basis = $_basis_size, number of bfs = $_Nbf")
     for k = 1 : opt_vmc.MaxIter

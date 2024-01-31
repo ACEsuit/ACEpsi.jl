@@ -207,7 +207,6 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{GaussianBasis{
    ∂X = Tuple([zero(X[z]) for z = 1:Nnuc])
    ∂ζ = [zero(l.bRnl[i].Dn.ζ) for i = 1:length(l.bRnl)]
    function pb(Δ)
-      println(Δ)
       for z = 1:Nnuc
          n = l.speclist[z]
          ∂BB = Polynomials4ML._pullback_evaluate(Δ[1][z], l.sparsebasis[n], (bRnl[z], bYlm[:,:,z]))
@@ -235,7 +234,6 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{STO_NG{T}, TP,
    dnorm = acquire!(l.bYlm.pool, :norm, (Nel, Nnuc), Polynomials4ML._gradtype(l.bYlm, X[1]))
    bYlm = acquire!(l.bRnl[1].pool, :Ylm, (Nel, length(l.bYlm), Nnuc), RT)
    dX = acquire!(l.bYlm.pool, :dX, (Nel, length(l.bYlm), Nnuc), Polynomials4ML._gradtype(l.bYlm, X[1]))
-   dζ = [acquire!(l.bRnl[1].pool, Symbol("dζ$z"), (3, length(l.bRnl[l.speclist[z]])), RT) for z = 1:Nnuc] 
    dR = [acquire!(l.bRnl[1].pool, Symbol("dR$z"), (3, length(l.bRnl[l.speclist[z]])), RT) for z = 1:Nnuc]
    bRnl = [acquire!(l.bRnl[1].pool, Symbol("bRnl$z"), (3, length(l.bRnl[l.speclist[z]])), RT) for z = 1:Nnuc] 
    for z = 1:Nnuc
@@ -250,12 +248,11 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{STO_NG{T}, TP,
       # Rnl
       i = l.speclist[z]
       l.bRnl[i].Dn.ζ = st[1][i] 
-      bRnl[z], dR[z], dζ[z] = Polynomials4ML.evaluate_ed_dp(l.bRnl[i], R)
+      bRnl[z], dR[z] = Polynomials4ML.evaluate_ed(l.bRnl[i], R)
       ϕnlm[z] = evaluate(l.sparsebasis[i],(bRnl[z], bYlm[:,:,z]))
    end
    ∂X = Tuple([zero(X[z]) for z = 1:Nnuc])
    function pb(Δ)
-      println(Δ)
       for z = 1:Nnuc
          n = l.speclist[z]
          ∂BB = Polynomials4ML._pullback_evaluate(Δ[1][z], l.sparsebasis[n], (bRnl[z], bYlm[:,:,z]))
@@ -268,7 +265,7 @@ function ChainRulesCore.rrule(::typeof(evaluate), l::ProductBasis{STO_NG{T}, TP,
       end
       return NoTangent(), NoTangent(), ∂X, NoTangent(), NoTangent()
    end
-   release!(R);release!(dnorm);release!(bYlm);release!(dX);release!(dζ);release!(dR);release!(bRnl)
+   release!(R);release!(dnorm);release!(bYlm);release!(dX);release!(dR);release!(bRnl)
    return (ϕnlm, ps, st), pb
 end
 
