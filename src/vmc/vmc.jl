@@ -33,11 +33,12 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
     acc_opt = zeros(acc_step)
 
     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
-    verbose && @printf("   k |  𝔼[E_L]   |  V[E_L] |   res   |   LR    |accRate|   Δt    \n")
+    verbose && @printf("   k |  𝔼[E_L]   |  V[E_L] |   res   |   LR    |accRate|   Δt  |free_memory  \n")
     _basis_size = size(ps.branch.bf.hidden.layer_1.hidden.W, 2)
     _Nbf = length(keys(ps.branch.bf.hidden))
     @info("size of basis = $_basis_size, number of bfs = $_Nbf")
     for k = 1 : opt_vmc.MaxIter
+        GC.gc()
         sam.x0 = x0
         
         # adjust Δt
@@ -57,7 +58,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
         end
         
         # err
-        verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt)
+        verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30)
         err_opt[k] = λ₀
 
         if res < opt_vmc.tol
