@@ -11,7 +11,7 @@ end
     using Polynomials4ML: natural_indices, degree, SparseProduct
     using ACEpsi.vmc: d1_lattice, EmbeddingW_J!
     using ACEpsi: BackflowPooling1d, setupBFState, BFJwfTrig_lux
-    using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC, d1, adamW, sr
+    using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC, d1, adamW, SR
     using LuxCore
     using Lux
     using Zygote
@@ -43,7 +43,7 @@ end
     end
 
     # Defining OrbitalsBasis
-    totdegree = [15]
+    totdegree = [15, 5]
     ord = length(totdegree)
     Pn = Polynomials4ML.RTrigBasis(maximum(totdegree))
     trans = (x -> (2 * pi * x / L)::Union{Float64, Dual{Nothing, Float64, 1}, Hyper{Float64}})#::typeof(x))# ::Union{Float64, Dual{Nothing, Float64, 1}, Hyper{Float64}})
@@ -51,7 +51,8 @@ end
     ## Jastrow Factor
     deg_of_cos = 3
     deg_of_mono = 3
-    J = ACEpsi.JCasino1dVb(0.05*L , deg_of_mono, deg_of_cos, L)
+    Lu = 0.03*L # cutoff for Jastrow factor
+    J = ACEpsi.JCasino1dVb(Lu , deg_of_mono, deg_of_cos, L)
     JS = ACEpsi.JCasinoChain(J)
 
     # @info("setting up old wf in new code")
@@ -70,47 +71,43 @@ end
     diff_coord = true
     ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
     
-    ## check spec if needed
-    # function getnicespec(spec::Vector, spec1p::Vector)
-    #     return [[spec1p[i] for i = spec[j]] for j = eachindex(spec)]
-    # end
-    # @show getnicespec(spec, spec1p);
-
     ## customized initial parameters
     # minimal HF is actually a good initial guess
-    # for i = 1:Nel # Nel
-    #     for j = eachindex(spec) # basis size
-    #         if j > Int(Nel/2)
-    #             ps.to_be_prod.layer_1.hidden1.W[i,j] = 0.0
-    #         end
-    #     end
-    # end
+    for i = 1:Nel # Nel
+        for j = eachindex(spec) # basis size
+            if j > Int(Nel/2)
+                ps.to_be_prod.layer_1.hidden1.W[i,j] = 0.0
+            end
+        end
+    end
+    
+    # Embedding minimal HF
+    # totdegree = [15, 5]
+    # ord = length(totdegree)
+    # sd_admissible = sd_admissible_func(ord, totdegree)
+    # wf, spec2, spec1p2 = BFJwfTrig_lux(Nel, Pn, nothing; ν = ord, trans = trans,  totdeg = totdegree[1], sd_admissible = sd_admissible, Jastrow_chain = JS)
+    # ps2, st = setupBFState(MersenneTwister(1234), wf, Σ)
+    # EmbeddingW_J!(ps, ps2, spec, spec2, spec1p, spec1p2)
+    ## intializr CASINO Jastrow so that we have HF
+    for i = 1:deg_of_cos
+        ps.to_be_prod.layer_2.hiddenJS.layer_1.W[i] = 0.0
+    end
+    for i = 1:deg_of_mono+1
+        ps.to_be_prod.layer_2.hiddenJS.layer_2.W[i] = 0.0
+    end
 
-    ## manual multi-level
-    ## data from previous run
-    # c = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/b1rs5N302023-11-07T15:03:50.898/Data200.json")
-    # c = c["W"]
+    # manual multi-level
+    # data from previous run
+    # Dic = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/Jastrowb1rs1N302024-01-27T09:26:49.738/Data50.json")
+    # c = Dic["W"]
     # basis_size = Int(length(c)/Nel)
     # c = reshape(c, (Nel, basis_size))
     # for i = axes(c, 1)
     #     for j = axes(c, 2)
-    #         ps.hidden1.W[i,j] = c[i,j]
+    #         ps.to_be_prod.layer_1.hidden1.W[i,j] = c[i,j]
     #     end
     # end
-
-    totdegree = [15, 5]
-    ord = length(totdegree)
-    sd_admissible = sd_admissible_func(ord, totdegree)
-    wf, spec2, spec1p2 = BFJwfTrig_lux(Nel, Pn, nothing; ν = ord, trans = trans,  totdeg = totdegree[1], sd_admissible = sd_admissible, Jastrow_chain = JS)
-    ps2, st = setupBFState(MersenneTwister(1234), wf, Σ)
-    EmbeddingW_J!(ps, ps2, spec, spec2, spec1p, spec1p2)
-    ## intializr CASINO Jastrow so that we have HF
-    for i = 1:deg_of_cos
-        ps2.to_be_prod.layer_2.hiddenJS.layer_1.W[i] = 0.0
-    end
-    for i = 1:deg_of_mono+1
-        ps2.to_be_prod.layer_2.hiddenJS.layer_2.W[i] = 0.0
-    end
+    # r0 = Vector.(Dic["x0"]) # init sample
 
     ## PauliNet Jastrow
     # ps.to_be_prod.layer_2.α1 = 0.0
@@ -142,19 +139,25 @@ end
     Lattice = [x0 + (k - 1) * spacing for k = 1:Nel]
     d = d1_lattice(Lattice)
 
-    burnin = 100
-    N_chain = 2000
+    ### to get over with NaN output in the ifirst run
+    # burnin = 3
+    # N_chain = nprocs()
+    ### comment out for 1st run
+    burnin = 2000
+    N_chain = 1600
+    ### 
     MaxIters = 200
     lr = 0.01
-    lr_dc = 10000000
-    Δt = 0.4*L
+    lr_dc = 10000000000
+    Δt = 0.3*L
+    lag = 20 # increase to see if optimization helps
     batch_size = floor(Int, N_chain / nprocs())
     # @assert batch_size * nprocs() == N_chain
 
     ham = SumH(Kin, Vext, Vee)
-    sam = MHSampler(wf, Nel, Δt=Δt , burnin = burnin, nchains = N_chain, d = d) # d = d for now
+    sam = MHSampler(wf, Nel, Δt=Δt , burnin = burnin, lag = lag, nchains = N_chain, d = d, L = L)
 
-    opt_vmc = VMC(MaxIters, lr, adamW(), lr_dc = lr_dc)
+    opt_vmc = VMC(MaxIters, lr, adamW(), lr_dc = lr_dc) # Trying out to SR
 end
 @info("Running b=$(b) rs=$(rs) N=$(Nel) with $(nprocs()) processes")
 @assert N_chain % nprocs() == 0 "N_chain must be divisible by nprocs()"
@@ -172,14 +175,21 @@ results_dir = @__DIR__() * "/jellium_data" * config_name * string(Dates.now()) *
 mkpath(results_dir)
 # save(results_dir * "Config_b1rs1maxnu3N$N.jld", "N", N, "totdegree" , totdegree, "MaxIters" , MaxIters, "burnin" , burnin, "N_chain" , N_chain, "lr", lr, "lr_dc", lr_dc, "Δt", Δt)
 ## save data using json
-json_config = """{"N": $(N), "totdegree" : $(totdegree), "MaxIters" : $(MaxIters), "burnin" : $(burnin), "N_chain" : $(N_chain), "lr": $(lr), "lr_dc": $(lr_dc), "Δt": $(Δt), "Wigner": $(Wigner), "diff_coord": $(diff_coord), "rs": $(rs), "b": $(b)}"""
+json_config = """{"N": $(N), "totdegree" : $(totdegree), "MaxIters" : $(MaxIters), "burnin" : $(burnin), "N_chain" : $(N_chain), "lr": $(lr), "lr_dc": $(lr_dc), "Δt": $(Δt), "Wigner": $(Wigner), "diff_coord": $(diff_coord), "rs": $(rs), "b": $(b), "Lu": $(Lu), "deg_of_mono": $(deg_of_mono), "deg_of_cos": $(deg_of_cos)}"""
 open(results_dir * "Config.json", "w") do io
     JSON3.write(io, JSON3.read(json_config))
 end
 
 @info("Wigner = $(Wigner)")
+
+# @info("Running random evalutation to get rid of the NaN output from Hyperdual pkg")
+# X = (rand(Nel).-1/2)*L
+# hX = [Hyper(x, 0, 0, 0) for x in X]
+# hX[1] = Hyper(X[1], 1, 1, 0)
+# @show wf(hX, ps2, st)[1]
+
 @info("Set-up done. Into VMC")
-wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps2, st; batch_size = batch_size ) # remember to change index whenever needed
+wf, err_opt, ps, x0 = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st; batch_size = batch_size) # remember to change index whenever needed
 
 ## Post-processing
 # open("test/1d/jellium_data/b1rs1maxnu3N302023-10-25T09:03:50.303/Config_b1rs1.json", "w") do io
@@ -187,20 +197,23 @@ wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps2, st; batch_size = 
 # end
 
 # using JSON3
-# config = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/Jastrowb1rs1N302023-11-09T06:47:17.787/Config.json")
+# config = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/Jastrowb1rs1N302024-02-08T12:35:28.674/Config.json")
 # N, totdegree, MaxIters, burnin, N_chain, lr, lr_dc, Δt, Wigner, diff_coord, b, rs = config["N"], config["totdegree"], config["MaxIters"], config["burnin"], config["N_chain"], config["lr"], config["lr_dc"], config["Δt"], config["Wigner"], config["diff_coord"], config["b"], config["rs"]
-
-# config = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/b1rsPt5N302023-11-05T08:08:39.880/Config.json")
-
-
-# Dic = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/tmp_wf_data/Data120.json")
+# N = 30
+# ρ = 1 / (2 * rs) # (average density)
+# L = N / ρ # supercell size
+# Dic = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/Jastrowb1rs1N302024-02-08T12:35:28.674/Data30.json")
 # E = Dic["E"]
 # σ = Dic["σ"]
 # Eavg = E[1:200]/N
 # σavg = σ[1:200]/N
+# using Printf
+# for i = 1:200
+#     @printf(" %d | %.5f | %.5f \n", i, Eavg[i], σ[i])
+# end
 # alpha = Dic["α"]
-# # W = Dic["W"]
-# # W = reshape(W, (N, Int(length(W)/N)))
+# W = Dic["W"]
+# W = reshape(W, (N, Int(length(W)/N)))
 
 # Dic2 = JSON3.read("/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/b1rs1maxnu3N302023-10-28T10:14:13.322/Data200ForPlot.json")
 # E2 = Dic2["E"]
@@ -227,7 +240,7 @@ wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps2, st; batch_size = 
 # end
 
 # using Plots
-# p = plot(lw=2, title="b=$(b), rs=$(rs), N=$N, burnin=$(burnin), N_chain=$(N_chain), lr=$(lr), lr_dc=$(lr_dc)",
+# p = plot(lw=2, title="b=$(b), rs=$(rs), N=$N, burnin=$(burnin), N_chain=$(N_chain), lr=$(lr)",
 # xlabel="# Iterations", ylabel="Energy(Hartree) per electron", 
 # legend=:outerbottom, 
 # size=(800, 800),
@@ -240,9 +253,18 @@ wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps2, st; batch_size = 
 # ## benchmarks
 # hline!([UHF_minimalPW], c=:black, linestyle=:dash, lw=1, label="HF minimal PW basis ($UHF_minimalPW)")
 # hline!([CASINO_VMC], c=:black, linestyle=:dashdotdot, lw=1, label="CASINO ($CASINO_VMC)")
-# savefig(p, "/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/b1rs5N302023-11-07T15:03:50.898/b1rs5.png")
+# savefig(p, "/zfs/users/berniehsu/berniehsu/OneD/ACEpsi.jl/test/1d/jellium_data/Jastrowb1rs1N302024-01-25T11:03:08.547/b1rs1.png")
 
-# ## b=1 rs=1
+# check particle density
+
+# x0 = Dic["x0"]
+# reduce(vcat,x0)
+# x = reduce(vcat,reduce(vcat,x0))
+# b_range = range(-L-100, L+100, length=42)
+# hist = histogram(x, bins=b_range, normalize=:pdf)
+# xlims!(-L,L)
+# rp = (map(x -> mod.(x .+ L/2, L) .- L, x0))
+## b=1 rs=1
 UHF_minimalPW = -0.1594301 #2791954408
 CASINO_VMC = -0.1710782
 

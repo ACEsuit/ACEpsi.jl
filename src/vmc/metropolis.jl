@@ -22,6 +22,7 @@ mutable struct MHSampler
     walkerType::String          # walker type: "unbiased", "Langevin"
     bc::String                  # boundary condition
     d::sampler_dimension        # electron dimension
+    L::Float64                  # supercell size [-L/2,L/2]
 end
 
 MHSampler(Ψ, Nel; Δt = 0.1, 
@@ -32,8 +33,9 @@ MHSampler(Ψ, Nel; Δt = 0.1,
             x0 = [],
             wT = "unbiased", 
             bc = "periodic", 
-            d = d3()) =
-    MHSampler(Nel, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, d)
+            d = d3(),
+            L = Δt*100) =
+    MHSampler(Nel, Δt, burnin, lag, N_batch, nchains, Ψ, x0, wT, bc, d, L)
 
 
 """
@@ -47,7 +49,7 @@ function MHstep(r0,
                 Ψx0, 
                 Nels::Int, 
                 sam::MHSampler, ps, st; batch_size = 1)
-    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d)) # might have found a mistake here. Once this line is executed, rp = r0 so... (see below)
+    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d), sam.L) # might have found a mistake here. Once this line is executed, rp = r0 so... (see below)
     # rp = deepcopy(r0) # ACESchrodinger code
     # rand_sample.(rp, Ref(Nels), Ref(sam.Δt), Ref(sam.d))
     raw_data = pmap(rp; batch_size = batch_size) do d
@@ -62,16 +64,16 @@ function MHstep(r0,
     return r, Ψ, acc
 end
 
-rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3) = begin
+rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3; L=nothing) = begin
     @view(X[rand(1:Nels)]) .+= Δt * randn(SVector{3, eltype(X[1])}, 1)
     @error("Incorrect implementation, should not use @view.")
     return X
 end
 
-rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T) where T <: Union{d1, d1_lattice} = begin
+rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T, L::Float64) where T <: Union{d1, d1_lattice} = begin
     X1 = deepcopy(X)
     rand_index = rand(1:Nels)
-    X1[rand_index] += Δt * rand(Normal(0.0, 1.0))
+    X1[rand_index] = map(x -> mod(x + L/2, L) - L/2, X1[rand_index] + Δt * rand(Normal(0.0, 1.0)))
     return X1
 end
 
