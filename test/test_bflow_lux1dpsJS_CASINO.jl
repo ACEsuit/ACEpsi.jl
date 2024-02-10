@@ -15,7 +15,7 @@ using BenchmarkTools
 
 using HyperDualNumbers: Hyper
 
-totdegree = [15]
+totdegree = [15, 5]
 Nel = 30
 rs = 1 # Wigner-Seitz radius r_s for 1D = 1/(2ρ); where ρ = N/L
 ρ = 1 / (2 * rs) # (average density)
@@ -36,7 +36,7 @@ ord = length(totdegree)
 Pn = Polynomials4ML.RTrigBasis(maximum(totdegree)+ord)
 trans = x -> 2 * pi * x / L
 
-J = ACEpsi.JCasino1dVb(0.05*L ,3, 3, L)
+J = ACEpsi.JCasino1dVb(0.04*L ,3, 3, L)
 JS = ACEpsi.JCasinoChain(J)
 
 _get_ord = bb -> sum([bb[i].n .!= 1 for i = 1:length(bb)]) == 0 ? 1 : sum([bb[i].n .!= 1 for i = 1:length(bb)])
@@ -105,7 +105,8 @@ function grad_test2(f, df, X::AbstractVector)
     ∇F = df(X)
     nX = length(X)
     EE = Matrix(I, (nX, nX))
-    
+    @show norm(∇F, Inf)
+
     for h in 0.1.^(3:12)
        gh = [ (f(X + h * EE[:, i]) - F) / h for i = 1:nX ]
        @printf(" %.1e | %.2e \n", h, norm(gh - ∇F, Inf))

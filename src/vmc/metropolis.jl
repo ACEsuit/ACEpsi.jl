@@ -73,8 +73,12 @@ end
 rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T, L::Float64) where T <: Union{d1, d1_lattice} = begin
     X1 = deepcopy(X)
     rand_index = rand(1:Nels)
-    X1[rand_index] = map(x -> mod(x + L/2, L) - L/2, X1[rand_index] + Δt * rand(Normal(0.0, 1.0)))
+    X1[rand_index] = PBC_mod(L, X1[rand_index] + Δt * rand(Normal(0.0, 1.0)))
     return X1
+end
+
+PBC_mod(L::Float64, xx::Float64) = begin
+    return map(x -> mod(x + L/2, L) - L/2, xx)
 end
 
 """
@@ -95,7 +99,8 @@ rand_init(Δt::Number, Nel::Int, nchains::Int, d::d3) = [Δt * randn(SVector{3, 
 rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1) = [Δt * randn(Nel) for _ = 1:nchains]
 
 # same as d1 rand_init, except shifted by equally spaced lattice
-rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [[x_e + randn() for x_e in d.L] for _ = 1:nchains]
+# rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [[x_e + randn() for x_e in d.L] for _ = 1:nchains]
+rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [[PBC_mod(d.L[end]-d.L[1] + (d.L[2]-d.L[1]), x_e + randn()) for x_e in d.L] for _ = 1:nchains] # adding PBC
 
 function sampler_restart(sam::MHSampler, ps, st; batch_size = 1)
     r0 = rand_init(sam.Δt, sam.Nel, sam.nchains, sam.d)

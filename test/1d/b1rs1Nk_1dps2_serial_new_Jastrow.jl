@@ -143,11 +143,12 @@ MaxIters = 200
 lr = 0.01
 lr_dc = 10000000
 Δt = 0.4*L
+lag = 30 
 # batch_size = floor(Int, N_chain / nprocs())
 # @assert batch_size * nprocs() == N_chain
 
 ham = SumH(Kin, Vext, Vee)
-sam = MHSampler(wf, Nel, Δt=Δt , burnin = burnin, nchains = N_chain, d = d) # d = d for now
+sam = MHSampler(wf, Nel, Δt=Δt , burnin = burnin, lag = lag , nchains = N_chain, d = d) # d = d for now
 
 opt_vmc = VMC(MaxIters, lr, adamW(), lr_dc = lr_dc)
 @info("Running b=$(b) rs=$(rs) N=$(Nel) on serial")
@@ -172,7 +173,7 @@ end
 
 @info("Wigner = $(Wigner)")
 @info("Set-up done. Into VMC")
-wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps2, st) # remember to change index whenever needed
+wf, err_opt, ps, x0 = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps2, st) # remember to change index whenever needed
 
 ## Post-processing
 # open("test/1d/jellium_data/b1rs1maxnu3N302023-10-25T09:03:50.303/Config_b1rs1.json", "w") do io
