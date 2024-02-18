@@ -30,7 +30,7 @@ end
 struct TuckerLayer <: AbstractExplicitLayer 
    P::Integer # reduced dimension
    K::Integer # spec1p
-   Nel::Integer # number of electrons
+   Nel::Integer # number of electrons/orbitals
    @reqfields()
 end
 

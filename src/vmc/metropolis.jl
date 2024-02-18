@@ -91,7 +91,8 @@ function sampler_restart(sam::MHSampler, ps, st; batch_size = 1)
     r = pos(sam)
     T = eltype(r[1])
     r0 = sam.x0
-    r0 = [sam.Δt * randn(SVector{3, T}, sam.Nel) + r for _ = 1:sam.nchains]
+    
+    r0 = [sam.Δt * randexp(SVector{3, T}, sam.Nel) + r for _ = 1:sam.nchains]
     raw_data = pmap(r0; batch_size = batch_size) do d
         sam.Ψ(d, ps, st)[1]
     end

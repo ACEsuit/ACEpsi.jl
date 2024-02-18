@@ -13,7 +13,7 @@ using ObjectPools: unwrap,ArrayPool, FlexArray,acquire!
 using Lux
 
 using ACEpsi.AtomicOrbitals: make_nlms_spec
-using ACEpsi.TD: No_Decomposition, Tucker
+using ACEpsi.TD: No_Decomposition, Tucker, SCP
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 
 # ----------------- usual BF without tensor decomposition ------------------
@@ -140,7 +140,7 @@ function get_spec(nuclei::Vector{Nuc{TN}}, speclist::Vector{TS}, bRnl, bYlm, tot
    return spec[:]
 end
 
-function get_spec(TD::Tucker)  
+function get_spec(TD::Union{Tucker, SCP})  
    spec = Array{Any}(undef, (3, TD.P))
  
    for k = 1:TD.P

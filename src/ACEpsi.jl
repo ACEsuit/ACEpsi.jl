@@ -15,10 +15,14 @@ include("atomicorbitals/atomicorbitals.jl")
 include("jastrow.jl")
 include("tensordecomposition/TD.jl")
 include("cluster/Cluster.jl")
-include("bflow3d.jl")
-include("bflow3dTucker.jl")
-include("bflow3dCluster.jl")
 include("backflowpooling.jl")
+
+include("wf/bflow3d.jl")
+include("wf/bflow3dTucker.jl")
+include("wf/bflow3dCluster.jl")
+include("wf/bflow3dSCP.jl")
+include("wf/embed.jl")
+
 
 # lux utils for bflow
 include("lux_utils.jl")
