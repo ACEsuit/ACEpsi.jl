@@ -88,13 +88,13 @@ sam = MHSampler(wf_list[1], Nel, nuclei,
 
 lr_0  = 0.2
 lr_dc = 1000.0
-epsilon = 0.1
+epsilon = 1e-3
 kappa_S = 0.95
 kappa_m = 0.
 opt_vmc = VMC_multilevel(MaxIters, lr_0,
                 ACEpsi.vmc.SR(0.0, epsilon, kappa_S, kappa_m, 
                               ACEpsi.vmc.QGT(), 
-                              ACEpsi.vmc.no_scale(),
+                              ACEpsi.vmc.scale_invariant(),
                               ACEpsi.vmc.no_constraint()
                               ); 
                 lr_dc = lr_dc)

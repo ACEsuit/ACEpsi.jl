@@ -38,25 +38,29 @@ function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
     λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
     dps = grad_params.(Ref(wf), x0, Ref(ps), Ref(st))
     O = 1/2 * reshape(_destructure(dps), (length(_destructure(ps)),sam.nchains))
-    Ō = mean(O, dims =2)
-    ΔO = (O .- Ō)/sqrt(sam.nchains)
-    return λ₀, σ, E, acc, ΔO, x0
+
+    #Ō = mean(O, dims =2)
+    #ΔO = (O .- Ō)/sqrt(sam.nchains)
+    return λ₀, σ, E, acc, O, x0
 end
 
 function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH, mₜ, vₜ, t; batch_size = 200)
-    λ₀, σ, E, acc, ΔO, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
-    g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
+    λ₀, σ, E, acc, O, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
+    g0 = vec(2.0 * mean(O .* (E .- mean(E))', dims = 2))
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
-    S = ΔO * ΔO'
-    # momentum
-    vₜ = momentum(vₜ, S, type.β₁)
+    S = O * O'/sam.nchains
+    
     # Scale Regularization
     vₜ, g0 = scale_regularization(vₜ, g0, type.st)
+
+    # momentum
+    vₜ = momentum(vₜ, S, type.β₁)
+
     # damping: S_ij = S_ij + eps δ_ij
     vₜ[diagind(vₜ)] .*= (1 + type.ϵ₁)
-    vₜ[diagind(vₜ)] .+= type.ϵ₂ * max(0.001, exp(-t/2000))
-    #vₜ = vₜ + type.ϵ₁ * Diagonal(diag(vₜ)) + type.ϵ₂ Diagonal(diag(one(S)))
+    vₜ[diagind(vₜ)] .+= type.ϵ₂ #* max(0.001, exp(-t/2000))
+
     g = vₜ \ g0
     # momentum for g 
     mₜ = momentum(mₜ, g, type.β₂)

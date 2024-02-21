@@ -82,6 +82,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
        @info("level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
        # optimization
        for k = 1 : opt_vmc.MaxIter[l]
+          ν = ν + 1
           GC.gc()
           sam.x0 = x0
           
@@ -90,7 +91,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
           sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
  
           # adjust learning rate
-          α, ν = InverseLR(ν, opt_vmc.lr, opt_vmc.lr_dc)
+          α, ~ = InverseLR(k, opt_vmc.lr, opt_vmc.lr_dc)
  
           # optimization
           ps, acc, λ₀, res, σ, x0, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)

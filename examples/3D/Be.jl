@@ -61,7 +61,7 @@ bYlm = RRlmBasis(Ylmdegree)
 totdegree = [30, 30, 30, 30]
 ν = [1, 1, 2, 2]
 
-MaxIters = [500, 1000, 2000, 20000]
+MaxIters = [100, 200, 400, 20000]
 _spec = [ [ spec[1][1:8]], 
           [ spec[1][1:13]], 
           [ spec[1][1:13]], 
@@ -88,13 +88,13 @@ sam = MHSampler(wf_list[1], Nel, nuclei,
 
 lr_0  = 0.2
 lr_dc = 1000.0
-epsilon = 0.1
+epsilon = 1e-3
 kappa_S = 0.95
 kappa_m = 0.
 opt_vmc = VMC_multilevel(MaxIters, lr_0,
                 ACEpsi.vmc.SR(0.0, epsilon, kappa_S, kappa_m, 
                               ACEpsi.vmc.QGT(), 
-                              ACEpsi.vmc.no_scale(),
+                              ACEpsi.vmc.scale_invariant(),
                               ACEpsi.vmc.no_constraint()
                               ); 
                 lr_dc = lr_dc)
@@ -113,7 +113,6 @@ print_tf(@test hA.value ≈ A)
 Zygote.gradient(x -> wf(x, ps, st)[1], X)
 p = Zygote.gradient(p -> wf(X, p, st)[1], ps)
 laplacian(wf, X, ps, st)
-    
 end
 
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
