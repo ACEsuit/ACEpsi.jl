@@ -61,13 +61,12 @@ bYlm = RRlmBasis(Ylmdegree)
 totdegree = [30, 30, 30, 30]
 ν = [1, 1, 2, 2]
 
-MaxIters = [100, 200, 400, 20000]
+MaxIters = [1000, 2000, 400, 20000]
 _spec = [ [ spec[1][1:8]], 
           [ spec[1][1:13]], 
           [ spec[1][1:13]], 
           [ spec[1][1:15]]
         ]
-
 
 _TD = [ACEpsi.TD.No_Decomposition(),
        ACEpsi.TD.No_Decomposition(),
@@ -80,11 +79,12 @@ speclist  = [1]
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
-sam = MHSampler(wf_list[1], Nel, nuclei, 
+
+physical_config = ACEpsi.vmc.Physical_config(nuclei, [1,1,1,1], [[2,2]])
+sam = MHSampler(wf_list[1], Nel, physical_config, 
                 Δt = 0.08, 
                 burnin  = 1000, 
                 nchains = 2000)
-
 
 lr_0  = 0.2
 lr_dc = 1000.0
@@ -94,12 +94,11 @@ kappa_m = 0.
 opt_vmc = VMC_multilevel(MaxIters, lr_0,
                 ACEpsi.vmc.SR(0.0, epsilon, kappa_S, kappa_m, 
                               ACEpsi.vmc.QGT(), 
-                              ACEpsi.vmc.scale_invariant(),
+                              ACEpsi.vmc.no_scale(),
                               ACEpsi.vmc.no_constraint()
                               ); 
                 lr_dc = lr_dc)
 
- 
 wf = wf_list[1]
 ps = ps_list[1]
 st = st_list[1]

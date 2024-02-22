@@ -73,7 +73,8 @@ _spec = [ [ spec[1][1:2]],
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD; js = ACEpsi.Jastrow(nuclei))
 
 ham = SumH(nuclei)
-sam = MHSampler(wf_list[1], Nel, nuclei, 
+physical_config = ACEpsi.vmc.Physical_config(nuclei, collect(1:10), [[1] for i = 1:1:10])
+sam = MHSampler(wf_list[1], Nel, physical_config, 
                 Δt = 0.08, 
                 burnin  = 1000, 
                 nchains = 2000)

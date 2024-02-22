@@ -80,7 +80,8 @@ speclist  = [1]
 wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
 
 ham = SumH(nuclei)
-sam = MHSampler(wf_list[1], Nel, nuclei, 
+physical_config = ACEpsi.vmc.Physical_config(nuclei, [1,1,1,1], [[2,2]])
+sam = MHSampler(wf_list[1], Nel, physical_config, 
                 Δt = 0.08, 
                 burnin  = 1000, 
                 nchains = 2000)

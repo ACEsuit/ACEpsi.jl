@@ -29,22 +29,14 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
                                         accMCMC = [10, [0.45, 0.55]], 
                                         batch_size = 1)
     # first level
-    wf = wf_list[1]
-    ps = ps_list[1]
-    st = st_list[1]
-    spec = spec_list[1]
-    spec1p = spec1p_list[1]
-    specAO = specAO_list[1]
-    Nlm = Nlm_list[1]
-    dispec = dist_list[1]
+    wf, ps, st, spec, spec1p, specAO, Nlm, dispec = wf_list[1], ps_list[1], st_list[1], spec_list[1], spec1p_list[1], specAO_list[1], Nlm_list[1], dist_list[1]
     mₜ, vₜ = initp(opt_vmc.type, ps_list[1])
     sam.Ψ = wf
-    ν = 1
-    # burnin 
-    res, λ₀, α = 1.0, 0., opt_vmc.lr
-    err_opt = [zeros(opt_vmc.MaxIter[i]) for i = 1:length(opt_vmc.MaxIter)]
 
-    x0, ~, acc = sampler_restart(sam, ps, st, batch_size = batch_size)
+    # burnin 
+    res, λ₀, α, ν = 1.0, 0., opt_vmc.lr, 1
+    err_opt = [zeros(opt_vmc.MaxIter[i]) for i = 1:length(opt_vmc.MaxIter)]
+    x0, ~, acc = sampler(sam, sam.burnin, ps, st, batch_size = batch_size)
 
     density && begin 
         x = reduce(vcat,reduce(vcat,x0))
@@ -57,8 +49,8 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
     verbose && @printf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt  |free_memory  \n")
     for l in 1:length(wf_list)
-       # do embeddings
-       if l > 1
+        # do embeddings
+        if l > 1
             wf = wf_list[l]
             p, s = destructure(ps)
             # embed for mt and vt
@@ -68,51 +60,44 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             mₜ, vₜ = updatep(opt_vmc.type, opt_vmc.utype, ps_list[l], index, mₜ, vₜ )
             # embed for ps
             ps = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l], Nlm, Nlm_list[l], dispec, dist_list[l])
-            st = st_list[l]
-            Nlm = Nlm_list[l]
-            spec = spec_list[l]
-            specAO = specAO_list[l]
-            spec1p = spec1p_list[l]
-            dispec = dist_list[l]
+            st, Nlm, spec, specAO, spec1p, dispec = st_list[l], Nlm_list[l], spec_list[l], specAO_list[l], spec1p_list[l], dist_list[l]
             sam.Ψ = wf
-       end
-       v = maximum(length.(spec))
-       _Nbf = length(keys(ps.branch.bf.hidden))
-       _basis_size = ACEpsi._size(ps)
-       @info("level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
-       # optimization
-       for k = 1 : opt_vmc.MaxIter[l]
-          ν = ν + 1
-          GC.gc()
-          sam.x0 = x0
+        end
+        v, _Nbf, _basis_size = maximum(length.(spec)), length(keys(ps.branch.bf.hidden)), ACEpsi._size(ps)
+        @info("level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
+        # optimization
+        for k = 1 : opt_vmc.MaxIter[l]
+            ν += 1
+            GC.gc()
+            sam.x0 = x0
           
-          # adjust Δt
-          acc_opt[mod(k,acc_step)+1] = acc
-          sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
+            # adjust Δt
+            acc_opt[mod(k,acc_step)+1] = acc
+            sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
  
-          # adjust learning rate
-          α, ~ = InverseLR(k, opt_vmc.lr, opt_vmc.lr_dc)
+            # adjust learning rate
+            α, ~ = InverseLR(k, opt_vmc.lr, opt_vmc.lr_dc)
  
-          # optimization
-          ps, acc, λ₀, res, σ, x0, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)
-          density && begin 
-            if k % 10 == 0
-                x = reduce(vcat,reduce(vcat,x0))
-                display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
-            end
-          end 
+            # optimization
+            ps, acc, λ₀, res, σ, x0, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)
+            density && begin 
+                if k % 10 == 0
+                    x = reduce(vcat,reduce(vcat,x0))
+                    display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
+                end
+            end 
           
-          # err
-          verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30)
-          err_opt[l][k] = λ₀
+            # err
+            verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30)
+            err_opt[l][k] = λ₀
  
-          if res < opt_vmc.tol
+            if res < opt_vmc.tol
                 ps_list[l] = deepcopy(ps)
                 break;
-          end  
-       end
-       ps_list[l] = deepcopy(ps)
-       opt_vmc.lr = α
+            end  
+        end
+        ps_list[l] = deepcopy(ps)
+        opt_vmc.lr = α
     end
     
     return wf_list, err_opt, ps_list

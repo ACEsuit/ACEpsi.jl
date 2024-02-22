@@ -23,7 +23,7 @@ function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH,
     res, λ₀, α = 1.0, 0., opt_vmc.lr
     err_opt = zeros(opt_vmc.MaxIter)
 
-    x0, ~, acc = sampler_restart(sam, ps, st, batch_size = batch_size) 
+    x0, ~, acc = sampler(sam, sam.burnin, ps, st, batch_size = batch_size) 
     density && begin 
         x = reduce(vcat,reduce(vcat,x0))
         display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
