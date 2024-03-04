@@ -49,13 +49,32 @@ function MHstep(r0,
                 Ψx0, 
                 Nels::Int, 
                 sam::MHSampler, ps, st; batch_size = 1)
-    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d), sam.L) # might have found a mistake here. Once this line is executed, rp = r0 so... (see below)
+    # === previous ===
+    #rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt), Ref(sam.d), sam.L) # might have found a mistake here. Once this line is executed, rp = r0 so... (see below)
     # rp = deepcopy(r0) # ACESchrodinger code
     # rand_sample.(rp, Ref(Nels), Ref(sam.Δt), Ref(sam.d))
-    raw_data = pmap(rp; batch_size = batch_size) do d
-        sam.Ψ(d, ps, st)[1]
+
+    # === chho ===
+    # multiple proposal
+    # rand_sample(X::AbstractVector{TX}, Nels::Int, Δt::Float64) where TX = begin
+    #     return map(x -> mod(x + sam.L/2, sam.L) - sam.L/2,  X + Δt * randn(TX, Nels))
+    # end
+
+    # single proposal
+    rand_sample(X::AbstractVector{TX}, Nels::Int, Δt::Float64) where TX = begin
+        X1 = deepcopy(X)
+        randidx = rand(1:Nels)
+        X1[randidx] = mod(X1[randidx] + Δt * randn(TX) + sam.L/2, sam.L) - sam.L/2
+        return X1
     end
-    Ψxp = vcat(raw_data)
+    rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
+    # === end chho ===
+    # raw_data = pmap(rp; batch_size = batch_size) do _d
+    #     sam.Ψ(_d, ps, st)[1]
+    # end
+
+    # Ψxp = vcat(raw_data)
+    Ψxp = eval.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
     accprob = accfcn(Ψx0, Ψxp)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
@@ -64,18 +83,18 @@ function MHstep(r0,
     return r, Ψ, acc
 end
 
-rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3; L=nothing) = begin
-    @view(X[rand(1:Nels)]) .+= Δt * randn(SVector{3, eltype(X[1])}, 1)
-    @error("Incorrect implementation, should not use @view.")
-    return X
-end
+# rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::d3; L=nothing) = begin
+#     @view(X[rand(1:Nels)]) .+= Δt * randn(SVector{3, eltype(X[1])}, 1)
+#     @error("Incorrect implementation, should not use @view.")
+#     return X
+# end
 
-rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T, L::Float64) where T <: Union{d1, d1_lattice} = begin
-    X1 = deepcopy(X)
-    rand_index = rand(1:Nels)
-    X1[rand_index] = map(x -> mod(x + L/2, L) - L/2, X1[rand_index] + Δt * rand(Normal(0.0, 1.0)))
-    return X1
-end
+# rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T, L::Float64) where T <: Union{d1, d1_lattice} = begin
+#     X1 = deepcopy(X)
+#     rand_index = rand(1:Nels)
+#     X1[rand_index] = map(x -> mod(x + L/2, L) - L/2, X1[rand_index] + Δt * rand(Normal(0.0, 1.0)))
+#     return X1
+# end
 
 """
 acceptance rate for log|Ψ|
@@ -99,18 +118,19 @@ rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [[x_e + randn() 
 
 function sampler_restart(sam::MHSampler, ps, st; batch_size = 1)
     r0 = rand_init(sam.Δt, sam.Nel, sam.nchains, sam.d)
+
     # println("Initial sample: ")
-    # @show r0
     # Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
-    raw_data = pmap(r0; batch_size = batch_size) do d
-        sam.Ψ(d, ps, st)[1]
+    raw_data = pmap(r0; batch_size = batch_size) do _d
+        sam.Ψ(_d, ps, st)[1]
     end
     Ψx0 = vcat(raw_data)
     acc = []
     for _ = 1 : sam.burnin
         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st; batch_size = batch_size);
-        push!(acc,a)
+        push!(acc, a)
     end
+
     return r0, Ψx0, mean(mean(acc))
 end
 
