@@ -89,12 +89,12 @@ end
 #     return X
 # end
 
-# rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T, L::Float64) where T <: Union{d1, d1_lattice} = begin
-#     X1 = deepcopy(X)
-#     rand_index = rand(1:Nels)
-#     X1[rand_index] = map(x -> mod(x + L/2, L) - L/2, X1[rand_index] + Δt * rand(Normal(0.0, 1.0)))
-#     return X1
-# end
+rand_sample(X::AbstractVector, Nels::Int, Δt::Number, d::T, L::Float64) where T <: Union{d1, d1_lattice} = begin
+    X1 = deepcopy(X)
+    rand_index = rand(1:Nels)
+    X1[rand_index] = map(x -> mod(x + L/2, L) - L/2, X1[rand_index] + Δt * rand(Normal(0.0, 1.0)))
+    return X1
+end
 
 """
 acceptance rate for log|Ψ|
@@ -118,19 +118,16 @@ rand_init(Δt::Number, Nel::Int, nchains::Int, d::d1_lattice) = [[x_e + randn() 
 
 function sampler_restart(sam::MHSampler, ps, st; batch_size = 1)
     r0 = rand_init(sam.Δt, sam.Nel, sam.nchains, sam.d)
-
-    # println("Initial sample: ")
-    # Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
-    raw_data = pmap(r0; batch_size = batch_size) do _d
-        sam.Ψ(_d, ps, st)[1]
-    end
-    Ψx0 = vcat(raw_data)
+    Ψx0 = eval.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+    # raw_data = pmap(r0; batch_size = batch_size) do _d
+    #     sam.Ψ(_d, ps, st)[1]
+    # end
+    # Ψx0 = vcat(raw_data)
     acc = []
     for _ = 1 : sam.burnin
         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st; batch_size = batch_size);
         push!(acc, a)
     end
-
     return r0, Ψx0, mean(mean(acc))
 end
 
