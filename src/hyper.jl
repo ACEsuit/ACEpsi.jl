@@ -13,14 +13,27 @@ array(nt::NamedTuple) = NTarr(nt)
 # ------------------------------
 #  0 
 
-zero!(a::AbstractArray) = fill!(a, zero(eltype(a)))
+zero!(a::AbstractArray{ <: Number}) = fill!(a, zero(eltype(a)))
+
+zero!(a::Vector{Vector{Float64}}) = begin
+   for aa in a
+      fill!(aa, zero(eltype(aa)))
+   end
+end
+
+zero!(a::Vector{Vector{Hyper}}) = begin
+   for aa in a
+      fill!(aa, zero(eltype(aa)))
+   end
+end
+
 zero!(a::Nothing) = nothing 
 
 function zero!(nt::NamedTuple)
-    for k in keys(nt)
-       zero!(nt[k])
-    end
-    return nt
+   for k in keys(nt)
+      zero!(nt[k])
+   end
+   return nt
 end 
 
 Base.zero(nt::NamedTuple) = zero!(deepcopy(nt))
