@@ -31,9 +31,9 @@ function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
     dps = grad_params.(Ref(wf), x0, Ref(ps), Ref(st))
     _destructure(ps) = destructure(ps)[1]
     O = 1/2 * reshape(_destructure(dps), (length(_destructure(ps)), sam.nchains))
-    #Ō = mean(O, dims =2)
-    #ΔO = (O .- Ō)/sqrt(sam.nchains)
-    return λ₀, σ, E, acc, O, x0
+    Ō = mean(O, dims =2)
+    ΔO = (O .- Ō)/sqrt(sam.nchains)
+    return λ₀, σ, E, acc, ΔO, x0
 end
 
 function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH, mₜ, vₜ, t; batch_size = 200)

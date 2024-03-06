@@ -62,7 +62,7 @@ end
 
 get_charge(nuc::Nuc) = Int(nuc.charge)
 
-function get_nuc(nuclei::Vector{Nuc{T}}, N::TN) where {T, TN <: Integer}
+function get_nuc(nuclei::SVector{NNuc, Nuc{T}}, N::TN) where {NNuc, T, TN <: Integer}
     nuc = get_charge.(nuclei)
     out = [ones(Int64, nuc[i]) for i = 1:length(nuc)]
     _out = [out[1]]

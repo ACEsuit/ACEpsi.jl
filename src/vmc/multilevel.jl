@@ -109,10 +109,10 @@ function dropnames(namedtuple::NamedTuple, names::Tuple{Vararg{Symbol}})
  end
 
 # slaterbasis
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
+function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::SlaterBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -145,10 +145,10 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
 end
 
 # gaussianbasis
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
+function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::GaussianBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -180,10 +180,10 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
     return wf, spec, spec1p, _spec, ps, st, Nlm, disspec
 end
 
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
+function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::STO_NG, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -215,10 +215,10 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
 end
 
 # slaterbasis
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
+function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::SlaterBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -251,10 +251,10 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
 end
 
 # gaussianbasis
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
+function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::GaussianBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -286,10 +286,10 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}},
     return wf, spec, spec1p, _spec, ps, st, Nlm, disspec
 end
 
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::Vector{Nuc{T}}, 
+function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::STO_NG, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level

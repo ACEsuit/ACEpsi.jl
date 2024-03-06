@@ -3,8 +3,8 @@ using ACEpsi.AtomicOrbitals: Nuc
 using StaticArrays
 
 # INTERFACE FOR HAMILTIANS   H ψ  ->  H(psi, X)
-struct SumH{T}
-    nuclei::Vector{Nuc{T}}
+struct SumH{T, NNuc}
+    nuclei::SVector{NNuc, Nuc{T}}
 end
 
 function Vee(wf, X::Vector{SVector{3, T}}, ps, st) where {T}

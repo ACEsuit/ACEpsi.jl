@@ -5,9 +5,10 @@ using LuxCore
 using LuxCore: AbstractExplicitLayer
 using Random: AbstractRNG
 using Zygote: Buffer
+using StaticArrays
 
-mutable struct Jastrow{T}
-    nuclei::Vector{Nuc{T}}  # nuclei
+mutable struct Jastrow{NNuc, T}
+    nuclei::SVector{NNuc, Nuc{T}}  # nuclei
 end
 
 (f::Jastrow)(args...) = evaluate(f, args...)
@@ -29,8 +30,8 @@ LuxCore.initialparameters(rng::AbstractRNG, l::JastrowLayer) = NamedTuple()
 (l::JastrowLayer)(X, ps, st) = 
       evaluate(l.basis, X, st.Σ), st
 
-mutable struct JPauliNet{T}
-    nuclei::Vector{Nuc{T}}
+mutable struct JPauliNet{NNuc, T}
+    nuclei::SVector{NNuc, Nuc{T}}
 end
 
 ## PauliNet

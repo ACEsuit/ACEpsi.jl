@@ -7,8 +7,8 @@ abstract type init_type end
 struct gaussian <: init_type end
 struct exponential <: init_type end
 
-struct Physical_config{T}
-    nuclei::Vector{Nuc{T}}
+struct Physical_config{T, NNuc}
+    nuclei::SVector{NNuc, Nuc{T}}
     inuc::Vector{Int}
     el_config::Vector{Vector{Int}}
 end 

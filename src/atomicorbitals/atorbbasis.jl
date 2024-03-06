@@ -63,7 +63,7 @@ end
 
 # mutable struct AtomicOrbitalsBasis{NB, T}
 #    prodbasis::ProductBasis{NB}
-#    nuclei::Vector{Nuc{T}}  # nuclei (defines the shifted orbitals)
+#    nuclei::SVector{NNuc, Nuc{T}}  # nuclei (defines the shifted orbitals)
 # end
 
 # (aobasis::AtomicOrbitalsBasis)(args...) = evaluate(aobasis, args...)
@@ -165,9 +165,9 @@ end
 # This can be done using ObjectPools, but for simplicity I didn't do that for now since I
 # don't want lux layers storing ObjectPools stuffs
 
-struct AtomicOrbitalsBasisLayer{L, T} <: AbstractExplicitContainerLayer{(:prodbasis, )}
+struct AtomicOrbitalsBasisLayer{L, T, NNuc} <: AbstractExplicitContainerLayer{(:prodbasis, )}
    prodbasis::L
-   nuclei::Vector{Nuc{T}}
+   nuclei::SVector{NNuc, Nuc{T}}
    @reqfields()
 end
 

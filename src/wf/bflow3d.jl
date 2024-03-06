@@ -49,12 +49,13 @@ function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm,
    corr_layer = Polynomials4ML.lux(corr1)
 
    l_hidden = Tuple(collect(Chain(; hidden1 = LinearLayer(length(corr1), Nel; use_cache = false), Mask = ACEpsi.MaskLayer(Nel), det = WrappedFunction(x::Matrix -> det(x))) for i = 1:Nbf))
+   
    jastrow_layer = ACEpsi.lux(js)
 
    BFwf_chain = Chain(; diff = embed_layer, Pds = prodbasis_layer, 
                         bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * sum(length.(prodbasis_layer.sparsebasis)))), 
                         bAA = corr_layer, 
-                        hidden = BranchLayer(l_hidden...),
+                        hidden = l_hidden[1], # BranchLayer(l_hidden...),
                         sum = WrappedFunction(sum))
    return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p, disspec
 end
@@ -62,18 +63,24 @@ end
 # ----------------- custom layers ------------------
 import ChainRulesCore: rrule
 import ForwardDiff
-struct embed_diff_layer <: AbstractExplicitLayer
-   nuc::Vector{Nuc{Float64}}
+using StaticArrays
+
+struct embed_diff_layer{NNuc} <: AbstractExplicitLayer
+   nuc::SVector{NNuc, Nuc{Float64}}
 end
 
-function evaluate(l::embed_diff_layer, X, ps, st)
-   return ntuple(i -> X .- Ref(l.nuc[i].rr), length(l.nuc)), ps, st
+_getdiff(_X::AbstractArray{SVector{3, T}}, _d::SVector{3, Float64}) where T = begin
+   return [SVector{3, T}(_x -_d) for _x in _X]
+end
+
+function evaluate(l::embed_diff_layer{NNuc}, X::AbstractVector, ps, st) where {NNuc}
+   return ntuple(i -> _getdiff(X, l.nuc[i].rr), Val(NNuc)), st
 end
 
 (l::embed_diff_layer)(X, ps, st) = evaluate(l, X, ps, st)
 
-function ChainRulesCore.rrule(::typeof(evaluate), l::embed_diff_layer, X, ps, st)
-   val = ntuple(i -> X .- Ref(l.nuc[i].rr), length(l.nuc))
+function ChainRulesCore.rrule(::typeof(evaluate), l::embed_diff_layer{NNuc}, X::AbstractVector, ps::NamedTuple, st::NamedTuple) where {NNuc}
+   val = ntuple(i -> _getdiff(X, l.nuc[i].rr), Val(NNuc))
    function pb(dA)
       return NoTangent(), NoTangent(), sum(dA[1]), NoTangent(), NoTangent()
    end
@@ -122,7 +129,7 @@ function rrule(::typeof(LuxCore.apply), l::myReshapeLayer{N}, X, ps, st) where {
 end
 
 # ----------------- utils ------------------
-function get_spec(nuclei::Vector{Nuc{TN}}, speclist::Vector{TS}, bRnl, bYlm, totdeg) where {TN, TS}
+function get_spec(nuclei::SVector{NNuc, Nuc{TN}}, speclist::Vector{TS}, bRnl, bYlm, totdeg) where {NNuc, TN, TS}
    Nnuc = length(nuclei)
    spec1p = [make_nlms_spec(bRnl[speclist[i]], bYlm, totaldegree = totdeg) for i = 1:Nnuc]
    Nnlm = length.(spec1p)
