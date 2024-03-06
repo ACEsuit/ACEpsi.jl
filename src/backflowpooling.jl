@@ -18,6 +18,7 @@ end
 (pooling::BackflowPooling)(args...) = evaluate(pooling, args...)
 
 Base.length(pooling::BackflowPooling) = 3 * length(pooling.basis) # length(spin()) * length(1pbasis)
+
 function evaluate(pooling::BackflowPooling, ϕnlm::Vector{TI}, Σ::AbstractVector) where {TI}
    Nel = length(Σ)
    Nnuc = length(ϕnlm)
@@ -78,12 +79,13 @@ function evaluate(pooling::BackflowPooling, ϕnlm::Vector{TI}, Σ::AbstractVecto
       end
    end # inbounds
    release!(Aall)
+   release!(ϕnlm)
    
    return A
 end
 
 function _ind(ii::Integer, k::Integer, Nnlm::Vector{TI}) where {TI} 
-   return sum(Nnlm[1:ii-1]) + k
+   return sum(@view(Nnlm[1:ii-1])) + k
 end
 # --------------------- connect with ChainRule
 function ChainRulesCore.rrule(::typeof(evaluate), pooling::BackflowPooling, ϕnlm, Σ::AbstractVector) 
