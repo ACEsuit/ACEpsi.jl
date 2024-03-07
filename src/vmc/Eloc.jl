@@ -22,12 +22,12 @@ function Vee(wf, X::Vector{SVector{3, T}}, ps, st) where {T}
     return v
 end
  
-function Vext(wf, X::Vector{SVector{3, T}}, nuclei::Vector{Nuc{TT}}, ps, st) where {T, TT}
+function Vext(wf, X::Vector{SVector{3, T}}, nuclei::SVector{n, Nuc{TT}}, ps, st) where {T, TT, n}
     nX = length(X)
     v = zero(T)
     r = zero(T)
     @inbounds begin
-        for i = 1:length(nuclei) 
+        for i = 1:n
             @simd ivdep for j = 1:nX 
                 r = norm(nuclei[i].rr - X[j])
                 v = muladd(nuclei[i].charge, 1/r, v)

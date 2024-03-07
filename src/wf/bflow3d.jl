@@ -55,8 +55,8 @@ function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm,
    BFwf_chain = Chain(; diff = embed_layer, Pds = prodbasis_layer, 
                         bA = pooling_layer, reshape = myReshapeLayer((Nel, 3 * sum(length.(prodbasis_layer.sparsebasis)))), 
                         bAA = corr_layer, 
-                        hidden = l_hidden[1], # BranchLayer(l_hidden...),
-                        sum = WrappedFunction(sum))
+                        hidden = BranchLayer(l_hidden...),
+                        sum = sumLayer(Nbf))
    return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p, disspec
 end
 
@@ -126,6 +126,42 @@ function rrule(::typeof(LuxCore.apply), l::myReshapeLayer{N}, X, ps, st) where {
       return NoTangent(), NoTangent(), A, NoTangent(), NoTangent()
    end
    return val, pb
+end
+
+struct sumLayer <: AbstractExplicitLayer
+   Ndet::Integer
+end
+
+(l::sumLayer)(x::T, ps, st) where {T <: Number} = begin 
+   val = zero(T)
+   for i = 1:l.Ndet
+       val += x[i]
+   end
+   return val, st
+end
+
+(l::sumLayer)(x::Tuple{T}, ps, st) where {T <: Number} = begin 
+   val = zero(T)
+   for i = 1:l.Ndet
+       val += x[i]
+   end
+   return val, st
+end
+
+function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::sumLayer, x::T, ps, st) where {T <: Number}
+   val_st = l(x, ps, st)
+   function pb(dx)
+      return NoTangent(), NoTangent(), one(T), NoTangent(), NoTangent()
+   end
+   return val_st, pb
+end
+
+function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::sumLayer, x::Tuple{T}, ps, st) where {T <: Number}
+   val_st = l(x, ps, st)
+   function pb(dx)
+      return NoTangent(), NoTangent(), Tuple(ones(T, length(x))), NoTangent(), NoTangent()
+   end
+   return val_st, pb
 end
 
 # ----------------- utils ------------------

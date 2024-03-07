@@ -54,6 +54,6 @@ function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm,
     BFwf_chain = Chain(; diff = embed_layer, Pds = prodbasis_layer, 
                          bA = pooling_layer, TK = tucker_layer, 
                          bAA = Lux.Parallel(nothing, (deepcopy(corr_layer) for i = 1:Nel)...), hidden = BranchLayer(l_hidden...),
-                        sum = WrappedFunction(sum))
+                         sum = sumLayer(Nbf))
     return Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) ), spec, spec1p, disspec
 end
