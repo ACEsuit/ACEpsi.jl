@@ -113,8 +113,6 @@ mutable struct JCasino1dVb{T}
     L::T # cell-size
 end
 
-_getXineqj(Xs) = (Nel = length(Xs); [Xs[i][j] for i = 1:Nel for j = 1:Nel if i ≠ j])
-
 import ChainRulesCore: rrule
 using ChainRulesCore: NoTangent
 
@@ -137,6 +135,7 @@ function rrule(::typeof(_getXineqj), Xs)
     return val, pb
 end
 
+_getXineqj(Xs) = (Nel = length(Xs); [Xs[i][j] for i = 1:Nel for j = 1:Nel if i ≠ j])
 
 ## CASINO trainable Jastrow for jellium
 function JCasinoChain(J::JCasino1dVb)
@@ -146,8 +145,7 @@ function JCasinoChain(J::JCasino1dVb)
     # cos 
     Np = J.Np
     l_trig = Polynomials4ML.lux(RTrigBasis(Np))
-
-    #l_trigs = Tuple(collect(l_trig for _ = 2:2:2*Np+1)) 
+ 
     CosChain = Chain(; getXineqj_cos = WrappedFunction(Xs -> _getXineqj(Xs)), SINCOS = l_trig, getcos = WrappedFunction(x -> x[:, 2:2:2*Np+1])) # picking out only cosines
     @assert length(2:2:2*Np+1) == Np
 

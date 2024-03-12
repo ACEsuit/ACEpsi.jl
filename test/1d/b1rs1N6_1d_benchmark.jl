@@ -18,7 +18,7 @@ using SpecialFunctions
 using ForwardDiff: Dual
 # using Dates, JLD
 
-Nel = 6
+Nel = 4
 rs = 1 # Wigner-Seitz radius r_s for 1D = 1/(2ρ); where ρ = N/L
 ρ = 1 / (2 * rs) # (average density)
 L = Nel / ρ # supercell size

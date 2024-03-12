@@ -19,29 +19,23 @@ end
 
 Base.length(pooling::BackflowPooling1dps) = 3 * length(pooling.basis) # length(spin()) * length(1pbasis)
 
+_ind(j::TJ, k::TK, n::TN) where {TJ <: Integer, TK <: Integer, TN <: Integer} = (j - 1) * n + k
 function evaluate(pooling::BackflowPooling1dps, Ps, Σ::AbstractVector)   
 
    Nel, n = size(Ps[1])
    T = promote_type(eltype(Ps[1]))
 
-    # evaluate the pooling operation
+   # evaluate the pooling operation
    #                spin  I    k = (nlm)
-   Aall = Vector{PtrArray{T, 2, (1, 2), Tuple{Int64, Int64}, Tuple{Nothing, Nothing}, Tuple{StaticInt{1}, StaticInt{1}}}}()
-
-   for i::Int64 = 1:Nel
-      push!(Aall, acquire!(pooling.tmp, Symbol("Aall$i"), (2, n), T))
-   end
-
-   for j = 1:Nel
-      fill!(Aall[j], zero(T))
-   end
+   Aall = acquire!(pooling.pool, :Aall, (2, Nel * n), T)
+   fill!(Aall, zero(T))
 
    @inbounds begin
       for j = 1:Nel
          for k = 1:n
             for i = 1:Nel
-                  iσ = spin2idx(Σ[i])
-                  Aall[j][iσ, k] += Ps[j][i, k]
+                  iσ = ACEpsi.spin2idx(Σ[i])
+                  Aall[iσ, _ind(j, k, n)] += Ps[j][i, k]
             end
          end
       end
@@ -62,27 +56,27 @@ function evaluate(pooling::BackflowPooling1dps, Ps, Σ::AbstractVector)
    #       lazy array. Could that have advantages? 
    #
 
-   @assert spin2idx(↑) == 1
-   @assert spin2idx(↓) == 2
-   @assert spin2idx(∅) == 3
+   @assert ACEpsi.spin2idx(↑) == 1
+   @assert ACEpsi.spin2idx(↓) == 2
+   @assert ACEpsi.spin2idx(∅) == 3
 
-   A = acquire!(pooling.pool, :A, (Nel, 3, n), T) # Nel, 3, n
+   A = acquire!(pooling.pool, :A, (Nel, 3, n), T)
    fill!(A, zero(T))
 
    @inbounds begin
-      for k = 1:n
-            @simd ivdep for i = 1:Nel             
+         for k = 1:n
+            @simd ivdep for i = 1:Nel       
                A[i, 3, k] = Ps[i][i, k]
             end
             @simd ivdep for iσ = 1:2
-               σ = idx2spin(iσ)
                for i = 1:Nel
-                  A[i, iσ, k] = Aall[i][iσ, k] - (Σ[i] == σ) * Ps[i][i, k]
+                  σ = ACEpsi.idx2spin(iσ)
+                  A[i, iσ, k] = Aall[iσ, _ind(i, k, n)] - (Σ[i] == σ) * Ps[i][i, k]
                end
             end
-      end
+         end
    end # inbounds
-
+   
    release!(Aall)
    
    return A

@@ -1,23 +1,25 @@
+using BenchmarkTools
+
 using ACEpsi, StaticArrays, Test
 using Polynomials4ML
 using Polynomials4ML: natural_indices, degree, SparseProduct
-using ACEpsi.vmc: d1_lattice, EmbeddingW!
-using ACEpsi: BackflowPooling1d, BFwf1dps_lux, BFwf1dps_lux2,setupBFState, Jastrow
+using ACEpsi.vmc: d1_lattice, EmbeddingW_J!
+using ACEpsi: BackflowPooling1d, setupBFState, BFJwfTrig_lux
 using ACEpsi.vmc: gradient, laplacian, grad_params, SumH, MHSampler, VMC, gd_GradientByVMC, d1, adamW, sr
-using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
 using Zygote
 using Optimisers # mainly for the destrcuture(ps) function
 using Random
-using Printf
 using LinearAlgebra
 using BenchmarkTools
 using HyperDualNumbers: Hyper
 using SpecialFunctions
-using Dates, JLD
+using ForwardDiff: Dual
+using Dates
+import JSON3
 
-Nel = 6
+Nel = 4
 rs = 1 # Wigner-Seitz radius r_s for 1D = 1/(2ρ); where ρ = N/L
 ρ = 1 / (2 * rs) # (average density)
 L = Nel / ρ # supercell size
@@ -31,7 +33,7 @@ for i = 1:Int(Nel / 2)
 end
 
 # Defining OrbitalsBasis
-totdegree = [2]
+totdegree = [5]
 ord = length(totdegree)
 Pn = Polynomials4ML.RTrigBasis(maximum(totdegree))
 length(Pn)
@@ -48,24 +50,6 @@ sd_admissible = sd_admissible_func(ord,totdegree[1])
 
 wf, spec, spec1p = BFwf1dps_lux(Nel, Pn; ν = ord, trans = trans,  totdeg = totdegree[1], sd_admissible = sd_admissible)
 ps, st = setupBFState(MersenneTwister(1234), wf, Σ)
-
-function getnicespec(spec::Vector, spec1p::Vector)
-    return [[spec1p[i] for i = spec[j]] for j = eachindex(spec)]
-end
-@show getnicespec(spec, spec1p)
-
-p, = destructure(ps)
-
-# some sanity check
-length(p)
-X =  [0.4311443915115578
-0.6119576335525756
-0.20139687963184993
-0.21725047756277704
-0.4431086290322228
-0.6995381939761542]
-wf(X, ps, st)
-
 
 # pair potential
 function v_ewald(x::AbstractFloat, b::Real, L::Real, M::Integer, K::Integer)
@@ -90,7 +74,7 @@ err_real(M; L::Real=1, b::Real=1) = ((2 * b)^2 / (sqrt(2) * L^3)) * 1 / (M - 1)^
 vb(x) = v_ewald(x, b, L, M, K)
 V(X::AbstractVector) = sum(vb(X[i]-X[j]) for i = 1:length(X)-1 for j = i+1:length(X));
 # Mdelung energy
-Mad = (Nel / 2) * (vb(0.0) - sqrt(pi) / (2 * b))
+Mad = 0.0 # (Nel / 2) * (vb(0.0) - sqrt(pi) / (2 * b))
 
 Kin(wf, X::AbstractVector, ps, st) = -0.5 * laplacian(wf, X, ps, st)
 Vext(wf, X::AbstractVector, ps, st) = 0.0
@@ -102,9 +86,9 @@ x0 = -L / 2 + spacing / 2
 Lattice = [x0 + (k - 1) * spacing for k = 1:Nel]
 d = d1_lattice(Lattice)
 
-burnin = 5
-nchains = 600
-MaxIter = 200
+burnin = 1000
+nchains = 2000
+MaxIter = 20000
 
 ham = SumH(Kin, Vext, Vee)
 sam = MHSampler(wf, Nel, Δt = 0.5, burnin = burnin, nchains = nchains, d = d)
@@ -123,13 +107,6 @@ wf, err_opt, ps = gd_GradientByVMC(opt_vmc, sam, ham, wf, ps, st)
 @show ps.hidden1.W
 E_RHF = -0.152250987350
 
-
-# using Plots
-# p = plot(err_opt/N, w = 3)
-# hline!([E_HF], lw=3, label="RHF($E_RHF)"
-
-# save parameters
-save(results_dir * "b1rs1N$(Nel)_W1.jld", "W", ps.hidden1.W)
 
 # manual multilevel using embedding
 # first define wf2
