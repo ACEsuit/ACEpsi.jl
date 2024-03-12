@@ -22,7 +22,7 @@ function Vee(wf, X::Vector{SVector{3, T}}, ps, st) where {T}
     return v
 end
  
-function Vext(wf, X::Vector{SVector{3, T}}, nuclei::Vector{Nuc{TT}}, ps, st) where {T, TT}
+function Vext(wf, X::Vector{SVector{3, T}}, nuclei::SVector{NNuc, Nuc{TT}}, ps, st) where {NNuc, T, TT}
     nX = length(X)
     v = zero(T)
     r = zero(T)

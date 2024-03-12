@@ -1,54 +1,83 @@
-using ACEpsi, Polynomials4ML, StaticArrays, Test 
+ using ACEpsi, Polynomials4ML, StaticArrays, Test 
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
-using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
-using ACEpsi.vmc: gradient, laplacian, grad_params
-using ACEpsi.TD: Tucker
+using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
+using ACEpsi.vmc: gradient, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
 using Zygote
-using Optimisers # mainly for the destrcuture(ps) function
+using Optimisers
 using Random
 using Printf
 using LinearAlgebra
 using BenchmarkTools
-
 using HyperDualNumbers: Hyper
 
-Rnldegree = n1 = 2
-Ylmdegree = 3
-totdegree = 20
-Nel = 10
+Nel = 4
 X = randn(SVector{3, Float64}, Nel)
-Σ = rand(spins(), Nel)
-nuclei = [ Nuc(3 * rand(SVector{3, Float64}), 1.0) for _=1:10 ]
+Σ = [↑,↑,↓,↓]
+nuclei = [ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)]
 
-# wrap it as HyperDualNumbers
-x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
-hX = [x2dualwrtj(x, 0) for x in X]
-hX[1] = x2dualwrtj(X[1], 1) # test eval for grad wrt x coord of first elec
+spec_Be = [(n1 = 1, n2 = 1, l = 0), 
+        (n1 = 1, n2 = 2, l = 0), 
+        (n1 = 1, n2 = 3, l = 0), 
+        (n1 = 1, n2 = 1, l = 1), 
+        (n1 = 1, n2 = 2, l = 1), 
+        (n1 = 2, n2 = 1, l = 0), 
+        (n1 = 2, n2 = 2, l = 0), 
+        (n1 = 2, n2 = 3, l = 0), 
+        (n1 = 2, n2 = 1, l = 1), 
+        (n1 = 2, n2 = 2, l = 1), 
+        (n1 = 3, n2 = 1, l = 0), 
+        (n1 = 3, n2 = 2, l = 0), 
+        (n1 = 3, n2 = 3, l = 0), 
+        (n1 = 3, n2 = 1, l = 1), 
+        (n1 = 3, n2 = 2, l = 1)
+        ]
 
-##
+spec = [ spec_Be ]
 
-# Defining AtomicOrbitalsBasis
-n2 = 2
+n1 = 5
 Pn = Polynomials4ML.legendre_basis(n1+1)
-spec = [(n1 = n1, n2 = n2, l = l) for n1 = 1:n1 for n2 = 1:n2 for l = 0:n1-1] 
-ζ = rand(length(spec))
-Dn = GaussianBasis(ζ)
-bRnl = AtomicOrbitalsRadials(Pn, Dn, spec) 
-bYlm = RYlmBasis(Ylmdegree)
+Ylmdegree = 2
+totdegree = 20
+ζ = 10.0 * rand(length(spec))
+Dn = SlaterBasis(ζ)
+bYlm = RRlmBasis(Ylmdegree)
 
-# setup state
-BFwf_chain, spec, spec1p = ACEpsi.BFwf_lux(Nel, bRnl, bYlm, nuclei, Tucker(5); totdeg = totdegree, ν = 2)
-ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
-out, st = BFwf_chain(X, ps, st)
+totdegree = [30, 30, 30, 30]
+ν = [1, 1, 2, 2]
+
+MaxIters = [1000, 2000, 4000, 10000]
+_spec = [ [ spec[1][1:8]], 
+          [ spec[1][1:13]], 
+          [ spec[1][1:13]], 
+          [ spec[1][1:15]]
+        ]
 
 
-@btime BFwf_chain($X, $ps, $st)
-@btime gradient($BFwf_chain, $X, $ps, $st)
-@btime laplacian($BFwf_chain, $X, $ps, $st)
+_TD = [ACEpsi.TD.Tucker(4),
+       ACEpsi.TD.Tucker(4),
+       ACEpsi.TD.Tucker(4),
+       ACEpsi.TD.Tucker(4)]
+
+Nbf = [1, 1, 1, 1]
+speclist  = [1]
+
+wf_list, spec_list, spec1p_list, specAO_list, ps_list, st_list, Nlm_list, dist_list = wf_multilevel(Nel, Σ, nuclei, Dn, Pn, bYlm, _spec, speclist, Nbf, totdegree, ν, _TD)
+
+BFwf_chain, ps, st = wf_list[1], ps_list[1], st_list[1]
+
+
+
+gradient(BFwf_chain, X, ps, st)
+
+
+
+@btime BFwf_chain($X, $ps, $st) # 24.761 μs
+@btime gradient($BFwf_chain, $X, $ps, $st) # 2.549 ms
+@btime laplacian($BFwf_chain, $X, $ps, $st) # 367.083 μs
 
 @profview let  BFwf_chain = BFwf_chain, X = X, ps =  ps, st = st
    for i = 1:10_000
@@ -57,13 +86,13 @@ out, st = BFwf_chain(X, ps, st)
 end
 
 @profview let  BFwf_chain = BFwf_chain, X = X, ps =  ps, st = st
-   for i = 1:10_000
+   for i = 1:10000
       gradient(BFwf_chain, X, ps, st)
    end
 end
 
 @profview let  BFwf_chain = BFwf_chain, X = X, ps =  ps, st = st
-   for i = 1:10_000
+   for i = 1:10_00
       laplacian(BFwf_chain, X, ps, st)
    end
 end
