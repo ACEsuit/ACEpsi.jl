@@ -29,7 +29,7 @@ end
 Nel = 4
 X = randn(SVector{3, Float64}, Nel)
 Σ = [↑,↑,↓,↓]
-nuclei = [ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)]
+nuclei = SVector{1}([ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)])
 
 spec_Be = [(n1 = 1, n2 = 1, l = 0), 
         (n1 = 1, n2 = 2, l = 0), 

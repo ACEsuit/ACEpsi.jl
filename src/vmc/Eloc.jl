@@ -27,7 +27,7 @@ function Vext(wf, X::Vector{SVector{3, T}}, nuclei::SVector{NNuc, Nuc{TT}}, ps, 
     v = zero(T)
     r = zero(T)
     @inbounds begin
-        for i = 1:length(nuclei) 
+        for i = 1:n
             @simd ivdep for j = 1:nX 
                 r = norm(nuclei[i].rr - X[j])
                 v = muladd(nuclei[i].charge, 1/r, v)

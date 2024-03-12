@@ -29,7 +29,7 @@ end
 Nel = 4
 X = randn(SVector{3, Float64}, Nel)
 Σ = [↑,↑,↓,↓]
-nuclei = [ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)]
+nuclei = SVector{1}([ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)])
 
 spec_Be = [(n1 = 1, n2 = 1, l = 0), 
         (n1 = 1, n2 = 2, l = 0), 
@@ -83,8 +83,8 @@ ham = SumH(nuclei)
 physical_config = ACEpsi.vmc.Physical_config(nuclei, [1,1,1,1], [[2,2]])
 sam = MHSampler(wf_list[1], Nel, physical_config, 
                 Δt = 0.08, 
-                burnin  = 1000, 
-                nchains = 2000)
+                burnin  = 10, 
+                nchains = 20)
 
 
 lr_0  = 0.2
