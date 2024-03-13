@@ -2,7 +2,7 @@ using ACEpsi, Polynomials4ML, StaticArrays, Test
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow
-using ACEpsi.vmc: gradient, laplacian, grad_params
+using ACEpsi.vmc: gradx, laplacian, grad_params
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
@@ -47,7 +47,7 @@ ps, st = setupBFState(MersenneTwister(1234), BFwf_chain, Σ)
 @info("Test evaluate")
 
 @btime BFwf_chain($X, $ps, $st)
-@btime gradient($BFwf_chain, $X, $ps, $st)
+@btime gradx($BFwf_chain, $X, $ps, $st)
 @btime laplacian($BFwf_chain, $X, $ps, $st)
 
 

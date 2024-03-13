@@ -2,7 +2,7 @@
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
-using ACEpsi.vmc: gradient, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler
+using ACEpsi.vmc: gradx, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
@@ -71,12 +71,12 @@ BFwf_chain, ps, st = wf_list[1], ps_list[1], st_list[1]
 
 
 
-gradient(BFwf_chain, X, ps, st)
+gradx(BFwf_chain, X, ps, st)
 
 
 
 @btime BFwf_chain($X, $ps, $st) # 24.761 μs
-@btime gradient($BFwf_chain, $X, $ps, $st) # 2.549 ms
+@btime gradx($BFwf_chain, $X, $ps, $st) # 2.549 ms
 @btime laplacian($BFwf_chain, $X, $ps, $st) # 367.083 μs
 
 @profview let  BFwf_chain = BFwf_chain, X = X, ps =  ps, st = st
@@ -87,7 +87,7 @@ end
 
 @profview let  BFwf_chain = BFwf_chain, X = X, ps =  ps, st = st
    for i = 1:10000
-      gradient(BFwf_chain, X, ps, st)
+      gradx(BFwf_chain, X, ps, st)
    end
 end
 
