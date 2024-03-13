@@ -2,7 +2,6 @@ export VMC
 using Printf
 using LinearAlgebra
 using Optimisers
-using Plots
 
 mutable struct VMC
     tol::Float64

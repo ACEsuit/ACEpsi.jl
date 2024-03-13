@@ -8,8 +8,6 @@ using ACEpsi
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
 using ACEpsi.AtomicOrbitals: _invmap, Nuc, make_nlms_spec
 using ACEpsi.TD: Tensor_Decomposition, No_Decomposition, Tucker
-using Plots
-
 mutable struct VMC_multilevel
     tol::Float64
     MaxIter::Vector{Int}
