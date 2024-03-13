@@ -12,7 +12,7 @@ mutable struct VMC
     type::opt
 end
 
-VMC(MaxIter::Int, lr::Float64, type; tol = 1.0e-3, lr_dc = 50.0) = VMC(tol, MaxIter, lr, lr_dc, type);
+VMC(MaxIter::Int, lr::Float64, type; tol = 1.0e-10, lr_dc = 50.0) = VMC(tol, MaxIter, lr, lr_dc, type);
         
 function gd_GradientByVMC(opt_vmc::VMC, sam::MHSampler, ham::SumH, 
                 wf, ps, st; 
