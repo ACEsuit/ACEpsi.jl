@@ -27,7 +27,7 @@ function Vext(wf, X::Vector{SVector{3, T}}, nuclei::SVector{NNuc, Nuc{TT}}, ps, 
     v = zero(T)
     r = zero(T)
     @inbounds begin
-        for i = 1:n
+        for i = 1:NNuc
             @simd ivdep for j = 1:nX 
                 r = norm(nuclei[i].rr - X[j])
                 v = muladd(nuclei[i].charge, 1/r, v)
@@ -51,7 +51,7 @@ https://arxiv.org/abs/2105.08351
 """
 
 function Elocal(H::SumH, wf, X::AbstractVector, ps, st)
-    gra = gradient(wf, X, ps, st)
+    gra = gradx(wf, X, ps, st)
     val = Vext(wf, X, H.nuclei, ps, st) + Vee(wf, X, ps, st) - 1/4 * laplacian(wf, X, ps, st) - 1/8 * gra' * gra
     return val
 end

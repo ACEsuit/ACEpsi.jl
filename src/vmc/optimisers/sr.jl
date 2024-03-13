@@ -2,6 +2,7 @@ using Optimisers
 using LinearMaps, LinearAlgebra, IterativeSolvers
 using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META, release!
 using ObjectPools: acquire!
+using Optimisers
 
 mutable struct SR <: opt
     ϵ₁::Number
@@ -28,10 +29,12 @@ end
 # ΔO_ki = O_ki - Ō_k -> ΔO_ki/sqrt(N_sample)
 function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
     λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
-    dps = grad_params.(Ref(wf), x0, Ref(ps), Ref(st))
-    _destructure(ps) = destructure(ps)[1]
-    O = 1/2 * reshape(_destructure(dps), (length(_destructure(ps)), sam.nchains))
-    Ō = mean(O, dims =2)
+    raw_dps = pmap(x0) do d
+        grad_params(wf, d, ps, st)
+    end     
+    dps = vcat(raw_dps...)
+    O = 1/2 * reshape(dps, (length(destructure(ps)[1]), sam.nchains))
+    Ō = mean(O, dims = 2)
     ΔO = (O .- Ō)/sqrt(sam.nchains)
     return λ₀, σ, E, acc, ΔO, x0
 end

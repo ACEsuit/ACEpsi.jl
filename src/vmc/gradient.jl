@@ -1,11 +1,15 @@
 using Zygote
 using HyperDualNumbers: Hyper
+using Optimisers: destructure
 
 x2dualwrtj(x, j) = SVector{3}([Hyper(x[i], i == j, i == j, 0) for i = 1:3])
 
-gradient(wf, x, ps, st) = Zygote.gradient(x -> wf(x, ps, st)[1], x)[1]
+gradx(wf, x, ps, st) = Zygote.gradient(x -> wf(x, ps, st)[1], x)[1]
 
-grad_params(wf, x, ps, st) = Zygote.gradient(p -> wf(x, p, st)[1], ps)[1]
+function grad_params(wf, x, ps, st)
+   dp = Zygote.gradient(p -> wf(x, p, st)[1], ps)
+   destructure(dp)[1]
+end
 
 function laplacian(wf, x, ps, st)
     ΔΨ = 0.0

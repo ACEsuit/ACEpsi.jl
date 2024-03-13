@@ -13,7 +13,7 @@ end
     using Polynomials4ML: natural_indices, degree, SparseProduct
     using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
     using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
-    using ACEpsi.vmc: gradient, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler
+    using ACEpsi.vmc: gradx, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler
     using ACEbase.Testing: print_tf, fdtest
     using LuxCore
     using Lux
@@ -168,14 +168,10 @@ x = sam.x0
 x = x[1:20]
 grad_params(l, X, ps, st)
 
-@show objectid(st)
-
 dps = pmap(x) do d
    grad_params(l, d, ps, st)
 end
 
+dps2 = [grad_params(l, xx, ps, st) for xx in x]
 
-
-# ===
-
-#. bumper.jl
+dps2 ≈ dps
