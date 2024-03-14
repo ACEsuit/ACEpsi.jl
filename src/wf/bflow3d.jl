@@ -129,10 +129,10 @@ function rrule(::typeof(LuxCore.apply), l::myReshapeLayer{N}, X, ps, st) where {
 end
 
 struct sumLayer <: AbstractExplicitLayer
-   Ndet::Integer
+   Ndet::Int64
 end
 
-(l::sumLayer)(x::T, ps, st) where {T <: Number} = begin 
+(l::sumLayer)(x::NTuple{N, T}, ps, st) where {N, T <: Number} = begin 
    val = zero(T)
    for i = 1:l.Ndet
        val += x[i]
@@ -140,26 +140,10 @@ end
    return val, st
 end
 
-(l::sumLayer)(x::Tuple{T}, ps, st) where {T <: Number} = begin 
-   val = zero(T)
-   for i = 1:l.Ndet
-       val += x[i]
-   end
-   return val, st
-end
-
-function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::sumLayer, x::T, ps, st) where {T <: Number}
+function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::sumLayer, x::NTuple{N, T}, ps, st) where {N, T <: Number}
    val_st = l(x, ps, st)
    function pb(dx)
-      return NoTangent(), NoTangent(), one(T), NoTangent(), NoTangent()
-   end
-   return val_st, pb
-end
-
-function ChainRulesCore.rrule(::typeof(LuxCore.apply), l::sumLayer, x::Tuple{T}, ps, st) where {T <: Number}
-   val_st = l(x, ps, st)
-   function pb(dx)
-      return NoTangent(), NoTangent(), Tuple(ones(T, length(x))), NoTangent(), NoTangent()
+      return NoTangent(), NoTangent(), Tuple(dx .* ones(T, N)), NoTangent(), NoTangent()
    end
    return val_st, pb
 end
