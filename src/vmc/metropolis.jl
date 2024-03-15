@@ -2,7 +2,6 @@ export MHSampler
 using StatsBase, StaticArrays, Optimisers, Distributed, Interpolations
 using ACEpsi.AtomicOrbitals: Nuc
 using Lux: Chain
-using Dates
 using ParallelDataTransfer: @getfrom
 using SharedArrays
 using Optimisers
@@ -151,7 +150,7 @@ function grad(wf, x, ps, st, E);
 end
 
 # evaluate Elocal on each processor respectively and return - this reduces communication cost
-function sampler_Elocal(sam, lag, ps, st)
+function sampler_Elocal_grad_params(sam, lag, ps, st, ham)
     @everywhere lag = $lag
     @everywhere ps = $ps
     @everywhere begin
@@ -166,15 +165,18 @@ function sampler_Elocal(sam, lag, ps, st)
             acc += mean(a)
         end
         acc = acc / lag
+        Eloc = Elocal.(Ref(ham), Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+        # we set sam.x0 here so that we don't have to pass back the huge array
+        # back to the call in mulitlevel VMC
+        sam.x0 = r0
+        dp = grad_params.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     end
-    r0_all = vcat([@getfrom k r0 for k in procs()]...)
+    # TODO: remove this r0_all
+    #r0_all = vcat([@getfrom k r0 for k in procs()]...)
+    Eloc_all = vcat([@getfrom k Eloc for k in procs()]...)
     acc_all = [@getfrom k acc for k in procs()]
-    if return_Ψx0
-        Ψx0_all = vcat([@getfrom k Ψx0 for k in procs()]...)
-        return r0_all, Ψx0_all, mean(acc_all)
-    else
-        return r0_all, nothing, mean(acc_all)
-    end
+    dps = vcat([@getfrom k dp for k in procs()]...)
+    return Eloc_all, mean(acc_all), dps
 end
 
 
@@ -183,21 +185,22 @@ function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
                 clip = 5., batch_size = 1)
-    x, ~, acc = sampler(sam, sam.lag, ps, st, batch_size = batch_size)
-    begin_time = time()
-    raw_data = pmap(x; batch_size = batch_size) do d
-        Elocal(ham, wf, d, ps, st)
-    end
-    println("Time used in Elocal pmap:", time() - begin_time)
-    Eloc = vcat(raw_data)
+    # x, ~, acc = sampler(sam, sam.lag, ps, st, batch_size = batch_size)
+    # begin_time = time()
+    # raw_data = pmap(x; batch_size = batch_size) do d
+    #     Elocal(ham, wf, d, ps, st)
+    # end
+    # println("Time used in Elocal pmap:", time() - begin_time)
+    # Eloc = vcat(raw_data)
+    Eloc, acc, dps = sampler_Elocal_grad_params(sam, sam.lag, ps, st, ham)
     val = sum(Eloc) / length(Eloc)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
     ΔE = Eloc .- median( Eloc )
     a = clip * mean( abs.(ΔE) )
-    ind = findall(x -> abs(x) > a, ΔE)
+    ind = findall(_x -> abs(_x) > a, ΔE)
     ΔE[ind] = (a * sign.(ΔE) .* (1 .+ log.((1 .+(abs.(ΔE)/a).^2)/2)))[ind]
     E_clip = median(Eloc) .+ ΔE
-    return val, var, E_clip, x, acc
+    return val, var, E_clip, acc, dps
 end
 
 function _get_effective_charge(Z, n, s_lower_shell, s_same_shell)

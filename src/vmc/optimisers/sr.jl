@@ -17,31 +17,30 @@ end
 SR() = SR(0.0, 1e-4, 0.95, 0.0, QGT(), no_scale(), no_constraint())
 
 function Optimization(type::SR, wf, ps, st, sam::MHSampler, ham::SumH, α, mₜ, vₜ, t; batch_size = 200)
-    g, acc, λ₀, σ, x0, mₜ, vₜ, ϵ = grad_sr(type._sr_type, type, wf, ps, st, sam, ham, mₜ, vₜ, t, batch_size = batch_size)
+    g, acc, λ₀, σ, mₜ, vₜ, ϵ = grad_sr(type._sr_type, type, wf, ps, st, sam, ham, mₜ, vₜ, t, batch_size = batch_size)
     res = norm(g)
     p, s = destructure(ps)
     p = p - α * ϵ * mₜ
-    return s(p), acc, λ₀, res, σ, x0, mₜ, vₜ
+    return s(p), acc, λ₀, res, σ, mₜ, vₜ
 end
 
 # O_kl = ∂ln ψθ(x_k)/∂θ_l : N_ps × N_sample
 # Ō_k = 1/N_sample ∑_i=1^N_sample O_ki : N_ps × 1
 # ΔO_ki = O_ki - Ō_k -> ΔO_ki/sqrt(N_sample)
 function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
-    λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
-    begin_time = time()
-    raw_dps = pmap(x0; batch_size = batch_size) do d
-        grad_params(wf, d, ps, st)
-    end     
+    λ₀, σ, E, acc, raw_Os = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
+    # raw_dps = pmap(x0; batch_size = batch_size) do d
+    #     grad_params(wf, d, ps, st)
+    # end     
     dps = vcat(raw_dps...)
     O = 1/2 * reshape(dps, (length(destructure(ps)[1]), sam.nchains * nprocs()))
     Ō = mean(O, dims = 2)
     ΔO = (O .- Ō) / sqrt(sam.nchains * nprocs())
-    return λ₀, σ, E, acc, ΔO, x0
+    return λ₀, σ, E, acc, ΔO
 end
 
 function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH, mₜ, vₜ, t; batch_size = 200)
-    λ₀, σ, E, acc, ΔO, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
+    λ₀, σ, E, acc, ΔO = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
     g0 = 2.0 * ΔO * E / sqrt(sam.nchains * nprocs())
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
@@ -64,7 +63,7 @@ function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH,
   
     # norm_constraint
     ϵ = norm_constraint(vₜ, g0, g, type.nt)
-    return g, acc, λ₀, σ, x0, mₜ, vₜ, ϵ
+    return g, acc, λ₀, σ, mₜ, vₜ, ϵ
 end
 
 norm_constraint(vₜ::AbstractMatrix, g::AbstractVector, g0::AbstractVector, nt::no_constraint) = 1.0

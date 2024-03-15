@@ -77,7 +77,8 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             ν += 1
             # TODO: This is a bug that has problem with GC and OOM?
             Sys.free_memory() / Sys.total_memory() < 0.2 && GC.gc()
-            @everywhere sam.x0 = $x0[(myid() -1) * sam.nchains + 1 : myid() * sam.nchains]
+            # we don't have to set x0 here - was done on each proc
+            #@everywhere sam.x0 = $x0[(myid() -1) * sam.nchains + 1 : myid() * sam.nchains]
           
             # adjust Δt - this is not the same as serial - fix later!!!!
             @everywhere acc_opt[mod($k,acc_step)+1] = acc
@@ -87,15 +88,15 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             α, ~ = InverseLR(k, opt_vmc.lr, opt_vmc.lr_dc)
  
             # optimization
-            begin_time = time()
-            ps, acc, λ₀, res, σ, x0, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)
-            println("Total time: ", time() - begin_time)
-            density && begin 
-                if k % 10 == 0
-                    x = reduce(vcat,reduce(vcat,x0))
-                    display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
-                end
-            end 
+            #begin_time = time()
+            ps, acc, λ₀, res, σ, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)
+            #println("Total time: ", time() - begin_time)
+            # density && begin 
+            #     if k % 10 == 0
+            #         x = reduce(vcat,reduce(vcat,x0))
+            #         display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
+            #     end
+            # end 
           
             # err
             verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30)
