@@ -29,19 +29,20 @@ end
 # ΔO_ki = O_ki - Ō_k -> ΔO_ki/sqrt(N_sample)
 function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
     λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
+    begin_time = time()
     raw_dps = pmap(x0; batch_size = batch_size) do d
         grad_params(wf, d, ps, st)
     end     
-    dps = vcat(raw_dps...)    
-    O = 1/2 * reshape(dps, (length(destructure(ps)[1]), sam.nchains))
+    dps = vcat(raw_dps...)
+    O = 1/2 * reshape(dps, (length(destructure(ps)[1]), sam.nchains * nprocs()))
     Ō = mean(O, dims = 2)
-    ΔO = (O .- Ō)/sqrt(sam.nchains)
+    ΔO = (O .- Ō) / sqrt(sam.nchains * nprocs())
     return λ₀, σ, E, acc, ΔO, x0
 end
 
 function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH, mₜ, vₜ, t; batch_size = 200)
     λ₀, σ, E, acc, ΔO, x0 = Jacobian_O(wf, ps, st, sam, ham, batch_size = batch_size)
-    g0 = 2.0 * ΔO * E/sqrt(sam.nchains)
+    g0 = 2.0 * ΔO * E / sqrt(sam.nchains * nprocs())
 
     # S_ij = 1/N_sample ∑_k=1^N_sample ΔO_ik * ΔO_jk = ΔO * ΔO'/N_sample -> ΔO * ΔO': N_ps × N_ps
     S = ΔO * ΔO'
@@ -56,8 +57,7 @@ function grad_sr(_sr_type::QGT, type::SR, wf, ps, st, sam::MHSampler, ham::SumH,
     vₜ[diagind(vₜ)] .*= (1 + type.ϵ₁)
     vₜ[diagind(vₜ)] .+= type.ϵ₂ #* max(0.001, exp(-t/2000))
 
-    # g = vₜ \ g0
-    g = g0
+    g = vₜ \ g0
     
     # momentum for g 
     mₜ = momentum(mₜ, g, type.β₂)

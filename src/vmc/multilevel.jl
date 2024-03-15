@@ -34,15 +34,17 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     # burnin 
     res, λ₀, α, ν = 1.0, 0., opt_vmc.lr, 1
     err_opt = [zeros(opt_vmc.MaxIter[i]) for i = 1:length(opt_vmc.MaxIter)]
-    x0, ~, acc = sampler(sam, sam.burnin, ps, st, batch_size = batch_size)
+    x0, ~, acc = sampler(sam, sam.burnin, ps, st; batch_size = batch_size)#, return_Ψx0 = false)
 
     density && begin 
         x = reduce(vcat,reduce(vcat,x0))
         display(histogram(x, xlim = (-10,10), ylim = (0,1), normalize=:pdf))
     end
 
-    acc_step, acc_range = accMCMC
-    acc_opt = zeros(acc_step)
+    @everywhere begin
+        acc_step, acc_range = $accMCMC
+        acc_opt = zeros(acc_step)
+    end
     
     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
     verbose && @printf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt  |free_memory  \n")
@@ -59,25 +61,35 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             # embed for ps
             ps = EmbeddingW!(ps, ps_list[l], spec, spec_list[l], spec1p, spec1p_list[l], specAO, specAO_list[l], Nlm, Nlm_list[l], dispec, dist_list[l])
             st, Nlm, spec, specAO, spec1p, dispec = st_list[l], Nlm_list[l], spec_list[l], specAO_list[l], spec1p_list[l], dist_list[l]
-            sam.Ψ = wf
+
+            # sync over different procs
+            @everywhere begin
+               sam.Ψ = $wf
+               ps = $ps
+               st = $st 
+            end
         end
         v, _Nbf, _basis_size = maximum(length.(spec)), length(keys(ps.branch.bf.hidden)), ACEpsi._size(ps)
         @info("level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
         # optimization
         for k = 1 : opt_vmc.MaxIter[l]
+
             ν += 1
-            GC.gc()
-            sam.x0 = x0
+            # TODO: This is a bug that has problem with GC and OOM?
+            Sys.free_memory() / Sys.total_memory() < 0.2 && GC.gc()
+            @everywhere sam.x0 = $x0[(myid() -1) * sam.nchains + 1 : myid() * sam.nchains]
           
-            # adjust Δt
-            acc_opt[mod(k,acc_step)+1] = acc
-            sam.Δt = acc_adjust(k, sam.Δt, acc_opt, acc_range, acc_step)
+            # adjust Δt - this is not the same as serial - fix later!!!!
+            @everywhere acc_opt[mod($k,acc_step)+1] = acc
+            @everywhere sam.Δt = acc_adjust($k, sam.Δt, acc_opt, acc_range, acc_step)
  
             # adjust learning rate
             α, ~ = InverseLR(k, opt_vmc.lr, opt_vmc.lr_dc)
  
             # optimization
+            begin_time = time()
             ps, acc, λ₀, res, σ, x0, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)
+            println("Total time: ", time() - begin_time)
             density && begin 
                 if k % 10 == 0
                     x = reduce(vcat,reduce(vcat,x0))

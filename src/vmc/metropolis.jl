@@ -2,6 +2,10 @@ export MHSampler
 using StatsBase, StaticArrays, Optimisers, Distributed, Interpolations
 using ACEpsi.AtomicOrbitals: Nuc
 using Lux: Chain
+using Dates
+using ParallelDataTransfer: @getfrom
+using SharedArrays
+using Optimisers
 
 abstract type init_type end
 struct gaussian <: init_type end
@@ -54,18 +58,67 @@ end
 
 initialize_around_nuclei(nchains, physical_config, init_method, Nel::Int) = [initialize_around_nuclei(physical_config, init_method, Nel) for _ = 1:nchains]
 
-function sampler(sam::MHSampler, lag, ps, st; batch_size = 1)
-    r0 = sam.x0
-    raw_data = pmap(r0; batch_size = batch_size) do d
-        sam.Ψ(d, ps, st)[1]
+# function sampler(sam::MHSampler, lag, ps, st; batch_size = 1)
+#     r0 = sam.x0
+#     raw_data = pmap(r0; batch_size = batch_size) do d
+#         sam.Ψ(d, ps, st)[1]
+#     end
+#     Ψx0 = vcat(raw_data)
+#     acc = zeros(eltype(r0[1][1]), lag)
+#     for i = 1:lag
+#         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st, batch_size = batch_size);
+#         acc[i] = mean(a)
+#     end
+#     return r0, Ψx0, mean(acc)
+# end
+
+# function MHstep(r0::Vector{Vector{SVector{3, TT}}}, 
+#                 Ψx0::Vector{T}, 
+#                 Nels::Int64, 
+#                 sam::MHSampler, ps::NamedTuple, st::NamedTuple; batch_size = 1) where {T, TT}
+#     rand_sample(X::Vector{SVector{3, TX}}, Nels::Int, Δt::Float64) where {TX}= X + Δt * randn(SVector{3, TX}, Nels)
+#     rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
+#     raw_data = pmap(rp; batch_size = batch_size) do d
+#         sam.Ψ(d, ps, st)[1]
+#     end
+#     Ψxp = vcat(raw_data)
+#     accfcn(Ψx0::Vector{T}, Ψxp::Vector{T}) = exp.(Ψxp .- Ψx0)
+#     accprob = accfcn(Ψx0, Ψxp)
+#     u = rand(sam.nchains)
+#     acc = u .<= accprob[:]
+#     r::Vector{Vector{SVector{3, TT}}} = acc .*  rp + (1.0 .- acc) .* r0
+#     Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
+#     return r, Ψ, acc
+# end
+
+## new implementation
+
+eval_Ψ(Ψ, r, ps, st) = Ψ(r, ps, st)[1]
+
+function sampler(sam::MHSampler, lag, ps, st; batch_size = 1, return_Ψx0 = true)
+    @everywhere lag = $lag
+    @everywhere ps = $ps
+    @everywhere begin
+        global r0, Ψx0, acc
+        r0 = sam.x0
+        Ψx0 = eval_Ψ.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+        acc = 0.0
+        for _ = 1:lag
+            global r0, Ψx0, acc
+            local a
+            r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st)
+            acc += mean(a)
+        end
+        acc = acc / lag
     end
-    Ψx0 = vcat(raw_data)
-    acc = zeros(eltype(r0[1][1]), lag)
-    for i = 1:lag
-        r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st, batch_size = batch_size);
-        acc[i] = mean(a)
+    r0_all = vcat([@getfrom k r0 for k in procs()]...)
+    acc_all = [@getfrom k acc for k in procs()]
+    if return_Ψx0
+        Ψx0_all = vcat([@getfrom k Ψx0 for k in procs()]...)
+        return r0_all, Ψx0_all, mean(acc_all)
+    else
+        return r0_all, nothing, mean(acc_all)
     end
-    return r0, Ψx0, mean(acc)
 end
 
 function MHstep(r0::Vector{Vector{SVector{3, TT}}}, 
@@ -74,18 +127,16 @@ function MHstep(r0::Vector{Vector{SVector{3, TT}}},
                 sam::MHSampler, ps::NamedTuple, st::NamedTuple; batch_size = 1) where {T, TT}
     rand_sample(X::Vector{SVector{3, TX}}, Nels::Int, Δt::Float64) where {TX}= X + Δt * randn(SVector{3, TX}, Nels)
     rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
-    raw_data = pmap(rp; batch_size = batch_size) do d
-        sam.Ψ(d, ps, st)[1]
-    end
-    Ψxp = vcat(raw_data)
-    accfcn(Ψx0::Vector{T}, Ψxp::Vector{T}) = exp.(Ψxp .- Ψx0)
-    accprob = accfcn(Ψx0, Ψxp)
+    Ψxp = eval_Ψ.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
+    accprob = exp.(Ψxp .- Ψx0)
     u = rand(sam.nchains)
     acc = u .<= accprob[:]
     r::Vector{Vector{SVector{3, TT}}} = acc .*  rp + (1.0 .- acc) .* r0
     Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
     return r, Ψ, acc
 end
+
+##
 
 params(a::NamedTuple) = destructure(a)[1]
 
@@ -99,14 +150,45 @@ function grad(wf, x, ps, st, E);
    return g;
 end
 
+# evaluate Elocal on each processor respectively and return - this reduces communication cost
+function sampler_Elocal(sam, lag, ps, st)
+    @everywhere lag = $lag
+    @everywhere ps = $ps
+    @everywhere begin
+        global r0, Ψx0, acc
+        r0 = sam.x0
+        Ψx0 = eval_Ψ.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+        acc = 0.0
+        for _ = 1:lag
+            global r0, Ψx0, acc
+            local a
+            r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st)
+            acc += mean(a)
+        end
+        acc = acc / lag
+    end
+    r0_all = vcat([@getfrom k r0 for k in procs()]...)
+    acc_all = [@getfrom k acc for k in procs()]
+    if return_Ψx0
+        Ψx0_all = vcat([@getfrom k Ψx0 for k in procs()]...)
+        return r0_all, Ψx0_all, mean(acc_all)
+    else
+        return r0_all, nothing, mean(acc_all)
+    end
+end
+
+
+
 function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
                 clip = 5., batch_size = 1)
     x, ~, acc = sampler(sam, sam.lag, ps, st, batch_size = batch_size)
+    begin_time = time()
     raw_data = pmap(x; batch_size = batch_size) do d
         Elocal(ham, wf, d, ps, st)
     end
+    println("Time used in Elocal pmap:", time() - begin_time)
     Eloc = vcat(raw_data)
     val = sum(Eloc) / length(Eloc)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
