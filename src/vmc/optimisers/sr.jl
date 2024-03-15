@@ -28,7 +28,7 @@ end
 # Ō_k = 1/N_sample ∑_i=1^N_sample O_ki : N_ps × 1
 # ΔO_ki = O_ki - Ō_k -> ΔO_ki/sqrt(N_sample)
 function Jacobian_O(wf, ps, st, sam::MHSampler, ham::SumH; batch_size = 200)
-    λ₀, σ, E, acc, raw_Os = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
+    λ₀, σ, E, acc, raw_dps = Eloc_Exp_TV_clip(wf, ps, st, sam, ham, batch_size = batch_size)
     # raw_dps = pmap(x0; batch_size = batch_size) do d
     #     grad_params(wf, d, ps, st)
     # end     
