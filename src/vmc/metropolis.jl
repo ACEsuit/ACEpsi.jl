@@ -57,41 +57,6 @@ end
 
 initialize_around_nuclei(nchains, physical_config, init_method, Nel::Int) = [initialize_around_nuclei(physical_config, init_method, Nel) for _ = 1:nchains]
 
-# function sampler(sam::MHSampler, lag, ps, st; batch_size = 1)
-#     r0 = sam.x0
-#     raw_data = pmap(r0; batch_size = batch_size) do d
-#         sam.Ψ(d, ps, st)[1]
-#     end
-#     Ψx0 = vcat(raw_data)
-#     acc = zeros(eltype(r0[1][1]), lag)
-#     for i = 1:lag
-#         r0, Ψx0, a = MHstep(r0, Ψx0, sam.Nel, sam, ps, st, batch_size = batch_size);
-#         acc[i] = mean(a)
-#     end
-#     return r0, Ψx0, mean(acc)
-# end
-
-# function MHstep(r0::Vector{Vector{SVector{3, TT}}}, 
-#                 Ψx0::Vector{T}, 
-#                 Nels::Int64, 
-#                 sam::MHSampler, ps::NamedTuple, st::NamedTuple; batch_size = 1) where {T, TT}
-#     rand_sample(X::Vector{SVector{3, TX}}, Nels::Int, Δt::Float64) where {TX}= X + Δt * randn(SVector{3, TX}, Nels)
-#     rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
-#     raw_data = pmap(rp; batch_size = batch_size) do d
-#         sam.Ψ(d, ps, st)[1]
-#     end
-#     Ψxp = vcat(raw_data)
-#     accfcn(Ψx0::Vector{T}, Ψxp::Vector{T}) = exp.(Ψxp .- Ψx0)
-#     accprob = accfcn(Ψx0, Ψxp)
-#     u = rand(sam.nchains)
-#     acc = u .<= accprob[:]
-#     r::Vector{Vector{SVector{3, TT}}} = acc .*  rp + (1.0 .- acc) .* r0
-#     Ψ = acc .*  Ψxp + (1.0 .- acc) .* Ψx0
-#     return r, Ψ, acc
-# end
-
-## new implementation
-
 eval_Ψ(Ψ, r, ps, st) = Ψ(r, ps, st)[1]
 
 function sampler(sam::MHSampler, lag, ps, st; batch_size = 1, return_Ψx0 = true)
@@ -171,8 +136,7 @@ function sampler_Elocal_grad_params(sam, lag, ps, st, ham)
         sam.x0 = r0
         dp = grad_params.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
     end
-    # TODO: remove this r0_all
-    #r0_all = vcat([@getfrom k r0 for k in procs()]...)
+
     Eloc_all = vcat([@getfrom k Eloc for k in procs()]...)
     acc_all = [@getfrom k acc for k in procs()]
     dps = vcat([@getfrom k dp for k in procs()]...)
@@ -185,13 +149,6 @@ function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
                 clip = 5., batch_size = 1)
-    # x, ~, acc = sampler(sam, sam.lag, ps, st, batch_size = batch_size)
-    # begin_time = time()
-    # raw_data = pmap(x; batch_size = batch_size) do d
-    #     Elocal(ham, wf, d, ps, st)
-    # end
-    # println("Time used in Elocal pmap:", time() - begin_time)
-    # Eloc = vcat(raw_data)
     Eloc, acc, dps = sampler_Elocal_grad_params(sam, sam.lag, ps, st, ham)
     val = sum(Eloc) / length(Eloc)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))
