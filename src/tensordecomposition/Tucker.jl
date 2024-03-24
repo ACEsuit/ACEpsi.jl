@@ -13,7 +13,6 @@ using Tullio
 
 export TuckerLayer
 
-
 mutable struct Tucker <: Tensor_Decomposition
     P::Integer
 end

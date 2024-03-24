@@ -14,13 +14,12 @@ include("envelope.jl")
 include("atomicorbitals/atomicorbitals.jl")
 include("jastrow.jl")
 include("tensordecomposition/TD.jl")
-include("cluster/Cluster.jl")
 include("backflowpooling.jl")
 
 include("wf/bflow3d.jl")
-include("wf/bflow3dTucker.jl")
-include("wf/bflow3dCluster.jl")
+include("wf/bflow3dSTucker.jl")
 include("wf/bflow3dSCP.jl")
+include("wf/bflow3dTD.jl")
 include("wf/embed.jl")
 
 

@@ -9,9 +9,10 @@ using ChainRulesCore
 using StrideArrays
 using ObjectPools: unwrap,ArrayPool, FlexArray,acquire!
 using Lux
+using ACEpsi.TD: SCP
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 
-function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm, nuclei, TD::SCP; totdeg = 100, cluster = Nel, 
+function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm, nuclei, TD::SCP; totdeg = 100, 
     ν = 3, sd_admissible = bb -> sum(b.s == '∅' for b in bb) == 1, disspec = [],
     js = JPauliNet(nuclei)) 
     # ----------- Lux connections ---------

@@ -123,7 +123,7 @@ function dropnames(namedtuple::NamedTuple, names::Tuple{Vararg{Symbol}})
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::SlaterBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei)) where {NNuc, T, TT <:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -143,7 +143,7 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}
         end
         sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
         push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
-        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i], js = js, cluster = cluster[i])
+        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i], js = js)
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
         push!(spec, _spec1)
@@ -159,7 +159,7 @@ end
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::GaussianBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei)) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -179,7 +179,7 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}
         end
         sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
         push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
-        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i], js = js, cluster = cluster[i])
+        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i], js = js)
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
         push!(spec, _spec1)
@@ -194,7 +194,7 @@ end
 function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
     Dn::STO_NG, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
     _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
+    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}; js = ACEpsi.JPauliNet(nuclei)) where {NNuc, T, TT<:Tensor_Decomposition}
     level = length(ν)
     Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
     for i = 1:level
@@ -213,113 +213,7 @@ function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}
         end
         sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
         push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
-        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i], js = js, cluster = cluster[i])
-        _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
-        push!(wf, _wf)
-        push!(spec, _spec1)
-        push!(spec1p, _spec1p)
-        push!(ps, _ps)
-        push!(st, _st)
-        push!(disspec, _disspec)
-    end
-    return wf, spec, spec1p, _spec, ps, st, Nlm, disspec
-end
-
-# slaterbasis
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
-    Dn::SlaterBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
-    _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
-    level = length(ν)
-    Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
-    for i = 1:level
-        bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(_spec[i][j]))), _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
-
-        Nnuc = length(speclist)
-        spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
-        _spec1idx = []
-        for j = 1:Nnuc
-            spec1 = make_nlms_spec(bRnl[speclist[j]], bYlm, totaldegree = totdegree[i])
-            spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
-            spec_Rnl = natural_indices(bRnl[speclist[j]]); inv_Rnl = _invmap(spec_Rnl)
-            for (z, b) in enumerate(spec1)
-                spec1idx[z] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
-            end
-            push!(_spec1idx, spec1idx)
-        end
-        sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
-        push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
-        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i], c; totdeg = totdegree[i], ν = ν[i], js = js, cluster = cluster[i])
-        _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
-        push!(wf, _wf)
-        push!(spec, _spec1)
-        push!(spec1p, _spec1p)
-        push!(ps, _ps)
-        push!(st, _st)
-        push!(disspec, _disspec)
-    end
-    return wf, spec, spec1p, _spec, ps, st, Nlm, disspec
-end
-
-# gaussianbasis
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
-    Dn::GaussianBasis, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
-    _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
-    level = length(ν)
-    Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
-    for i = 1:level
-        bRnl = [AtomicOrbitalsRadials(Pn, Gaussian(10 * rand(length(_spec[i][j]))), _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
-
-        Nnuc = length(speclist)
-        spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
-        _spec1idx = []
-        for j = 1:Nnuc
-            spec1 = make_nlms_spec(bRnl[speclist[j]], bYlm, totaldegree = totdegree[i])
-            spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
-            spec_Rnl = natural_indices(bRnl[speclist[j]]); inv_Rnl = _invmap(spec_Rnl)
-            for (z, b) in enumerate(spec1)
-                spec1idx[z] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
-            end
-            push!(_spec1idx, spec1idx)
-        end
-        sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
-        push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
-        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i], c; totdeg = totdegree[i], ν = ν[i], js = js, cluster = cluster[i])
-        _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
-        push!(wf, _wf)
-        push!(spec, _spec1)
-        push!(spec1p, _spec1p)
-        push!(ps, _ps)
-        push!(st, _st)
-        push!(disspec, _disspec)
-    end
-    return wf, spec, spec1p, _spec, ps, st, Nlm, disspec
-end
-
-function wf_multilevel(Nel::Int, Σ::Vector{Char}, nuclei::SVector{NNuc, Nuc{T}}, 
-    Dn::STO_NG, Pn::OrthPolyBasis1D3T, bYlm::Union{RYlmBasis, CYlmBasis, CRlmBasis, RRlmBasis},
-    _spec, speclist::Vector{Int}, Nbf::Vector{Int},  
-    totdegree::Vector{Int}, ν::Vector{Int}, TD::Vector{TT}, c::ACEpsi.Cluster._bf_orbital; js = ACEpsi.JPauliNet(nuclei), cluster = Nel * ones(Int, length(ν))) where {NNuc, T, TT<:Tensor_Decomposition}
-    level = length(ν)
-    Nlm, wf, spec, spec1p, disspec, ps, st = [], [], [], [], [], [], []
-    for i = 1:level
-        bRnl = [AtomicOrbitalsRadials(Pn, Dn, _spec[i][speclist[j]]) for j = 1:length(_spec[i])]
-        Nnuc = length(speclist)
-        spec_Ylm = natural_indices(bYlm); inv_Ylm = _invmap(spec_Ylm)
-        _spec1idx = []
-        for j = 1:Nnuc
-            spec1 = make_nlms_spec(bRnl[speclist[j]], bYlm, totaldegree = totdegree[i])
-            spec1idx = Vector{Tuple{Int, Int}}(undef, length(spec1))
-            spec_Rnl = natural_indices(bRnl[speclist[j]]); inv_Rnl = _invmap(spec_Rnl)
-            for (z, b) in enumerate(spec1)
-                spec1idx[z] = (inv_Rnl[dropnames(b,(:m,))], inv_Ylm[(l=b.l, m=b.m)])
-            end
-            push!(_spec1idx, spec1idx)
-        end
-        sparsebasis = [SparseProduct(_spec1idx[j]) for j = 1:Nnuc]
-        push!(Nlm, [length(sparsebasis[speclist[z]].spec) for z = 1:Nnuc])
-        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i], c; totdeg = totdegree[i], ν = ν[i], js = js, cluster = cluster[i])
+        _wf, _spec1, _spec1p, _disspec = BFwf_lux(Nel, Nbf[i], speclist, bRnl, bYlm, nuclei, TD[i]; totdeg = totdegree[i], ν = ν[i], js = js)
         _ps, _st = setupBFState(MersenneTwister(1234), _wf, Σ)
         push!(wf, _wf)
         push!(spec, _spec1)

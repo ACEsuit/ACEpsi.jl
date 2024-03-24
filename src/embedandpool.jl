@@ -40,7 +40,7 @@ end
       end
 
       # pooling 
-      EE = tuple(E_1,...., )
+      # EE = tuple(E_1,...., )
       A = evaluate(embedpool.pooling, EE, ps.pooling, st.pooling) 
       # A = Nfeat x Nel 
 

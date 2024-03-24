@@ -11,13 +11,12 @@ using ChainRulesCore
 using StrideArrays
 using ObjectPools: unwrap,ArrayPool, FlexArray,acquire!
 using Lux
-
 using ACEpsi.AtomicOrbitals: make_nlms_spec
 using ACEpsi.TD: No_Decomposition, Tucker, SCP
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 
 # ----------------- usual BF without tensor decomposition ------------------
-function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm, nuclei, TD::No_Decomposition; totdeg = 100, cluster = Nel, 
+function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm, nuclei, TD::No_Decomposition; totdeg = 100, 
    ν = 3, sd_admissible = bb -> sum(b.s == '∅' for b in bb) == 1, disspec = [],
    js = JPauliNet(nuclei)) 
    # ----------- Lux connections ---------
@@ -31,7 +30,7 @@ function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm,
    pooling_layer = ACEpsi.lux(pooling)
    spec1p = get_spec(nuclei, speclist, bRnl, bYlm, totdeg)
    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]]
-   default_admissible = bb -> (length(bb) <= 1) || (sum([abs(sort(bb, by = b -> b.I)[1].I - sort(bb, by = b -> b.I)[end].I)]) <= cluster)
+   default_admissible = bb -> (length(bb) == 0) || (sum(b.n1 - 1 for b in bb ) <= totdeg)
 
    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
                         minvv = fill(0, ν), 
