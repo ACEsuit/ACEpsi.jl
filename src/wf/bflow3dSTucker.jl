@@ -13,7 +13,7 @@ using ACEpsi.AtomicOrbitals: make_nlms_spec, _invmap, Nuc
 using ACEpsi.TD: Tucker
 using ACEpsi: ↑, ↓, ∅, spins, extspins, Spin, spin2idx, idx2spin
 
-function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 100, cluster = Nel, 
+function BFwf_lux(Nel::Integer, Nbf::Integer, speclist::Vector{Int}, bRnl, bYlm, nuclei, TD::Tucker; totdeg = 100, 
     ν = 3, sd_admissible = bb -> sum(b.s == '∅' for b in bb) == 1, disspec = [],
     js = JPauliNet(nuclei)) 
     # ----------- Lux connections ---------

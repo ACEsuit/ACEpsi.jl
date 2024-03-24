@@ -1,13 +1,3 @@
-using Distributed
-
-N_procs = 4
-
-if nprocs() == 1
-    addprocs(N_procs - 1, exeflags="--project=$(Base.active_project())")
-end
-
-@everywhere begin
-
 
     using ACEpsi, Polynomials4ML, StaticArrays, Test
     using Polynomials4ML: natural_indices, degree, SparseProduct
@@ -26,43 +16,11 @@ end
     using HyperDualNumbers: Hyper
     using Polynomials4ML.Utils: gensparse
     using ObjectPools
-end
 
 
-@everywhere begin
-
-
-   function ObjectPools.acquire!(c::ObjectPools.FlexArrayCache, sz::NTuple{N, <:Integer}, ::Type{T}
-      ) where {N, T} 
-         # szofT = sizeof(T)
-         # szofA = prod(sz) * szofT
-         # stack = c.vecs
-         # if isempty(stack)
-         # _A = Vector{UInt8}(undef, szofA)
-         # else 
-         # _A = pop!(stack)
-         # resize!(_A, szofA)
-         # end
-      return Array{T, N}(undef, sz)    #FlexCachedArray(_convert(_A, sz, T), _A, c)
-   end
-
-   function ObjectPools.acquire!(c::ObjectPools.FlexArray, sz::NTuple{N, <:Integer}, ::Type{T}
-      ) where {N, T} 
-         # szofT = sizeof(T)
-         # szofA = prod(sz) * szofT
-         # stack = c.vecs
-         # if isempty(stack)
-         # _A = Vector{UInt8}(undef, szofA)
-         # else 
-         # _A = pop!(stack)
-         # resize!(_A, szofA)
-         # end
-      return Array{T, N}(undef, sz)    #FlexCachedArray(_convert(_A, sz, T), _A, c)
-   end
-
-    Nel = 4
+    Nel = 2
     X = randn(SVector{3, Float64}, Nel)
-    Σ = [↑,↑,↓,↓]
+    Σ = [↑,↓]
     nuclei = SVector{1}([ Nuc(zeros(SVector{3, Float64}), Nel * 1.0)])
 
     spec_Be = [(n1 = 1, n2 = 1, l = 0),
@@ -103,7 +61,6 @@ end
 
     Nbf = 1
     speclist  = [1]
-    cluster = Nel
     sd_admissible = bb -> sum(b.s == '∅' for b in bb) == 1
     disspec = []
     bRnl = [AtomicOrbitalsRadials(Pn, SlaterBasis(10 * rand(length(_spec[j]))), _spec[speclist[j]]) for j = 1:length(_spec)]
@@ -122,7 +79,7 @@ end
     pooling_layer = ACEpsi.lux(pooling)
     spec1p = ACEpsi.get_spec(nuclei, speclist, bRnl, bYlm, totdeg)
     tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]]
-    default_admissible = bb -> (length(bb) <= 1) || (sum([abs(sort(bb, by = b -> b.I)[1].I - sort(bb, by = b -> b.I)[end].I)]) <= cluster)
+    default_admissible = bb -> (length(bb) == 0) || (sum(b.n1 - 1 for b in bb ) <= totdeg)
 
     specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = default_admissible,
                         minvv = fill(0, ν),
@@ -135,6 +92,16 @@ end
 
     # define n-correlation
     corr1 = Polynomials4ML.SparseSymmProd(spec)
+
+
+
+
+spec
+spec1p
+displayspec(spec, spec1p)
+
+
+
 
     # (nX, 3, length(nuclei), length(spec1 from totaldegree)) -> (nX, length(spec))
     corr_layer = Polynomials4ML.lux(corr1)
@@ -149,7 +116,7 @@ end
                         hidden = l_hidden[1], # BranchLayer(l_hidden...),
                         sum = WrappedFunction(sum))
     l = Chain(; branch = BranchLayer(; js = jastrow_layer, bf = BFwf_chain, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
-end
+
 
 
 # ===
