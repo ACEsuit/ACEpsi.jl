@@ -9,6 +9,7 @@ using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
 using ACEpsi.AtomicOrbitals: _invmap, Nuc, make_nlms_spec
 using ACEpsi.TD: Tensor_Decomposition, No_Decomposition, Tucker
 using JSON
+using ProgressMeter
 
 mutable struct VMC_multilevel
     tol::Float64
@@ -45,6 +46,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
         end
         @info("Finish saving configs")
         io = open(res_path * "output.txt", "w+")
+        progress_io = open(res_path * "progess.txt", "w+")
     end
 
     # first level
@@ -98,6 +100,13 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
         v, _Nbf, _basis_size = maximum(length.(spec)), length(keys(ps.branch.bf.hidden)), ACEpsi._size(ps)
         @info("level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
         write_res && println(io, "level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
+
+        write_res && println(progress_io, "level = $l")
+
+        if write_res
+            Prometer = Progress(opt_vmc.MaxIter[l]; output = progress_io)
+        end
+
         # optimization
         for k = 1 : opt_vmc.MaxIter[l]
 
@@ -135,6 +144,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
                 ps_list[l] = deepcopy(ps)
                 break;
             end  
+            write_res && next!(Prometer)
         end
         ps_list[l] = deepcopy(ps)
         opt_vmc.lr = α
