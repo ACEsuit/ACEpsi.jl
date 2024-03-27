@@ -1,5 +1,3 @@
-import ChainRulesCore: rrule, NoTangent
-
 using ChainRulesCore: ignore_derivatives
 using LuxCore
 using LuxCore: AbstractExplicitLayer
@@ -44,6 +42,20 @@ function (l::TuckerLayer)(x::AbstractArray, ps, st)
         release!(x)
     end
     return out, st
+end
+
+using ChainRulesCore
+
+# extension is not loaded - import explicitly for performance
+function ChainRulesCore.rrule(ev::Tullio.Eval, args...)
+    Z = ev.fwd(args...)
+    Z, function tullio_back(Δ)
+        isnothing(ev.rev) && error("no gradient definition here!")
+        dxs = map(ev.rev(Δ, Z, args...)) do dx
+            dx === nothing ? ChainRulesCore.ZeroTangent() : dx
+        end
+        tuple(ChainRulesCore.ZeroTangent(), dxs...)
+    end
 end
 
 LuxCore.initialparameters(rng::AbstractRNG, l::TuckerLayer) = ( W = randn(rng, l.Nel, 3, l.P, l.K), )
