@@ -8,6 +8,8 @@ using ACEpsi
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
 using ACEpsi.AtomicOrbitals: _invmap, Nuc, make_nlms_spec
 using ACEpsi.TD: Tensor_Decomposition, No_Decomposition, Tucker
+using JSON
+
 mutable struct VMC_multilevel
     tol::Float64
     MaxIter::Vector{Int}
@@ -22,10 +24,29 @@ VMC_multilevel(MaxIter::Vector{Int}, lr::Float64, type; tol = 1.0e-3, lr_dc = 50
 # TODO: this should be implemented to recursively embed the wavefunction
 
 
+
 function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list; 
                                         verbose = true, density = false, 
                                         accMCMC = [10, [0.45, 0.55]], 
-                                        batch_size = 1)
+                                        batch_size = 1, write_res = false, res_path = "tmp/")
+    
+                                        
+    # IOs
+    if write_res
+        @info(" Storing results at $res_path")
+        mkpath(res_path)
+        open(res_path * "configs.json","w") do f
+            JSON.print(f, ACEpsi.vmc.write_args(
+            opt_vmc, sam, accMCMC, spec1p_list,
+            spec_list, specAO_list,
+            Nlm_list, dist_list,
+            wf_list, ps_list, st_list)
+            )
+        end
+        @info("Finish saving configs")
+        io = open(res_path * "output.txt", "w+")
+    end
+
     # first level
     wf, ps, st, spec, spec1p, specAO, Nlm, dispec = wf_list[1], ps_list[1], st_list[1], spec_list[1], spec1p_list[1], specAO_list[1], Nlm_list[1], dist_list[1]
     mₜ, vₜ = initp(opt_vmc.type, ps_list[1])
@@ -48,6 +69,11 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     
     verbose && @printf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc)
     verbose && @printf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt  |free_memory  \n")
+
+    write_res && println(io, @sprintf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc))
+    write_res && println(io, @sprintf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt  |free_memory  \n"))
+    flush(io)
+    
     for l in 1:length(wf_list)
         # do embeddings
         if l > 1
@@ -71,6 +97,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
         end
         v, _Nbf, _basis_size = maximum(length.(spec)), length(keys(ps.branch.bf.hidden)), ACEpsi._size(ps)
         @info("level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
+        write_res && println(io, "level = $l, order = $v, size of basis = $_basis_size, number of bfs = $_Nbf")
         # optimization
         for k = 1 : opt_vmc.MaxIter[l]
 
@@ -100,6 +127,8 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
           
             # err
             verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30)
+            write_res && println(io, @sprintf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30))
+            flush(io)
             err_opt[l][k] = λ₀
  
             if res < opt_vmc.tol
@@ -110,6 +139,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
         ps_list[l] = deepcopy(ps)
         opt_vmc.lr = α
     end
+    close(io)
     
     return wf_list, err_opt, ps_list
 end
