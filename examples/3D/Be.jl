@@ -12,7 +12,7 @@ using ACEpsi, Polynomials4ML, StaticArrays, Test
 using Polynomials4ML: natural_indices, degree, SparseProduct
 using ACEpsi.AtomicOrbitals: Nuc, make_nlms_spec, evaluate
 using ACEpsi: BackflowPooling, BFwf_lux, setupBFState, Jastrow, displayspec
-using ACEpsi.vmc: gradx, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler
+using ACEpsi.vmc: gradx, laplacian, grad_params, EmbeddingW!, _invmap, VMC_multilevel, wf_multilevel, VMC, gd_GradientByVMC, gd_GradientByVMC_multilevel, AdamW, SR, SumH, MHSampler, eval_Ψ, MHstep, acc_adjust, Elocal
 using ACEbase.Testing: print_tf, fdtest
 using LuxCore
 using Lux
@@ -115,7 +115,7 @@ laplacian(wf, X, ps, st)
 end
 
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list, batch_size = 50,
+                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list,
                     accMCMC = [10, [0.4,0.7]])
 
 # Eref = -14.667

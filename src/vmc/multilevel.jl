@@ -28,7 +28,7 @@ VMC_multilevel(MaxIter::Vector{Int}, lr::Float64, type; tol = 1.0e-3, lr_dc = 50
 function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ham::SumH, wf_list, ps_list, st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list; 
                                         verbose = true, density = false, 
                                         accMCMC = [10, [0.45, 0.55]], 
-                                        batch_size = 1, write_res = false, res_path = "tmp/")
+                                        write_res = false, res_path = "tmp/")
     
                                         
     # IOs
@@ -55,7 +55,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
     # burnin 
     res, λ₀, α, ν = 1.0, 0., opt_vmc.lr, 1
     err_opt = [zeros(opt_vmc.MaxIter[i]) for i = 1:length(opt_vmc.MaxIter)]
-    x0, ~, acc = sampler(sam, sam.burnin, ps, st; batch_size = batch_size)#, return_Ψx0 = false)
+    x0, ~, acc = sampler(sam, sam.burnin, ps, st;) #, return_Ψx0 = false)
 
     density && begin 
         x = reduce(vcat,reduce(vcat,x0))
@@ -116,7 +116,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
  
             # optimization
             #begin_time = time()
-            ps, acc, λ₀, res, σ, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν, batch_size = batch_size)
+            ps, acc, λ₀, res, σ, mₜ, vₜ = Optimization(opt_vmc.type, wf, ps, st, sam, ham, α, mₜ, vₜ, ν)
             #println("Total time: ", time() - begin_time)
             # density && begin 
             #     if k % 10 == 0

@@ -59,7 +59,7 @@ initialize_around_nuclei(nchains, physical_config, init_method, Nel::Int) = [ini
 
 eval_Ψ(Ψ, r, ps, st) = Ψ(r, ps, st)[1]
 
-function sampler(sam::MHSampler, lag, ps, st; batch_size = 1, return_Ψx0 = true)
+function sampler(sam::MHSampler, lag, ps, st; return_Ψx0 = true)
     @everywhere lag = $lag
     @everywhere ps = $ps
     @everywhere begin
@@ -88,7 +88,7 @@ end
 function MHstep(r0::Vector{Vector{SVector{3, TT}}}, 
                 Ψx0::Vector{T}, 
                 Nels::Int64, 
-                sam::MHSampler, ps::NamedTuple, st::NamedTuple; batch_size = 1) where {T, TT}
+                sam::MHSampler, ps::NamedTuple, st::NamedTuple) where {T, TT}
     rand_sample(X::Vector{SVector{3, TX}}, Nels::Int, Δt::Float64) where {TX}= X + Δt * randn(SVector{3, TX}, Nels)
     rp = rand_sample.(r0, Ref(Nels), Ref(sam.Δt))
     Ψxp = eval_Ψ.(Ref(sam.Ψ), rp, Ref(ps), Ref(st))
@@ -154,7 +154,7 @@ end
 function Eloc_Exp_TV_clip(wf, ps, st,
                 sam::MHSampler, 
                 ham::SumH;
-                clip = 5., batch_size = 1)
+                clip = 5.,)
     Eloc, acc, dps = sampler_Elocal_grad_params(sam, sam.lag, ps, st, ham)
     val = sum(Eloc) / length(Eloc)
     var = sqrt(sum((Eloc .-val).^2)/(length(Eloc)*(length(Eloc) -1)))

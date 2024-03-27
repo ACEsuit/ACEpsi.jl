@@ -23,8 +23,8 @@ v̂ₜ ← vₜ/(1-β₂ᵗ)
 ηₜ ← SetScheduleMultiplier(t) can be fixed, decay, or also be used for warm restarts
 θₜ = θₜ₋₁ - ηₜ(αm̂ₜ/(√v̂ₜ+ϵ)+λθₜ₋₁)
 """
-function Optimization(type::adamW, wf, ps, st, sam::MHSampler, ham::SumH, α, mₜ, vₜ, t; batch_size = 200)
-    λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham; batch_size = batch_size)
+function Optimization(type::adamW, wf, ps, st, sam::MHSampler, ham::SumH, α, mₜ, vₜ, t)
+    λ₀, σ, E, x0, acc = Eloc_Exp_TV_clip(wf, ps, st, sam, ham)
     g = grad(wf, x0, ps, st, E)
 
     p, s = destructure(ps)

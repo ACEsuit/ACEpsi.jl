@@ -118,7 +118,7 @@ laplacian(wf, X, ps, st)
 end
 
 wf, err_opt, ps = gd_GradientByVMC_multilevel(opt_vmc, sam, ham, wf_list, ps_list, 
-                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list, batch_size = 50,
+                    st_list, spec_list, spec1p_list, specAO_list, Nlm_list, dist_list,
                     accMCMC = [10, [0.4,0.7]])
 
 # Eref = -14.667
