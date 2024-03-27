@@ -1,5 +1,5 @@
 export MHSampler
-using StatsBase, StaticArrays, Optimisers, Distributed, Interpolations
+using StatsBase, StaticArrays, Optimisers, Distributed 
 using ACEpsi.AtomicOrbitals: Nuc
 using Lux: Chain
 using ParallelDataTransfer: @getfrom
@@ -121,7 +121,7 @@ function sampler_Elocal_grad_params(sam, lag, ps, st, ham)
     @everywhere begin
         global r0, Ψx0, acc
         r0 = sam.x0
-        Ψx0 = eval_Ψ.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+        Ψx0 = eval_Ψ.(Ref(sam.Ψ), r0, Ref(ps), Ref(st)) # TODO: multithread
         acc = 0.0
         for _ = 1:lag
             global r0, Ψx0, acc
@@ -130,11 +130,17 @@ function sampler_Elocal_grad_params(sam, lag, ps, st, ham)
             acc += mean(a)
         end
         acc = acc / lag
-        Eloc = Elocal.(Ref(ham), Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+        Eloc = Elocal.(Ref(ham), Ref(sam.Ψ), r0, Ref(ps), Ref(st)) # TODO: multithread
         # we set sam.x0 here so that we don't have to pass back the huge array
         # back to the call in mulitlevel VMC
         sam.x0 = r0
         dp = grad_params.(Ref(sam.Ψ), r0, Ref(ps), Ref(st))
+
+        T = promote_type(eltype(r0[1]), eltype(destructure(ps)[1]))
+        dp = Vector{Vector{T}}()
+        Base.Threads.@threads for r in r0
+            push!(dp, grad_params(sam.Ψ, r, ps, st)) # TODO: fix this
+        end
     end
 
     Eloc_all = vcat([@getfrom k Eloc for k in procs()]...)

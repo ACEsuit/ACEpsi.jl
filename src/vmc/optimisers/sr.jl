@@ -1,5 +1,5 @@
 using Optimisers
-using LinearMaps, LinearAlgebra, IterativeSolvers
+using LinearAlgebra
 using Polynomials4ML: _make_reqfields, @reqfields, POOL, TMP, META, release!
 using ObjectPools: acquire!
 using Optimisers
