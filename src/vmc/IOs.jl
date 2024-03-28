@@ -53,7 +53,7 @@ function write_args(vmc::VMC_multilevel, sam::MHSampler, accMCMC,
         "dist_list" => dist_list,       
 
         # type of tensor decomposition 
-        "TD_list" => string.(_classfy.(ps_list)),
+        "TD_list" => string.(_get_TD.(wf_list)),
         )
 
     # sampler
@@ -79,7 +79,21 @@ function write_args(vmc::VMC_multilevel, sam::MHSampler, accMCMC,
 end
 
 _get_js(wf) = string(typeof(wf.layers.branch.layers.js))
-_get_nbfs(wf) = wf.layers.branch.layers.bf.layers.sum.Ndet
+_get_nbfs(wf) = begin
+    try
+        return wf.layers.branch.layers.bf.layers.sum.Ndet
+    catch
+        return 1
+    end
+end
+
+_get_TD(wf) = begin
+    if :TK in keys(wf.layers.branch.layers.bf.layers)
+        return "SymTucker($(wf.layers.branch.layers.bf.layers.TK.P))"
+    else
+        return "No_TD"
+    end
+end
 
 function _write_dict(opt::SR)
     d = Dict(
