@@ -74,7 +74,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
 
     write_res && println(io, @sprintf("Initialize MCMC: Δt = %.2f, accRate = %.4f \n", sam.Δt, acc))
     write_res && println(io, @sprintf("   k |  𝔼[E_L]  |  V[E_L] |   res   |   LR    |accRate|   Δt  |free_memory  \n"))
-    flush(io)
+    write_res && flush(io)
     
     for l in 1:length(wf_list)
         # do embeddings
@@ -116,10 +116,13 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             # we don't have to set x0 here - was done on each proc
             #@everywhere sam.x0 = $x0[(myid() -1) * sam.nchains + 1 : myid() * sam.nchains]
           
-            # adjust Δt - this is not the same as serial - fix later!!!!
-            @everywhere acc_opt[mod($k,acc_step)+1] = acc
+            # adjust Δt
+            # first we set acc_opt to different procs with acc
+            @everywhere acc_opt[mod($k,acc_step)+1] = $acc
+
+            # and then update Δt, sam.Δt should be the same for every iteration so no sync is needed
             @everywhere sam.Δt = acc_adjust($k, sam.Δt, acc_opt, acc_range, acc_step)
- 
+            
             # adjust learning rate
             α, ~ = InverseLR(k, opt_vmc.lr, opt_vmc.lr_dc)
  
@@ -137,7 +140,7 @@ function gd_GradientByVMC_multilevel(opt_vmc::VMC_multilevel, sam::MHSampler, ha
             # err
             verbose && @printf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f \n", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30)
             write_res && println(io, @sprintf(" %3.d | %.5f | %.5f | %.5f | %.5f | %.3f | %.3f | %.3f", k, λ₀, σ, res, α, acc, sam.Δt, Sys.free_memory() / 2^30))
-            flush(io)
+            write_res && flush(io)
             err_opt[l][k] = λ₀
  
             if res < opt_vmc.tol
