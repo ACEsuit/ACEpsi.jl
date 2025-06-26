@@ -1,26 +1,21 @@
 module ACEpsi
 
-# define operation on HyperDualNumbers
-include("hyper.jl")
+include("molecule/nuclei.jl")
+include("molecule/spin.jl")
+include("molecule/molecule.jl")
+include("molecule/molecules.jl")
+include("molecule/hamiltonian.jl")
+include("model/layers.jl")
+include("model/spec.jl")
+include("model/wavefunction.jl")
+include("model/multilevel.jl")
+include("train/metropolis.jl")
+include("train/utils.jl")
+include("train/opt/struct.jl")
+include("train/opt/svd.jl")
+include("train/opt/sr.jl")
 
-# define spin symbols and some basic functionality 
-include("spins.jl")
-
-# the old 1d backflow code, keep around for now...
-include("bflow.jl")
-include("envelope.jl")
-
-# the new 3d backflow code 
-include("atomicorbitals/atomicorbitals.jl")
-include("jastrow.jl")
-include("bflow3d.jl")
-
-include("backflowpooling.jl")
-
-# lux utils for bflow
-include("lux_utils.jl")
-
-# vmc
-include("vmc/opt.jl")
+include("train/train.jl")
 
 end
+
