@@ -4,9 +4,9 @@ using Lux
 using Random
 using EquivariantTensors
 using LinearAlgebra
-import Polynomials4ML: _valtype
-
 export build_wavefunction, evalx, gradx, gradp, laplacian
+using Polynomials4ML
+import Polynomials4ML: _valtype
 
 _valtype(::Polynomials4ML.RadialDecay, T::Type{<: Number}) = T
 
@@ -22,7 +22,7 @@ function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν; filena
     admissible = bb -> ((length(bb) == 0) || (sum(b.n2 > _totdegn[b.I][length(bb)][b.l + 1] for b in bb)) == 0) 
     spec = [t for t in spec if admissible([spec1p[t[j]] for j = 1:length(t)])]
     
-    branches = (; (Symbol("l", i) => Polynomials4ML.lux(b) for (i, b) in enumerate(basis))...)
+    branches = (; (Symbol("l", i) => b for (i, b) in enumerate(basis))...)
     AAbasis = SparseSymmProd(spec)
 
     l = Chain(; l_embed = Diff_layer(mol.nuclei), branch = Lux.Experimental.freeze(Parallel(hcat; branches...)), 
