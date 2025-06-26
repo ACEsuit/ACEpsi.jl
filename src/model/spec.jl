@@ -193,7 +193,7 @@ function build_totdeglevels(mol, basis_set, totdeg, ν; ratio = 0.5, max_level::
         end
     end
     for i = 1:length(νlevels)
-        νlevels[i] = length(totdeglevels[i])
+        νlevels[i] = length(totdeglevels[i][1])
     end
 
     if max_level !== nothing && length(totdeglevels) > max_level
