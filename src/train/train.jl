@@ -8,15 +8,13 @@ function train(mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_l
     val_list = [zeros(iterations[i]) for i = 1:level]
     var_list = [zeros(iterations[i]) for i = 1:level]
     rank_list = [zeros(iterations[i]) for i = 1:level]
-    @sync for k in 1:nprocs()
-        @async begin
-            sendto(k, mol = mol)
-            sendto(k, nchains = nchains)
-            sendto(k, burnin = burnin)
-            sendto(k, lag = lag)
-            sendto(k, clip = clip)
-            sendto(k, Δt = Δt)
-        end
+    for k in 1:nprocs()
+        sendto(k, mol = mol)
+        sendto(k, nchains = nchains)
+        sendto(k, burnin = burnin)
+        sendto(k, lag = lag)
+        sendto(k, clip = clip)
+        sendto(k, Δt = Δt)
     end
 
     @everywhere ham = SumH(mol.nuclei)
@@ -28,12 +26,10 @@ function train(mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_l
     for i = 1:level
         model, ps, st, spec, spec1p = model_list[i], ps_list[i], st_list[i], spec_list[i], spec1p_list[i]
         iteration = iterations[i]
-        @sync for k in 1:nprocs()
-            @async begin
-                sendto(k, model = model)
-                sendto(k, ps = ps)
-                sendto(k, st = st)
-            end
+        for k in 1:nprocs()
+            sendto(k, model = model)
+            sendto(k, ps = ps)
+            sendto(k, st = st)
         end
         dim_ps = length(destructure(ps)[1])
         @everywhere dim_ps = length(destructure(ps)[1])
@@ -62,11 +58,11 @@ function train(mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_l
         for iter = 1:iteration
             p, re = destructure(ps)
             @everywhere p, re = destructure(ps)
-            @sync for k = 1:nprocs()
-                @async sendto(k, p = p)
+            for k = 1:nprocs()
+                sendto(k, p = p)
             end
             @everywhere ps = re(p)
-            damping = max(InverseLR(i, optimizer.damping, optimizer.damping_decay), optimizer.damping_min)
+            damping = max(InverseLR(iter, optimizer.damping, optimizer.damping_decay), optimizer.damping_min)
             _iter += 1
             @everywhere begin 
                 _x, _theta, _acc, _elocs, _o_tot = compute_Eloc_dp(ham, model, ps, st, _x, _theta, _acc, Δt, lag)
@@ -78,18 +74,16 @@ function train(mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_l
             val_list[i][iter], var_list[i][iter] = mean(Eloc), sqrt(var(Eloc)/length(Eloc))
             acc_opt[mod1(iter, acc_step)] = ācc
             Δt = acc_adjust(iter, Δt, acc_opt, acc_range, acc_step)
-            @sync for k = 1:nprocs()
-                @async begin 
-                    sendto(k, Δt = Δt)
-                    sendto(k, v̄al = v̄al)
-                    sendto(k, val_mean = val_list[i][iter])
-                end
+            for k = 1:nprocs()
+                sendto(k, Δt = Δt)
+                sendto(k, v̄al = v̄al)
+                sendto(k, val_mean = val_list[i][iter])
             end
             @everywhere ΔE = _elocs .- v̄al
             @everywhere _a = clip * Statistics.mean( abs.(ΔE) )
             ā = mean([@getfrom k _a for k in 1:nprocs()])
-            @sync for k = 1:nprocs()
-                @async sendto(k, ā = ā)
+            for k = 1:nprocs()
+                sendto(k, ā = ā)
             end
             @everywhere begin 
                 ΔE = clipE.(ΔE, Ref(ā)) 
@@ -97,9 +91,9 @@ function train(mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_l
                 _o_mean = mean(_o_tot, dims = 2)
             end
             o_mean = mean([@getfrom k _o_mean for k in 1:nprocs()])
-            ldiv!(nprocs(), o_mean)
-            @sync for k = 1:nprocs()
-                @async sendto(k, o_mean = o_mean)
+            #ldiv!(nprocs(), o_mean)
+            for k = 1:nprocs()
+                sendto(k, o_mean = o_mean)
             end
             @everywhere begin 
                 _o_tot .-= _o_mean
@@ -117,9 +111,6 @@ function train(mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_l
             _mem = mean([@getfrom k Sys.free_memory() for k in nprocs()])
             println(io, @sprintf("   %5.d     |   %.5f     |   %.5f     |   %.5f     |   %.5f     |   %.5f     |  %.5f     |   %.5f     |   %5.d ", iter, val_list[i][iter], var_list[i][iter], ācc, Δt, _mem / 2^30, res, γ, r))
             println(@sprintf("   %5.d     |   %.5f     |   %.5f     |   %.5f     |   %.5f     |   %.5f     |  %.5f     |   %.5f     |   %5.d ", iter, val_list[i][iter], var_list[i][iter], ācc, Δt, _mem / 2^30, res, γ, r))
-            if iter % 10 == 0
-                flush(io)
-            end
         end
         per = 0.2
         _err = zero(val_list[i])
@@ -130,11 +121,11 @@ function train(mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_l
         @info("average energy: $(_err[end])")
         ps_list[i] = deepcopy(ps)
         flush(io)
-        close(io)
     end
     record_energy(val_list, optimizer.res_path)
     record_rank(rank_list, optimizer.res_path)
     record_var(var_list, optimizer.res_path)
     record_ps(ps_list, optimizer.res_path)
+    close(io)
     return model_list, ps_list, st_list, val_list, var_list, rank_list
 end

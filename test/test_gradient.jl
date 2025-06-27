@@ -34,4 +34,4 @@ d = ForwardDiff.gradient(p -> wf(X, s(p), st)[1], p)   # Compute ∇_θ log|ψ| 
 # ======= Laplacian check: ∇²_x log|ψ| =======
 p, s = destructure(X)
 d = ForwardDiff.hessian(x -> wf(s(x), ps, st)[1], p)   # Compute full Hessian w.r.t. positions
-@test norm(sum([d[i,i] for i=1:30]) - laplacian(wf, X, ps, st)) < 1e-8  # Compare trace of Hessian with custom Laplacian
+@test norm(sum([d[i,i] for i=1:size(d, 1)]) - laplacian(wf, X, ps, st)) < 1e-8  # Compare trace of Hessian with custom Laplacian
