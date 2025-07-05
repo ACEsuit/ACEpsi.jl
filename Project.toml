@@ -12,6 +12,7 @@ EquivariantTensors = "5e107534-7145-4f8f-b06f-47a52840c895"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Functors = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
 HyperDualNumbers = "50ceba7f-c3ee-5a84-a6e8-3ad40456ec97"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LowRankApprox = "898213cb-b102-5a47-900c-97e73b919f73"
@@ -29,9 +30,10 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
-julia = "1.10"
 EquivariantTensors = "0.1.2"
 Polynomials4ML = "0.5.0"
+julia = "1.10"
+
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 

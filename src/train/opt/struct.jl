@@ -4,7 +4,7 @@ export MINSRSolver, SPRINGSolver, DirectSolver, SketchSolver, SVDSolver
 
 abstract type SR_method end
 
-struct OPTSETTING
+mutable struct OPTSETTING
     sr_method::SR_method
     iterations::Vector{Int64}
     burnin::Int
@@ -13,6 +13,7 @@ struct OPTSETTING
     Δt::Float64
     acc_step::Int
     acc_range::Vector{Float64}
+    acc_opt
     clip::Float64
     lr::Float64
     lr_dc::Int
@@ -23,16 +24,17 @@ struct OPTSETTING
     norm_constrain::Float64
     η::Float64
     res_path
+    checkpoints
 end
 
 function OPTSETTING(sr_method::SR_method; iterations::Vector{Int}, burnin::Int, lag::Int, nchains::Int,
-                    Δt::Float64, acc_step::Int, acc_range::Vector{Float64},
+                    Δt::Float64, acc_step::Int, acc_range::Vector{Float64}, acc_opt, 
                     clip::Float64, lr::Float64, lr_dc::Int, m::Float64,
                     damping::Float64, damping_decay::Int, damping_min::Float64,
-                    norm_constrain::Float64, η::Float64, res_path)
-    return OPTSETTING(sr_method, iterations, burnin, lag, nchains, Δt, acc_step, acc_range,
+                    norm_constrain::Float64, η::Float64, res_path, checkpoints)
+    return OPTSETTING(sr_method, iterations, burnin, lag, nchains, Δt, acc_step, acc_range, acc_opt, 
                       clip, lr, lr_dc, m, damping, damping_decay, damping_min,
-                      norm_constrain, η, res_path)
+                      norm_constrain, η, res_path, checkpoints)
 end
 
 struct MINSRSolver <: SR_method

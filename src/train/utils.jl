@@ -4,7 +4,8 @@ using ForwardDiff
 using Optimisers: destructure
 using LinearAlgebra
 
-export clipE, test_wavefunction
+export clipE, test_wavefunction, setup, load_setup
+
 function acc_adjust(k::Int, Δt::Number, acc_opt::AbstractVector, acc_range::AbstractVector, acc_step::Int)
     if mod(k, acc_step) == 0
         if mean(acc_opt) < acc_range[1]
@@ -87,7 +88,7 @@ function test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list,
         @assert norm(s(d) - gradx(model, X, ps, st)) < 1e-8
         p, s = destructure(ps)
         d = ForwardDiff.gradient(p -> model(X, s(p), st)[1], p)   # Compute ∇_θ log|ψ| using ForwardDiff
-        @assert norm(d - ACEpsi.gradp(model, X, ps, st)) < 1e-3
+        @assert norm(d - gradp(model, X, ps, st)) < 1e-3
         p, s = destructure(X)
         d = ForwardDiff.hessian(x -> model(s(x), ps, st)[1], p)   # Compute full Hessian w.r.t. positions
         @assert norm(sum([d[i,i] for i=1:size(d, 1)]) - laplacian(model, X, ps, st)) < 1e-5  # Compare trace of Hessian with custom Laplacian
@@ -100,4 +101,190 @@ function test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list,
         y2 = model2(X, ps2, st2)[1]
         @assert norm(y1 - y2) < 1e-5
     end 
+end
+
+using Distributed, Printf, JLD2
+
+function setup(mol, mol_name, method; ν = 2, basis_set = "cc-pvtz")
+    atoms = [nuc.name for nuc in mol.nuclei]
+    basis = Vector([load_basis_from_json("basis.json", atom, basis_set) for atom in atoms])  # Load basis from JSON
+    A = []
+    for (i, atom) in enumerate(atoms)
+        spec = displayspec1p(basis[i].spec)
+        push!(A, strip(last(split(spec, ','))))
+    end
+
+    totdeg = map(x -> fill(x, ν), A)
+
+    model_list, ps_list, st_list, spec_list, spec1p_list, totdeg_list, ν_list =
+        model_generator(mol, basis_set, totdeg, ν; ratio = 0.5);
+
+    new_model_list = []
+    new_ps_list = []
+    new_st_list = []
+    new_spec_list = []
+    new_spec1p_list = []
+    new_totdeg_list = []
+    new_ν_list = []
+
+    for i in eachindex(model_list)
+        try
+            test_wavefunction(
+            [model_list[i]],
+            [ps_list[i]],
+            [st_list[i]],
+            [spec_list[i]],
+            [spec1p_list[i]],
+            mol
+        )
+        push!(new_model_list, model_list[i])
+        push!(new_ps_list, ps_list[i])
+        push!(new_st_list, st_list[i])
+        push!(new_spec_list, spec_list[i])
+        push!(new_spec1p_list, spec1p_list[i])
+        push!(new_totdeg_list, totdeg_list[i])
+        push!(new_ν_list, ν_list[i])
+        catch e
+        @warn "test_wavefunction failed at layer $i, skipping it.\nError: $e"
+        end
+    end
+
+    model_list   = [i for i in new_model_list]
+    ps_list      = [i for i in new_ps_list]
+    st_list      = [i for i in new_st_list]
+    spec_list    = [i for i in new_spec_list]
+    spec1p_list  = [i for i in new_spec1p_list]
+    totdeg_list  = [i for i in new_totdeg_list]
+    ν_list       = [i for i in new_ν_list]
+
+    test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list, mol)
+
+    solver = (SPRINGSolver(), SketchSolver(800, 50, 50, 1.4), SVDSolver(800, 50, 50, 1.4))
+    iterations = 1000 * ones(Int, length(spec_list))
+    iterations[end] = 30000
+    
+    checkpoints = []
+    for i = 1:length(iterations)- 1
+        push!(checkpoints, [[1, iterations[i]]])
+    end
+    interval = 3000
+    A = []
+    append!(A, collect(interval : interval : iterations[end]))
+    if A[end] != iterations[end]
+        push!(A, iterations[end])
+    end
+    checkpoint = []
+    for i = 1:length(A)
+        if i == 1
+            a = 1
+        else
+            a = A[i-1]+1
+        end
+        push!(checkpoint, [a, A[i]])
+    end
+    push!(checkpoints, [i for i in checkpoint])
+    checkpoints = [i for i in checkpoints]
+
+    string = method == 1 ? "SPRING" :
+             method == 2 ? "SKETCH" :
+             method == 3 ? "WSSR"   : error("Invalid method")
+
+    res_path = "$mol_name/$string/"
+    optimizer = OPTSETTING(solver[method],
+        iterations = iterations,
+        burnin = 1000,
+        lag = 10,
+        nchains = 2^8,
+        Δt = 0.08,
+        acc_step = 10,
+        acc_range = [0.45, 0.90],
+        acc_opt = zeros(10), 
+        clip = 5.0,
+        lr = 0.0015,
+        lr_dc = 3000,
+        m = 0.99,
+        damping = 0.001,
+        damping_decay = 100,
+        damping_min = 0.001,
+        norm_constrain = 0.001,
+        η = 0.95,
+        res_path = res_path, 
+        checkpoints = checkpoints
+    )
+    Δt = optimizer.Δt
+    acc = 0.0
+    acc_opt = fill(0.0, optimizer.acc_step)
+    x0, _theta, _acc = init_walkers(mol, model_list[1], ps_list[1], st_list[1],
+                                    optimizer.burnin, optimizer.nchains * nprocs(), Δt)
+    for trial = 1:50
+        x0, _theta, _acc = init_walkers(mol, model_list[1], ps_list[1], st_list[1],
+                                    10, optimizer.nchains * nprocs(), Δt)
+        acc = mean(_acc)
+        @printf("Try %2d: Δt = %.5f | acc = %.4f\n", trial, Δt, acc)
+        push!(acc_opt, acc)
+        deleteat!(acc_opt, 1)
+
+        if acc < optimizer.acc_range[1]
+            Δt *= exp(1/10 * (acc - optimizer.acc_range[1]) / optimizer.acc_range[1])
+            @printf("acc too low, decreasing Δt → %.5f\n", Δt)
+        elseif acc > optimizer.acc_range[2]
+            Δt *= exp(1/10 * (acc - optimizer.acc_range[2]) / optimizer.acc_range[2])
+            @printf("acc too high, decreasing Δt → %.5f\n", Δt)
+        else
+            break
+        end
+    end
+
+    @printf("Initialize MCMC: Δt = %.5f, accRate = %.5f \n", Δt, acc)
+    optimizer.Δt = Δt
+    mkpath(optimizer.res_path)
+    res_path = "$mol_name"
+    save_path = joinpath(res_path, "$(mol_name).jld2")
+    x0 = split_x0(x0, optimizer.nchains)
+    @save save_path x0 optimizer model_list ps_list st_list spec_list spec1p_list totdeg_list ν_list
+
+    return nothing
+end
+
+function split_x0(x0::Vector, nchains::Int)
+    nworkers = nprocs()
+    @assert length(x0) == nchains * nworkers "x0 length must be equal to nchains * nprocs()"
+    return [x0[(i-1)*nchains+1 : i*nchains] for i in 1:nworkers]
+end
+
+function load_setup(mol_name::String)
+    file_path = joinpath(mol_name, "$(mol_name).jld2")
+
+    @info "Loading setup from: $file_path"
+
+    @load file_path x0 optimizer model_list ps_list st_list spec_list spec1p_list totdeg_list ν_list
+
+    return x0, optimizer, model_list, ps_list, st_list, spec_list, spec1p_list, totdeg_list, ν_list
+end
+
+function get_resume_index(checkpoints_by_layer, res_path::String)
+    latest_file = nothing
+    latest_layer = 0
+    latest_stop = 0
+
+    for (i, layer_ckpts) in enumerate(checkpoints_by_layer)
+        for (j, (start, stop)) in enumerate(layer_ckpts)
+            l = [start, stop]
+            filename = joinpath(res_path, "$(i)_$(l).jld2")
+            if isfile(filename)
+                @info "Found checkpoint: $filename"
+                if i > latest_layer || (i == latest_layer && stop > latest_stop)
+                    latest_file = filename
+                    latest_layer = i
+                    latest_stop = stop
+                end
+            else
+                @info "Resuming from layer $i, checkpoint $j → missing file: $filename"
+                return i, j, latest_file
+            end
+        end
+    end
+
+    @info "All checkpoints found. Nothing to resume."
+    return length(checkpoints_by_layer) + 1, 1, latest_file
 end

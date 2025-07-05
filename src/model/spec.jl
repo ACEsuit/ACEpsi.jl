@@ -146,12 +146,12 @@ end
 
 
 function build_totdeglevels(mol, basis_set, totdeg, ν; ratio = 0.5, max_level::Union{Nothing, Int} = nothing)
-    _, orbital = ACEpsi.auto_load_basis(mol, basis_set; return_spec = true)
+    _, orbital = auto_load_basis(mol, basis_set; return_spec = true)
     n_atom = length(orbital)
 
-    lj = maximum(length.(ACEpsi.iteratespec1p.(ACEpsi.orbital_for_iatom_jord.(Ref(orbital), Ref(totdeg), 1:n_atom, 1), Ref(1))))
+    lj = maximum(length.(iteratespec1p.(orbital_for_iatom_jord.(Ref(orbital), Ref(totdeg), 1:n_atom, 1), Ref(1))))
     _lj = max(Int(ceil(lj * ratio)), 1)
-    spec1pl = [ACEpsi.iteratespec1p(ACEpsi.orbital_for_iatom_jord(orbital, totdeg, i, 1), lj) for i = 1:n_atom]
+    spec1pl = [iteratespec1p(orbital_for_iatom_jord(orbital, totdeg, i, 1), lj) for i = 1:n_atom]
 
     totdeglevels = Vector{Vector{Vector{String}}}()
     νlevels = Int[]

@@ -24,15 +24,15 @@ CH4 = create_molecule(SVector(
     Nuc("H", [-1.18886,  1.18886, -1.18886])
 ))
 
+Li2 = create_molecule(SVector(
+    Nuc("Li", [-5.051/2, 0.0, 0.0]),
+    Nuc("Li", [ 5.051/2, 0.0, 0.0])
+))
+LiH = create_molecule(SVector(
+    Nuc("Li", [-3.015/2, 0.0, 0.0]),
+    Nuc("H",  [ 3.015/2, 0.0, 0.0])
+))
 # === Diatomic and small molecules with spacing parameter ===
-Li2(spacing) = create_molecule(SVector(
-    Nuc("Li", [-spacing/2, 0.0, 0.0]),
-    Nuc("Li", [ spacing/2, 0.0, 0.0])
-))
-LiH(spacing) = create_molecule(SVector(
-    Nuc("Li", [-spacing/2, 0.0, 0.0]),
-    Nuc("H",  [ spacing/2, 0.0, 0.0])
-))
 N2(spacing) = create_molecule(SVector(
     Nuc("N", [-spacing/2, 0.0, 0.0]),
     Nuc("N", [ spacing/2, 0.0, 0.0])

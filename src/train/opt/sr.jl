@@ -1,7 +1,7 @@
 export opts!
 
 function opts!(i, OptParams::OPTPARAMS, optimizer::DirectSolver, Eloc, o::Matrix{T}, nchains, damping::Float64, dim_ps::Int64, η::Float64, norm_constrain, γ, m) where {T}
-    s = o * o'
+    s = o * o' # O * O'
     @inbounds @simd for i = 1:dim_ps
         s[i, i] += damping
     end
@@ -19,45 +19,41 @@ end
 
 function opts!(i, OptParams::OPTPARAMSPRING, optimizer::SPRINGSolver, Eloc, o::Matrix{T}, nchains, damping::Float64, dim_ps::Int64, η::Float64, norm_constrain, γ, m) where {T}
     res = norm(OptParams.f)
-    lmul!(-γ, Eloc)
+    lmul!(-γ, Eloc) # -delta tau * (E - E_mean)
     s = o' * o
     
     s .+= 1/(nchains)
-    Tvecs, Tvals = svd(Symmetric(s))
+    Tvals, Tvecs = eigen(Symmetric(s))
     Tvals = max.(Tvals, 0.0) .+ damping
 
-    if OptParams.dw_tot[1] !== 0.0
-        mul!(OptParams.dow, transpose(o), OptParams.dw_tot) 
-        epsilon_tilde = Eloc .- η * OptParams.dow
-    else
-        epsilon_tilde = Eloc
-    end
+    mul!(OptParams.dow, transpose(o), OptParams.dw_tot) 
+    epsilon_tilde = Eloc .- η * OptParams.dow
 
     mul!(OptParams.dow, Tvecs', epsilon_tilde)
-    OptParams.dow = Diagonal(1 ./ Tvals) * OptParams.dow
+    ldiv!(Diagonal(Tvals), OptParams.dow)
     OptParams.dow = Tvecs * OptParams.dow
-    mul!(OptParams.f, o, OptParams.dow) 
-    OptParams.dw_tot .*= η
-    OptParams.dw_tot .+= OptParams.f
+    OptParams.dow .-= mean(OptParams.dow)
+
+    mul!(OptParams.f, o, OptParams.dow)
+    OptParams.dw_tot .= η * OptParams.dw_tot .+ OptParams.f / sqrt(nchains) 
     OptParams.dw_tot .*= min(1, sqrt(norm_constrain)/norm(OptParams.dw_tot))
     return OptParams.dw_tot, length(OptParams.f), res
 end
 
 function opts!(i, OptParams::OPTPARAMMINSR, optimizer::MINSRSolver, Eloc, o::Matrix{T}, nchains, damping::Float64, dim_ps::Int64, η::Float64, norm_constrain, γ, m) where {T}
-    lmul!(sqrt(nchains), Eloc)
-    ldiv!(sqrt(nchains), o)
-    res = norm(o * Eloc)
-    lmul!(-γ, Eloc)
+    res = norm(OptParams.f)
+    lmul!(-γ, Eloc) # -delta tau * (E - E_mean)
     s = o' * o
     
-    Tvecs, Tvals = svd(Symmetric(s))
+    Tvals, Tvecs = eigen(Symmetric(s))
     Tvals = max.(Tvals, 0.0) .+ damping
+
     mul!(OptParams.dow, Tvecs', Eloc)
-    OptParams.dow = Diagonal(1 ./ Tvals) * OptParams.dow
+    ldiv!(Diagonal(Tvals), OptParams.dow)
     OptParams.dow = Tvecs * OptParams.dow
-    mul!(OptParams.f, o, OptParams.dow) 
-    OptParams.dw_tot .*= η
-    OptParams.dw_tot .+= (1-η) * OptParams.f
+
+    mul!(OptParams.f, o, OptParams.dow)
+    OptParams.dw_tot .= η * OptParams.dw_tot .+ (1-η) * OptParams.f / sqrt(nchains) 
     OptParams.dw_tot .*= min(1, sqrt(norm_constrain)/norm(OptParams.dw_tot))
     return OptParams.dw_tot, length(OptParams.f), res
 end
