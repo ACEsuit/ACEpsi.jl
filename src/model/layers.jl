@@ -54,8 +54,15 @@ function evaluate(jl::JastrowLayer, X::Vector{SVector{3, TX}}, Σ::Vector{Char})
 
         γ += -c_ij / (1 + dist)
     end
-    return γ
+    return exp(γ)
 end
+
+struct BackflowPoolingLayer_TD{TT}<: AbstractLuxLayer
+    spec::Vector{TT}
+    Σ::Vector{Char}
+end
+
+(l::BackflowPoolingLayer_TD)(x, ps, st) = evaluate(l, x, l.Σ), ps, st
 
 function evaluate(l::BackflowPoolingLayer, x, Σ::Vector{Char})
     T = promote_type(eltype(x[1]))
@@ -93,6 +100,43 @@ function evaluate(l::BackflowPoolingLayer, x, Σ::Vector{Char})
     return A  # shape: (Nel, 3 * Nnlm)
 end
 
+function evaluate(l::BackflowPoolingLayer_TD, x, Σ::Vector{Char})
+    T = promote_type(eltype(x[1]))
+    Nnlm = length(l.spec)
+    Nel = length(Σ)
+
+    @assert spin2idx(↑) == 1
+    @assert spin2idx(↓) == 2
+    @assert spin2idx(∅) == 3
+
+    A = zeros(T, Nel, 3, Nnlm)       # (Nel, 3 channel, Nnlm)
+    Aall = zeros(T, 2, Nnlm)         # (spin channel ∈ {↑, ↓}, Nnlm)
+
+    @inbounds begin
+        for k = 1:Nnlm
+            @simd ivdep for i = 1:Nel
+                iσ = spin2idx(Σ[i])
+                if iσ ≤ 2
+                    Aall[iσ, k] += x[i, k]
+                end
+                A[i, 3, k] = x[i, k]
+            end
+        end
+
+        for k = 1:Nnlm
+            @simd ivdep for iσ = 1:2
+                σ = idx2spin(iσ)
+                for i = 1:Nel
+                    A[i, iσ, k] = Aall[iσ, k] - (Σ[i] == σ ? x[i, k] : zero(T))
+                end
+            end
+        end
+    end
+
+    return A  # shape: (Nel, 3, Nnlm)
+end
+
+
 function ChainRulesCore.rrule(::typeof(evaluate), l::Diff_layer{Nnuc}, X::Vector{SVector{3, TX}}, ps::NamedTuple, st::NamedTuple) where {Nnuc, TX}
    val = ntuple(i -> _getdiff(X, l.nuc[i].rr), Val(Nnuc))
    function pb(dA)
@@ -112,6 +156,14 @@ function ChainRulesCore.rrule(::typeof(Lux.apply), l::MaskLayer, Φ, ps, st)
 end
  
 function ChainRulesCore.rrule(::typeof(evaluate), pooling::BackflowPoolingLayer, x, Σ::Vector{Char}) 
+    A = evaluate(pooling, x, pooling.Σ)
+    function pb(∂A)
+        return NoTangent(), NoTangent(), _pullback_evaluate(∂A, pooling, x, Σ), NoTangent()
+    end
+    return A, pb
+end 
+
+function ChainRulesCore.rrule(::typeof(evaluate), pooling::BackflowPoolingLayer_TD, x, Σ::Vector{Char}) 
     A = evaluate(pooling, x, pooling.Σ)
     function pb(∂A)
         return NoTangent(), NoTangent(), _pullback_evaluate(∂A, pooling, x, Σ), NoTangent()
@@ -148,6 +200,35 @@ function _pullback_evaluate(∂A, l::BackflowPoolingLayer, x, Σ::Vector{Char})
                 @simd for j = 1:Nel
                     iσ = spin2idx(Σ[i])
                     ∂x[i, k] += ∂A[j, 3*(k - 1) + iσ] * (j != i)
+                end
+            end
+        end
+    end
+
+    return ∂x
+end
+
+function _pullback_evaluate(∂A, l::BackflowPoolingLayer_TD, x, Σ::Vector{Char})
+    TA = eltype(x[1])
+    Nel = length(Σ)
+    Nnlm = length(l.spec)
+
+    ∂x = zeros(TA, Nel, Nnlm)
+
+    @inbounds begin
+        for k = 1:Nnlm
+            for i = 1:Nel
+                σi = Σ[i]
+                iσ = spin2idx(σi)
+
+                ∂x[i, k] += ∂A[i, 3, k]
+
+                if iσ ≤ 2
+                    for j = 1:Nel
+                        if j != i && Σ[j] == σi
+                            ∂x[i, k] += ∂A[j, iσ, k]
+                        end
+                    end
                 end
             end
         end

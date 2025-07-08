@@ -3,7 +3,7 @@ using UnPack, Printf, Statistics, ParallelDataTransfer
 export train
 
 function train(x0, mol, model_list::Vector, ps_list::Vector, st_list::Vector, spec_list::Vector, spec1p_list::Vector, totdeg_list, ν_list, optimizer)    
-    idx_i, idx_l, latest_file = ACEpsi.get_resume_index(optimizer.checkpoints, optimizer.res_path) 
+    idx_i, idx_l, latest_file = get_resume_index(optimizer.checkpoints, optimizer.res_path) 
     if idx_i == 1 && idx_l == 1
         level = length(optimizer.iterations) 
         val_list = [zeros(optimizer.iterations[i]) for i = 1:level]
@@ -12,8 +12,8 @@ function train(x0, mol, model_list::Vector, ps_list::Vector, st_list::Vector, sp
         i = 1
         model, ps, st, spec, spec1p = model_list[i], ps_list[i], st_list[i], spec_list[i], spec1p_list[i]
         dim_ps = length(destructure(ps)[1])
-        io = ACEpsi.mkrespath(optimizer.res_path)
-        OptParams = ACEpsi.init_optim(dim_ps, optimizer.nchains * nprocs(), optimizer.sr_method)
+        io = mkrespath(optimizer.res_path)
+        OptParams = init_optim(dim_ps, optimizer.nchains * nprocs(), optimizer.sr_method)
     else
         @assert latest_file !== nothing "Checkpoint file not found, but trying to resume."
 
@@ -89,7 +89,7 @@ function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0,
         end
     else
         for k in 1:nprocs()
-            sendto(k, _x = x0[myid()])
+            sendto(k, _x = x0[k])
         end
         @everywhere _theta = evalx.(Ref(model), _x, Ref(ps), Ref(st))
         @everywhere _acc = ones(length(_theta))
@@ -101,7 +101,7 @@ function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0,
             sendto(k, p = p)
         end
         @everywhere ps = re(p)
-        damping = max(ACEpsi.InverseLR(iter, optimizer.damping, optimizer.damping_decay), optimizer.damping_min)
+        damping = max(InverseLR(iter, optimizer.damping, optimizer.damping_decay), optimizer.damping_min)
         @everywhere begin 
             _x, _theta, _acc, _elocs, _o_tot = compute_Eloc_dp(ham, model, ps, st, _x, _theta, _acc, Δt, lag)
             acc = mean(_acc) 
@@ -111,7 +111,7 @@ function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0,
         v̄al = median(Eloc) 
         val_list[i][iter], var_list[i][iter] = mean(Eloc), sqrt(var(Eloc)/length(Eloc))
         optimizer.acc_opt[mod1(iter, acc_step)] = ācc
-        optimizer.Δt = ACEpsi.acc_adjust(iter, optimizer.Δt, optimizer.acc_opt, acc_range, acc_step)
+        optimizer.Δt = acc_adjust(iter, optimizer.Δt, optimizer.acc_opt, acc_range, acc_step)
         Δt = optimizer.Δt
         for k = 1:nprocs()
             sendto(k, Δt = Δt)
@@ -125,7 +125,7 @@ function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0,
             sendto(k, ā = ā)
         end
         @everywhere begin 
-            ΔE = ACEpsi.clipE.(ΔE, Ref(ā)) 
+            ΔE = clipE.(ΔE, Ref(ā)) 
             _elocs = v̄al .+ ΔE .- val_mean # E - medial(E) + medial(E) - val_mean
             _o_mean = mean(_o_tot, dims = 2) 
         end
@@ -145,7 +145,7 @@ function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0,
         ldiv!(sqrt(nprocs() * nchains), o)
         ldiv!(sqrt(nprocs() * nchains), Eloc)
 
-        γ = ACEpsi.InverseLR(iter, lr, lr_dc)
+        γ = InverseLR(iter, lr, lr_dc)
         OptParams.dw_tot, r, res = opts!(iter, OptParams, optimizer.sr_method, Eloc, o, nchains * nprocs(), damping, dim_ps, η, norm_constrain, γ, m)
         rank_list[i][iter] = r
         ProgressMeter.next!(progress_iter; showvalues = [(:iter, iter), (:E, val_list[i][iter]), (:var, var_list[i][iter]), (:acc, ācc), (:lr, γ), (:res, res), (:t, Δt), (:rank, r)])

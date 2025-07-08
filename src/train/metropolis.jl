@@ -38,7 +38,7 @@ function distributed_sampling!(wf, ps, st, _x::Vector{Vector{SVector{3, TX}}}, _
 end
 
 function distributed_mhsteps!(wf, ps, st, _x::Vector{Vector{SVector{3, TX}}}, _theta::Vector{TT}, _acc::Vector{TT}, Nel::Int64, nchains::Int64, Δt::TN, i::Int64) where {TT, TN <: Float64, TX}
-    xx = map(i -> _x[i] + Δt * randn(SVector{3, TX}, Nel), 1:nchains)
+    xx = map(i -> _x[i] + sqrt(Δt) * randn(SVector{3, TX}, Nel), 1:nchains)
     theta_upd = evalx.(Ref(wf), xx, Ref(ps), Ref(st))
     logpsi_frac = theta_upd - _theta
     A = @fastmath exp.(logpsi_frac)

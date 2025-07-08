@@ -54,10 +54,24 @@ function parseTotdegToInt(
     return _totdegn
 end
 
-function displayspec(spec, spec1p)
-    nicespec = []
-    for k = 1:length(spec)
-        push!(nicespec, [spec1p[spec[k][j]] for j = 1:length(spec[k])])
+function displayspec(spec, spec1p, ps)
+    if :TK ∉ keys(ps.branch.bf)
+        nicespec = []
+        for k = 1:length(spec)
+            push!(nicespec, [spec1p[spec[k][j]] for j = 1:length(spec[k])])
+        end
+    else
+        P = 0
+        if length(size(ps.branch.bf.TK.W)) == 4
+            P = size(ps.branch.bf.TK.W)[3]
+        elseif length(size(ps.branch.bf.TK.W)) == 3
+            P = size(ps.branch.bf.TK.W)[2]
+        end
+        spec1p = get_spec1p(P)
+        nicespec = []
+        for k = 1:length(spec)
+            push!(nicespec, [spec1p[spec[k][j]] for j = 1:length(spec[k])])
+        end
     end
     return nicespec
 end
@@ -93,6 +107,18 @@ function get_spec1p(basis::Vector{TS}; spin = false) where {TS}
         end
     end
     return spec[:]
+end
+
+function get_spec1p(P)  
+    spec = Array{Any}(undef, (3, P))
+ 
+    for k = 1:P
+        for (is, s) in enumerate(extspins())
+            spec[is, k] = (s=s, P = k)
+        end
+    end
+ 
+   return spec[:]
 end
 
 function _invmap(a)
@@ -145,7 +171,7 @@ function sample_evenly(arr::AbstractVector; N = 10)
 end
 
 
-function build_totdeglevels(mol, basis_set, totdeg, ν; ratio = 0.5, max_level::Union{Nothing, Int} = nothing)
+function build_totdeglevels(mol, basis_set, totdeg, ν, TD::No_Decomposition; ratio = 0.5, max_level::Union{Nothing, Int} = nothing)
     _, orbital = auto_load_basis(mol, basis_set; return_spec = true)
     n_atom = length(orbital)
 
@@ -203,3 +229,45 @@ function build_totdeglevels(mol, basis_set, totdeg, ν; ratio = 0.5, max_level::
 
     return totdeglevels, νlevels
 end
+
+function build_totdeglevels(mol, basis_set, totdeg, ν, TD; ratio = 0.5, max_level::Union{Nothing, Int} = nothing)
+    maxdim = length(totdeg)
+    levels = Vector{Vector{Int}}()
+
+    d = mol.Nel
+    deg_split = floor(Int, totdeg[1] * ratio)
+    for x = d:deg_split
+        push!(levels, [x])
+    end
+
+    function extend_levels(levels, curdim)
+        result = Vector{Vector{Int}}()
+        for v in levels
+            if length(v) == curdim &&
+               all(v[i] ≥ floor(Int, totdeg[i] * ratio) for i in 1:curdim)
+                for j = mol.Nel:floor(Int, totdeg[curdim+1] * ratio)
+                    push!(result, vcat(v, j))
+                end
+            end
+        end
+        return result
+    end
+
+    for curdim = 1:maxdim-1
+        new_levels = extend_levels(levels, curdim)
+        append!(levels, new_levels)
+    end
+
+    last_diag = [floor(Int, totdeg[i] * ratio) for i in 1:maxdim]
+    while all(last_diag[i] ≤ totdeg[i] for i in 1:maxdim)
+        push!(levels, copy(last_diag))
+        for i in 1:maxdim
+            last_diag[i] += 1
+        end
+    end
+
+    νlevels = [length(v) for v in levels]
+    return levels, νlevels
+end
+
+

@@ -5,17 +5,20 @@ using ACEpsi
 method = 1
 mol = ACEpsi.molecules.Be
 mol_name = "Be"
-setup(mol, mol_name, method)
+TD = SCPMultipleW(14) #No_Decomposition() 
+worldsize = N_procs = 8
+setup(mol, mol_name, method, TD, worldsize)
 
-x0, optimizer, model_list, ps_list, st_list, spec_list, spec1p_list, totdeg_list, ν_list = load_setup(mol_name);
+x0, optimizer, model_list, ps_list, st_list, spec_list, spec1p_list, totdeg_list, ν_list = load_setup(mol_name, TD);
 solver = (SPRINGSolver(), SketchSolver(800, 50, 50, 1.4), SVDSolver(800, 50, 50, 1.4))
 optimizer.sr_method = solver[method]
 string = method == 1 ? "SPRING" :
              method == 2 ? "SKETCH" :
              method == 3 ? "WSSR"   : error("Invalid method")
-optimizer.res_path = "$mol_name/$string/"
+clean_TD = replace("$(TD)", r"[^A-Za-z0-9]" => "")
+optimizer.res_path = "$mol_name/$string/$clean_TD/"
 
-N_procs = 8
+
 using Pkg
 using Distributed
 Pkg.activate(Base.current_project())

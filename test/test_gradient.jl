@@ -13,7 +13,7 @@ Nel = mol.Nel                 # Get number of electrons in the molecule
 basis_set = "cc-pvtz"
 totdeg = [["2d", "2d"], ["3p", "3p"], ["3p", "3p"]]
 ν = 2
-wf, ps, st, spec, spec1p = build_wavefunction(mol, basis_set, totdeg, ν)
+wf, ps, st, spec, spec1p = build_wavefunction(mol, basis_set, totdeg, ν, No_Decomposition())
 
 # Generate random 3D coordinates for all electrons as input configuration X
 X = [SVector{3}(rand(3)) for i = 1:Nel]

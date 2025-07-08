@@ -13,11 +13,11 @@ Nel = mol.Nel                 # Get number of electrons in the molecule
 basis_set = "cc-pvtz"
 totdeg = [["2d", "2d"], ["3p", "3p"], ["3p", "3p"]]
 ν = 2
-wf1, ps1, st1, spec1, spec1p1 = build_wavefunction(mol, basis_set, totdeg, ν)
+wf1, ps1, st1, spec1, spec1p1 = build_wavefunction(mol, basis_set, totdeg, ν, No_Decomposition())
 
 totdeg = [["1f", "1f", "1f"], ["1d", "1d", "1d"], ["1d", "1d", "1d"]]
 ν = 3
-wf2, ps2, st2, spec2, spec1p2 = build_wavefunction(mol, basis_set, totdeg, ν)
+wf2, ps2, st2, spec2, spec1p2 = build_wavefunction(mol, basis_set, totdeg, ν, No_Decomposition())
 
 ps2 = transfer_weights!(ps1, ps2, spec1, spec2, spec1p1, spec1p2)
 

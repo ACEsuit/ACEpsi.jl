@@ -10,7 +10,7 @@ import Polynomials4ML: _valtype
 
 _valtype(::Polynomials4ML.RadialDecay, T::Type{<: Number}) = T
 
-function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν; filename = "basis.json")
+function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν, TD::No_Decomposition; filename = "basis.json")
     basis = auto_load_basis(mol, basis_set; filename = filename)
     A_spec = get_spec1p(basis; spin = false)
     spec1p = get_spec1p(basis; spin = true)
@@ -31,6 +31,112 @@ function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν; filena
     model = Chain(; branch = BranchLayer(; js = JastrowLayer(mol.Σ), bf = l, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
     ps, st = Lux.setup(Random.default_rng(), model)
     return model, ps, st, spec, spec1p
+end
+
+function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν, TD::SCPMultipleW; filename = "basis.json")
+    basis = auto_load_basis(mol, basis_set; filename = filename)
+    A_spec = get_spec1p(basis; spin = false)
+    pooling_spec1p = get_spec1p(basis; spin = true)
+    P = maximum(totdeg)
+    tucker_layer = SCPMultipleLayer(P, length(A_spec), mol.Nel)
+    spec1p = get_spec1p(P)
+    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+    filter = bb -> ((length(bb) == 0) ||  sum(b.s == '∅' for b in bb) == 1)
+    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = bb -> (true), filter = filter, minvv = fill(0, ν), maxvv = fill(length(spec1p), ν), ordered = true)
+    spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+    sd_admissible = bb -> (length(bb) == 0) || ((maximum(b.P for b in bb ) <= totdeg[length(bb)]) && sum([ (bb[i].P - bb[i+1].P) != 0 for i = 1:length(bb)-1]) == 0)
+    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+    branches = (; (Symbol("l", i) => b for (i, b) in enumerate(basis))...)
+    AAbasis = SparseSymmProd(spec)
+    corr_layer = WrappedFunction(x -> Matrix(AAbasis(x)'))
+
+    l = Chain(; l_embed = Diff_layer(mol.nuclei), branch = Lux.Experimental.freeze(Parallel(hcat; branches...)), 
+            pooling = BackflowPoolingLayer_TD(A_spec, mol.Σ), TK = tucker_layer, 
+            bAA = Lux.Parallel(vcat, (
+            Chain(deepcopy(corr_layer), Dense(length(AAbasis), 1; use_bias=false)) 
+            for _ in 1:mol.Nel)...), 
+            mask = MaskLayer(mol.Nel, mol.Σ), l_det = WrappedFunction(x -> det(x)))
+    model = Chain(; branch = BranchLayer(; js = JastrowLayer(mol.Σ), bf = l, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+    ps, st = Lux.setup(Random.default_rng(), model)
+    return model, ps, st, spec, A_spec
+end
+
+function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν, TD::STKMultipleW; filename = "basis.json")
+    basis = auto_load_basis(mol, basis_set; filename = filename)
+    A_spec = get_spec1p(basis; spin = false)
+    pooling_spec1p = get_spec1p(basis; spin = true)
+    P = maximum(totdeg)
+    tucker_layer = STKMultipleWLayer(P, length(A_spec), mol.Nel)
+    spec1p = get_spec1p(P)
+    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+    filter = bb -> ((length(bb) == 0) ||  sum(b.s == '∅' for b in bb) == 1)
+    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = bb -> (true), filter = filter, minvv = fill(0, ν), maxvv = fill(length(spec1p), ν), ordered = true)
+    spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+    sd_admissible = bb -> (length(bb) == 0) || ((maximum(b.P for b in bb ) <= totdeg[length(bb)]) )
+    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+    branches = (; (Symbol("l", i) => b for (i, b) in enumerate(basis))...)
+    AAbasis = SparseSymmProd(spec)
+    corr_layer = WrappedFunction(x -> Matrix(AAbasis(x)'))
+
+    l = Chain(; l_embed = Diff_layer(mol.nuclei), branch = Lux.Experimental.freeze(Parallel(hcat; branches...)), 
+            pooling = BackflowPoolingLayer_TD(A_spec, mol.Σ), TK = tucker_layer, 
+            bAA = Lux.Parallel(vcat, (
+            Chain(deepcopy(corr_layer), Dense(length(AAbasis), 1; use_bias=false)) 
+            for _ in 1:mol.Nel)...), 
+            mask = MaskLayer(mol.Nel, mol.Σ), l_det = WrappedFunction(x -> det(x)))
+    model = Chain(; branch = BranchLayer(; js = JastrowLayer(mol.Σ), bf = l, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+    ps, st = Lux.setup(Random.default_rng(), model)
+    return model, ps, st, spec, A_spec
+end
+
+function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν, TD::SCPCommonW; filename = "basis.json")
+    basis = auto_load_basis(mol, basis_set; filename = filename)
+    A_spec = get_spec1p(basis; spin = false)
+    pooling_spec1p = get_spec1p(basis; spin = true)
+    P = maximum(totdeg)
+    tucker_layer = SCPCommonLayer(P, length(A_spec), mol.Nel)
+    spec1p = get_spec1p(P)
+    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+    filter = bb -> ((length(bb) == 0) ||  sum(b.s == '∅' for b in bb) == 1)
+    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = bb -> (true), filter = filter, minvv = fill(0, ν), maxvv = fill(length(spec1p), ν), ordered = true)
+    spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+    sd_admissible = bb -> (length(bb) == 0) || ((maximum(b.P for b in bb ) <= totdeg[length(bb)]) && sum([ (bb[i].P - bb[i+1].P) != 0 for i = 1:length(bb)-1]) == 0)
+    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+    branches = (; (Symbol("l", i) => b for (i, b) in enumerate(basis))...)
+    AAbasis = SparseSymmProd(spec)
+    corr_layer = WrappedFunction(x -> Matrix(AAbasis(x)'))
+
+    l = Chain(; l_embed = Diff_layer(mol.nuclei), branch = Lux.Experimental.freeze(Parallel(hcat; branches...)), 
+            pooling = BackflowPoolingLayer_TD(A_spec, mol.Σ), TK = tucker_layer, corr = WrappedFunction(x -> Matrix(AAbasis(x)')), 
+            linear = Dense(length(AAbasis), mol.Nel; use_bias=false), mask = MaskLayer(mol.Nel, mol.Σ), l_det = WrappedFunction(x -> det(x)))
+    model = Chain(; branch = BranchLayer(; js = JastrowLayer(mol.Σ), bf = l, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+    ps, st = Lux.setup(Random.default_rng(), model)
+    return model, ps, st, spec, A_spec
+end
+
+function build_wavefunction(mol::Molecule, basis_set::String, totdeg, ν, TD::STKCommonW; filename = "basis.json")
+    basis = auto_load_basis(mol, basis_set; filename = filename)
+    A_spec = get_spec1p(basis; spin = false)
+    pooling_spec1p = get_spec1p(basis; spin = true)
+    P = maximum(totdeg)
+    tucker_layer = STKCommonLayer(P, length(A_spec), mol.Nel)
+    spec1p = get_spec1p(P)
+    tup2b = vv -> [ spec1p[v] for v in vv[vv .> 0]  ]
+    filter = bb -> ((length(bb) == 0) ||  sum(b.s == '∅' for b in bb) == 1)
+    specAA = gensparse(; NU = ν, tup2b = tup2b, admissible = bb -> (true), filter = filter, minvv = fill(0, ν), maxvv = fill(length(spec1p), ν), ordered = true)
+    spec = [ vv[vv .> 0] for vv in specAA if !(isempty(vv[vv .> 0]))]
+    sd_admissible = bb -> (length(bb) == 0) || ((maximum(b.P for b in bb ) <= totdeg[length(bb)]))
+    spec = [t for t in spec if sd_admissible([spec1p[t[j]] for j = 1:length(t)])]
+    branches = (; (Symbol("l", i) => b for (i, b) in enumerate(basis))...)
+    AAbasis = SparseSymmProd(spec)
+    corr_layer = WrappedFunction(x -> Matrix(AAbasis(x)'))
+
+    l = Chain(; l_embed = Diff_layer(mol.nuclei), branch = Lux.Experimental.freeze(Parallel(hcat; branches...)), 
+            pooling = BackflowPoolingLayer_TD(A_spec, mol.Σ), TK = tucker_layer, corr = WrappedFunction(x -> Matrix(AAbasis(x)')), 
+            linear = Dense(length(AAbasis), mol.Nel; use_bias=false), mask = MaskLayer(mol.Nel, mol.Σ), l_det = WrappedFunction(x -> det(x)))
+    model = Chain(; branch = BranchLayer(; js = JastrowLayer(mol.Σ), bf = l, ), prod = WrappedFunction(x -> x[1] * x[2]), logabs = WrappedFunction(x -> 2 * log(abs(x))) )
+    ps, st = Lux.setup(Random.default_rng(), model)
+    return model, ps, st, spec, A_spec
 end
 
 evalx(wf, X::Vector{SVector{3, T}}, ps, st) where {T} = wf(X, ps, st)[1] 
