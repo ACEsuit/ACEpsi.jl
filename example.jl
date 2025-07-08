@@ -5,7 +5,7 @@ using ACEpsi
 method = 1
 mol = ACEpsi.molecules.Be
 mol_name = "Be"
-TD = SCPMultipleW(14) #No_Decomposition() 
+TD = STKCommonW(14) 
 worldsize = N_procs = 8
 setup(mol, mol_name, method, TD, worldsize)
 
@@ -17,7 +17,6 @@ string = method == 1 ? "SPRING" :
              method == 3 ? "WSSR"   : error("Invalid method")
 clean_TD = replace("$(TD)", r"[^A-Za-z0-9]" => "")
 optimizer.res_path = "$mol_name/$string/$clean_TD/"
-
 
 using Pkg
 using Distributed
@@ -35,3 +34,4 @@ end
 end
 
 model_list, ps_list, st_list, val_list, var_list, rank_list = train(x0, mol, model_list, ps_list, st_list, spec_list, spec1p_list, totdeg_list, ν_list, optimizer);
+

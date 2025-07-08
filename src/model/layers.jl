@@ -116,10 +116,8 @@ function evaluate(l::BackflowPoolingLayer_TD, x, Σ::Vector{Char})
         for k = 1:Nnlm
             @simd ivdep for i = 1:Nel
                 iσ = spin2idx(Σ[i])
-                if iσ ≤ 2
-                    Aall[iσ, k] += x[i, k]
-                end
-                A[i, 3, k] = x[i, k]
+                Aall[iσ, k] += x[i, k]                      # accumulate for ↑, ↓
+                A[i, 3, k] = x[i, k]                        # j = 3 ↔ ∅ channel
             end
         end
 
@@ -127,11 +125,12 @@ function evaluate(l::BackflowPoolingLayer_TD, x, Σ::Vector{Char})
             @simd ivdep for iσ = 1:2
                 σ = idx2spin(iσ)
                 for i = 1:Nel
-                    A[i, iσ, k] = Aall[iσ, k] - (Σ[i] == σ ? x[i, k] : zero(T))
+                    A[i, iσ, k] = Aall[iσ, k] - (Σ[i] == σ) * x[i, k]
                 end
             end
         end
     end
+
 
     return A  # shape: (Nel, 3, Nnlm)
 end
@@ -218,17 +217,11 @@ function _pullback_evaluate(∂A, l::BackflowPoolingLayer_TD, x, Σ::Vector{Char
     @inbounds begin
         for k = 1:Nnlm
             for i = 1:Nel
-                σi = Σ[i]
-                iσ = spin2idx(σi)
-
+                # j = 3 is ∅ channel
                 ∂x[i, k] += ∂A[i, 3, k]
-
-                if iσ ≤ 2
-                    for j = 1:Nel
-                        if j != i && Σ[j] == σi
-                            ∂x[i, k] += ∂A[j, iσ, k]
-                        end
-                    end
+                @simd for j = 1:Nel
+                    iσ = spin2idx(Σ[i])
+                    ∂x[i, k] += ∂A[j, iσ, k] * (j != i)
                 end
             end
         end
