@@ -153,13 +153,13 @@ function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvt
         end
     end
 
-    model_list   = [i for i in new_model_list]
-    ps_list      = [i for i in new_ps_list]
-    st_list      = [i for i in new_st_list]
-    spec_list    = [i for i in new_spec_list]
-    spec1p_list  = [i for i in new_spec1p_list]
-    totdeg_list  = [i for i in new_totdeg_list]
-    ν_list       = [i for i in new_ν_list]
+    model_list   = [i for i in new_model_list[2:end]]
+    ps_list      = [i for i in new_ps_list[2:end]]
+    st_list      = [i for i in new_st_list[2:end]]
+    spec_list    = [i for i in new_spec_list[2:end]]
+    spec1p_list  = [i for i in new_spec1p_list[2:end]]
+    totdeg_list  = [i for i in new_totdeg_list[2:end]]
+    ν_list       = [i for i in new_ν_list[2:end]]
 
     ACEpsi.test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list, mol)
 

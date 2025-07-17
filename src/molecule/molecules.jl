@@ -32,6 +32,14 @@ LiH = create_molecule(SVector(
     Nuc("Li", [-3.015/2, 0.0, 0.0]),
     Nuc("H",  [ 3.015/2, 0.0, 0.0])
 ))
+
+# === H₂O molecule ===
+H2O = create_molecule(SVector(
+    Nuc("O", [0.0, 0.0, 0.0]),
+    Nuc("H", [-1.84345 * sin(110.6 / 360 * pi), -1.84345 * cos(110.6 / 360 * pi), 0.0]),
+    Nuc("H", [ 1.84345 * sin(110.6 / 360 * pi), -1.84345 * cos(110.6 / 360 * pi), 0.0])
+))
+
 # === Diatomic and small molecules with spacing parameter ===
 N2(spacing) = create_molecule(SVector(
     Nuc("N", [-spacing/2, 0.0, 0.0]),
@@ -58,11 +66,6 @@ NH2(spacing, angle) = create_molecule(SVector(
     Nuc("H", [ spacing * sin(angle / 360 * pi), -spacing * cos(angle / 360 * pi), 0.0])
 ))
 
-# === H₂O molecule with bond angle ===
-H2O(spacing, angle) = create_molecule(SVector(
-    Nuc("O", [0.0, 0.0, 0.0]),
-    Nuc("H", [-spacing * sin(angle / 360 * pi), -spacing * cos(angle / 360 * pi), 0.0]),
-    Nuc("H", [ spacing * sin(angle / 360 * pi), -spacing * cos(angle / 360 * pi), 0.0])
-))
+
 
 end
