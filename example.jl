@@ -3,11 +3,11 @@
 using ACEpsi
 
 method = 1
-mol = ACEpsi.molecules.Be
-mol_name = "Be"
+mol = ACEpsi.molecules.H2O
+mol_name = "H2O"
 TD = No_Decomposition()
-worldsize = N_procs = 16
-setup(mol, mol_name, method, TD, worldsize; ν = 3)
+worldsize = N_procs = 8
+setup(mol, mol_name, method, TD, worldsize; ν = 2)
 
 x0, optimizer, model_list, ps_list, st_list, spec_list, spec1p_list, totdeg_list, ν_list = load_setup(mol_name, TD);
 solver = (SPRINGSolver(), SketchSolver(800, 50, 50, 1.4), SVDSolver(800, 50, 50, 1.4))

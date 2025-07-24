@@ -6,7 +6,7 @@ using LinearAlgebra
 using ForwardDiff
 
 # Define a water molecule (H2O) with O-H bond length 1.0 and bond angle 105°
-mol = ACEpsi.molecules.H2O(1.0, 105)
+mol = ACEpsi.molecules.H2O
 Nel = mol.Nel                 # Get number of electrons in the molecule
 
 # Build the wavefunction object and get its initial parameters and state

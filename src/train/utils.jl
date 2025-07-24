@@ -164,8 +164,8 @@ function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvt
     ACEpsi.test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list, mol)
 
     solver = (SPRINGSolver(), SketchSolver(800, 50, 50, 1.4), SVDSolver(800, 50, 50, 1.4))
-    iterations = 2000 * ones(Int, length(spec_list))
-    iterations[end] = 30000
+    iterations = 500 * ones(Int, length(spec_list))
+    iterations[end] = 40000
     
     checkpoints = []
     for i = 1:length(iterations)- 1
@@ -220,7 +220,7 @@ function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvt
     acc_opt = fill(0.0, optimizer.acc_step)
     x0, _theta, _acc = init_walkers(mol, model_list[1], ps_list[1], st_list[1],
                                     optimizer.burnin, optimizer.nchains * worldsize, Δt)
-    for trial = 1:50
+    for trial = 1:200
         x0, _theta, _acc = init_walkers(mol, model_list[1], ps_list[1], st_list[1],
                                     10, optimizer.nchains * worldsize, Δt)
         acc = mean(_acc)

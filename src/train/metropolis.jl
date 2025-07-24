@@ -1,9 +1,9 @@
 using Statistics: mean
-export init_walkers, compute_Eloc_dp
+export init_walkers, compute_Eloc_dp, burnin!
 
 function init_walkers(mol, model, ps, st, burnin, nchains, Δt)         
     x0 = initialize_around_nuclei(mol.nuclei, mol.Nel, nchains)
-    x, θ, acc = burnin!(x0, model, ps, st, burnin, nchains; Δt = Δt)
+    x, θ, acc = burnin!(x0, model, ps, st, burnin; Δt = Δt)
     return x, θ, acc
 end
 
@@ -22,7 +22,7 @@ function initialize_around_nuclei(nuclei::SVector{Nnuc, Nuc{T, TT}}, Nel::Int64,
     return r
 end
 
-function burnin!(_x, wf, ps, st, burnin::Int64, nchains::Int64; Δt = 0.08)
+function burnin!(_x, wf, ps, st, burnin::Int64; Δt = 0.08)
     _theta = evalx.(Ref(wf), _x, Ref(ps), Ref(st))
     _acc = zeros(burnin)
     _x, _theta, _acc = distributed_sampling!(wf, ps, st, _x, _theta, _acc, Δt, burnin)

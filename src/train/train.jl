@@ -64,11 +64,10 @@ function train(x0, mol, model_list::Vector, ps_list::Vector, st_list::Vector, sp
 end
 
 function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0, mol, model::Chain, ps, st, optimizer)
-    @unpack clip, acc_step, acc_range, damping, nchains, lag, lr, lr_dc, η, norm_constrain, m = optimizer
+    @unpack clip, acc_step, acc_range, damping, nchains, lag, Δt, lr, lr_dc, η, norm_constrain, m = optimizer
     progress_iter = Progress(_iters[2] - _iters[1] + 1; barglyphs = BarGlyphs("[=> ]"), barlen = 50, desc = "VMC steps: ", color=:yellow)
     ham = SumH(mol.nuclei)
     dim_ps = length(destructure(ps)[1])
-    Δt = optimizer.Δt
     for k in 1:nprocs()
         sendto(k, mol = mol)
         sendto(k, ham = ham)
@@ -85,19 +84,24 @@ function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0,
     _x, _theta, _acc = [], [], []
     if x0 == nothing
         @everywhere begin 
-            _x, _theta, _acc = init_walkers(mol, model, ps, st, burnin, nchains, optimizer.Δt)
+            _x, _theta, _acc = init_walkers(mol, model, ps, st, burnin, nchains, Δt)
         end
     else
         for k in 1:nprocs()
             sendto(k, _x = x0[k])
         end
         @everywhere _theta = evalx.(Ref(model), _x, Ref(ps), Ref(st))
-        @everywhere _acc = ones(length(_theta))
+        @everywhere _x, _theta, _acc = burnin!(_x, model, ps, st, 10; Δt = Δt)
+        @everywhere acc = mean(_acc) 
     end
+    ācc = mean([@getfrom k acc for k in 1:nprocs()])
+    @printf("acc = %.4f\n", ācc)
+   
     for iter = _iters[1]:_iters[2]
         p, re = destructure(ps)
         @everywhere p, re = destructure(ps)
         for k = 1:nprocs()
+            sendto(k, Δt = Δt)
             sendto(k, p = p)
         end
         @everywhere ps = re(p)
@@ -111,10 +115,9 @@ function train(i::Int, _iters, io, val_list, var_list, rank_list, OptParams, x0,
         v̄al = median(Eloc) 
         val_list[i][iter], var_list[i][iter] = mean(Eloc), sqrt(var(Eloc)/length(Eloc))
         optimizer.acc_opt[mod1(iter, acc_step)] = ācc
-        optimizer.Δt = acc_adjust(iter, optimizer.Δt, optimizer.acc_opt, acc_range, acc_step)
-        Δt = optimizer.Δt
+        Δt = acc_adjust(iter, Δt, optimizer.acc_opt, acc_range, acc_step)
+        optimizer.Δt = Δt
         for k = 1:nprocs()
-            sendto(k, Δt = Δt)
             sendto(k, v̄al = v̄al)
             sendto(k, val_mean = mean(Eloc))
         end

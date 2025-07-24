@@ -222,6 +222,13 @@ function build_totdeglevels(mol, basis_set, totdeg, ν, TD::No_Decomposition; ra
         νlevels[i] = length(totdeglevels[i][1])
     end
 
+    idx_ones = findall(==(1), νlevels)
+    last3_idx = idx_ones[max(end-2, 1):end]
+    idx_gt1 = findall(>(1), νlevels)
+    idx_keep = sort(union(last3_idx, idx_gt1))
+    νlevels = νlevels[idx_keep]
+    totdeglevels = totdeglevels[idx_keep]
+
     if max_level !== nothing && length(totdeglevels) > max_level
         totdeglevels = sample_evenly(totdeglevels; N = max_level)
         νlevels = sample_evenly(νlevels; N = max_level)
