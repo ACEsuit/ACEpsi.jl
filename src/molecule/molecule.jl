@@ -9,7 +9,10 @@ struct Molecule{Nnuc, T, TT, TN <: Int64, TS <: Int64}
 end
 
 # Construct a Molecule from a list of nuclei
-function create_molecule(nuclei::SVector{Nnuc, Nuc{T, TT}}) where {Nnuc, T, TT}
+function create_molecule(
+    nuclei::SVector{Nnuc, Nuc{T,TT}},
+    target_ms::Union{Nothing, Tuple{Int,Int}} = nothing
+) where {Nnuc,T,TT}
     element_names = [n.name for n in nuclei]                      # Element names
     unique_elements = unique(element_names)                      # Unique species
     total_electrons = sum(n.charge for n in nuclei)              # Total electron count
@@ -21,7 +24,12 @@ function create_molecule(nuclei::SVector{Nnuc, Nuc{T, TT}}) where {Nnuc, T, TT}
     ]
     element_electron_dict = Dict(Symbol.(unique_elements) .=> electrons_per_element)
 
-    Σ = generate_spin_config(total_electrons)                    # Spin configuration
+    if target_ms === nothing
+        Σ = generate_spin_config(total_electrons)       
+    else
+        n_up, n_down = target_ms
+        Σ = vcat(fill('↑', n_up), fill('↓', n_down))
+    end
     return Molecule(nuclei, total_electrons, element_electron_dict, Σ)
 end
 

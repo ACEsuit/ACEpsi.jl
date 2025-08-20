@@ -105,7 +105,7 @@ end
 
 using Distributed, Printf, JLD2
 
-function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvtz")
+function setup(mol, mol_name, method, TD, worldsize; nchains = 2^8, ν = 2, basis_set = "cc-pvtz")
     atoms = [nuc.name for nuc in mol.nuclei]
     basis = Vector([load_basis_from_json("basis.json", atom, basis_set) for atom in atoms])  # Load basis from JSON
     A = []
@@ -121,7 +121,7 @@ function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvt
     end
 
     model_list, ps_list, st_list, spec_list, spec1p_list, totdeg_list, ν_list =
-        model_generator(mol, basis_set, totdeg, ν; TD = TD, ratio = 0.5);
+        model_generator(mol, basis_set, totdeg, ν; TD = TD, ratio = 1.0);
 
     new_model_list = []
     new_ps_list = []
@@ -153,19 +153,34 @@ function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvt
         end
     end
 
-    model_list   = [i for i in new_model_list[2:end]]
-    ps_list      = [i for i in new_ps_list[2:end]]
-    st_list      = [i for i in new_st_list[2:end]]
-    spec_list    = [i for i in new_spec_list[2:end]]
-    spec1p_list  = [i for i in new_spec1p_list[2:end]]
-    totdeg_list  = [i for i in new_totdeg_list[2:end]]
-    ν_list       = [i for i in new_ν_list[2:end]]
+    model_list   = [i for i in new_model_list[1:end]]
+    ps_list      = [i for i in new_ps_list[1:end]]
+    st_list      = [i for i in new_st_list[1:end]]
+    spec_list    = [i for i in new_spec_list[1:end]]
+    spec1p_list  = [i for i in new_spec1p_list[1:end]]
+    totdeg_list  = [i for i in new_totdeg_list[1:end]]
+    ν_list       = [i for i in new_ν_list[1:end]]
 
     ACEpsi.test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list, mol)
 
     solver = (SPRINGSolver(), SketchSolver(800, 50, 50, 1.4), SVDSolver(800, 50, 50, 1.4))
-    iterations = 500 * ones(Int, length(spec_list))
-    iterations[end] = 40000
+    iterations = ones(Int, length(spec_list))
+    for i = 1:length(ν_list)
+        if ν_list[i] == 1
+            if i + 1 <= length(ν_list)   
+                if ν_list[i + 1] == 2
+                    iterations[i] = 1000
+                else
+                    iterations[i] = 50
+                end
+            else
+                iterations[i] = 10000
+            end
+        elseif ν_list[i] == 2
+            iterations[i] = 500
+        end
+    end
+    iterations[end] = 10000
     
     checkpoints = []
     for i = 1:length(iterations)- 1
@@ -198,7 +213,7 @@ function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvt
         iterations = iterations,
         burnin = 1000,
         lag = 10,
-        nchains = 2^8,
+        nchains = nchains,
         Δt = 0.08,
         acc_step = 10,
         acc_range = [0.45, 0.99],
@@ -217,28 +232,8 @@ function setup(mol, mol_name, method, TD, worldsize; ν = 2, basis_set = "cc-pvt
     )
     Δt = optimizer.Δt
     acc = 0.0
-    acc_opt = fill(0.0, optimizer.acc_step)
-    x0, _theta, _acc = init_walkers(mol, model_list[1], ps_list[1], st_list[1],
+    x0, _, _ = init_walkers(mol, model_list[1], ps_list[1], st_list[1],
                                     optimizer.burnin, optimizer.nchains * worldsize, Δt)
-    for trial = 1:200
-        x0, _theta, _acc = init_walkers(mol, model_list[1], ps_list[1], st_list[1],
-                                    10, optimizer.nchains * worldsize, Δt)
-        acc = mean(_acc)
-        @printf("Try %2d: Δt = %.5f | acc = %.4f\n", trial, Δt, acc)
-        push!(acc_opt, acc)
-        deleteat!(acc_opt, 1)
-
-        if acc < optimizer.acc_range[1]
-            Δt *= exp(1/10 * (acc - optimizer.acc_range[1]) / optimizer.acc_range[1])
-            @printf("acc too low, decreasing Δt → %.5f\n", Δt)
-        elseif acc > optimizer.acc_range[2]
-            Δt *= exp(1/10 * (acc - optimizer.acc_range[2]) / optimizer.acc_range[2])
-            @printf("acc too high, decreasing Δt → %.5f\n", Δt)
-        else
-            break
-        end
-    end
-
     @printf("Initialize MCMC: Δt = %.5f, accRate = %.5f \n", Δt, acc)
     optimizer.Δt = Δt
     mkpath(optimizer.res_path)

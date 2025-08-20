@@ -2,12 +2,12 @@ using Statistics: mean
 export init_walkers, compute_Eloc_dp, burnin!
 
 function init_walkers(mol, model, ps, st, burnin, nchains, Δt)         
-    x0 = initialize_around_nuclei(mol.nuclei, mol.Nel, nchains)
+    x0 = initialize_around_nuclei(mol.nuclei, mol.Nel, nchains; Δt = Δt)
     x, θ, acc = burnin!(x0, model, ps, st, burnin; Δt = Δt)
     return x, θ, acc
 end
 
-function initialize_around_nuclei(nuclei::SVector{Nnuc, Nuc{T, TT}}, Nel::Int64, nchains::Int64) where {Nnuc, T <: Real, TT}
+function initialize_around_nuclei(nuclei::SVector{Nnuc, Nuc{T, TT}}, Nel::Int64, nchains::Int64; Δt = 0.08) where {Nnuc, T <: Real, TT}
     r0 = Vector{SVector{3, T}}(undef, Nel)
     inuc = Vector{Vector{Int64}}(undef, Nnuc)
     @inbounds @simd for i = 1:Nnuc
@@ -38,7 +38,7 @@ function distributed_sampling!(wf, ps, st, _x::Vector{Vector{SVector{3, TX}}}, _
 end
 
 function distributed_mhsteps!(wf, ps, st, _x::Vector{Vector{SVector{3, TX}}}, _theta::Vector{TT}, _acc::Vector{TT}, Nel::Int64, nchains::Int64, Δt::TN, i::Int64) where {TT, TN <: Float64, TX}
-    xx = map(i -> _x[i] + sqrt(Δt) * randn(SVector{3, TX}, Nel), 1:nchains)
+    xx = map(i -> _x[i] + Δt * randn(SVector{3, TX}, Nel), 1:nchains)
     theta_upd = evalx.(Ref(wf), xx, Ref(ps), Ref(st))
     logpsi_frac = theta_upd - _theta
     A = @fastmath exp.(logpsi_frac)

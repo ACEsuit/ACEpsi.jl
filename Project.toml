@@ -5,6 +5,7 @@ version = "0.0.1"
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 ChemBasisSets = "1c560d76-8727-4c46-9370-373904ef8065"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -31,6 +32,7 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
+ChemBasisSets = "1.0.0"
 EquivariantTensors = "0.1.2"
 Polynomials4ML = "0.5.0"
 julia = "1.10"

@@ -3,25 +3,38 @@ module molecules
 using ACEpsi: Nuc, create_molecule
 using StaticArrays
 
+const GROUND_SPIN = Dict{String,Tuple{Int,Int}}(
+    "H"  => (1,0),
+    "He" => (1,1),
+    "Li" => (2,1),
+    "Be" => (2,2),
+    "B"  => (3,2),
+    "C"  => (4,2),
+    "N"  => (5,2),
+    "O"  => (5,3),
+    "F"  => (5,4),
+    "Ne" => (5,5),
+)
+
 # === Single atom molecules at origin ===
-H  = create_molecule(SVector(Nuc("H", [0.0, 0.0, 0.0])))
-He = create_molecule(SVector(Nuc("He", [0.0, 0.0, 0.0])))
+H  = create_molecule(SVector(Nuc("H", [0.0, 0.0, 0.0])), GROUND_SPIN["H"])
+He = create_molecule(SVector(Nuc("He", [0.0, 0.0, 0.0])), GROUND_SPIN["He"])
 # -7.47798
-Li = create_molecule(SVector(Nuc("Li", [0.0, 0.0, 0.0])))
+Li = create_molecule(SVector(Nuc("Li", [0.0, 0.0, 0.0])),  GROUND_SPIN["Li"])
 # -14.66733
-Be = create_molecule(SVector(Nuc("Be", [0.0, 0.0, 0.0])))
+Be = create_molecule(SVector(Nuc("Be", [0.0, 0.0, 0.0])), GROUND_SPIN["Be"])
 # -24.65370
-B  = create_molecule(SVector(Nuc("B", [0.0, 0.0, 0.0])))
+B  = create_molecule(SVector(Nuc("B", [0.0, 0.0, 0.0])), GROUND_SPIN["B"])
 # -37.84471
-C  = create_molecule(SVector(Nuc("C", [0.0, 0.0, 0.0])))
+C  = create_molecule(SVector(Nuc("C", [0.0, 0.0, 0.0])),    GROUND_SPIN["C"])
 # -54.58882
-N  = create_molecule(SVector(Nuc("N", [0.0, 0.0, 0.0])))
+N  = create_molecule(SVector(Nuc("N", [0.0, 0.0, 0.0])), GROUND_SPIN["N"])
 # -75.06655
-O  = create_molecule(SVector(Nuc("O", [0.0, 0.0, 0.0])))
+O  = create_molecule(SVector(Nuc("O", [0.0, 0.0, 0.0])),    GROUND_SPIN["O"])
 # -99.7329
-F  = create_molecule(SVector(Nuc("F", [0.0, 0.0, 0.0])))
+F  = create_molecule(SVector(Nuc("F", [0.0, 0.0, 0.0])),   GROUND_SPIN["F"])
 # -128.9366
-Ne = create_molecule(SVector(Nuc("Ne", [0.0, 0.0, 0.0])))
+Ne = create_molecule(SVector(Nuc("Ne", [0.0, 0.0, 0.0])),   GROUND_SPIN["Ne"])
 
 # -14.99475
 Li2 = create_molecule(SVector(
