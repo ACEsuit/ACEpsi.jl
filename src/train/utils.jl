@@ -62,22 +62,6 @@ function record_ps(P::T, res_path) where {T}
     open(res_path * "parameters.json","w") do f JSON.print(f, record_p) end
 end
 
-
-function ∇clip!(dw_tot, f::AbstractArray{TT}, norm_constrain::T, γ::TG) where {TT <: Float64, T, TG}
-    res = γ * dot(dw_tot, f)
-    a = min(1, sqrt(norm_constrain)/res)
-    if norm_constrain > 0 && res > norm_constrain
-        lmul!(a, dw_tot)
-    end
-end
-
-function ∇clip!(dw_tot, norm_constrain::T, res::TG) where {T, TG}
-    a = min(1, sqrt(norm_constrain)/res)
-    if norm_constrain > 0 && res > norm_constrain
-        lmul!(a, dw_tot)
-    end
-end
-
 function test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list, mol)
     X = [SVector{3}(rand(3)) for i = 1:mol.Nel]
     for i = 1:length(model_list)
@@ -169,7 +153,7 @@ function setup(mol, mol_name, method, TD, worldsize; nchains = 2^8, ν = 2, basi
         if ν_list[i] == 1
             if i + 1 <= length(ν_list)   
                 if ν_list[i + 1] == 2
-                    iterations[i] = 1000
+                    iterations[i] = 2000
                 else
                     iterations[i] = 50
                 end
@@ -225,7 +209,7 @@ function setup(mol, mol_name, method, TD, worldsize; nchains = 2^8, ν = 2, basi
         damping = 0.001,
         damping_decay = 100,
         damping_min = 0.001,
-        norm_constrain = 0.001,
+        norm_constrain = 0.01,
         η = 0.95,
         res_path = res_path, 
         checkpoints = checkpoints
