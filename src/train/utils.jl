@@ -87,9 +87,17 @@ function test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list,
     end 
 end
 
-using Distributed, Printf, JLD2
+using Distributed, Printf, JLD2, JSON
 
-function setup(mol, mol_name, method, TD, worldsize; nchains = 2^8, ν = 2, basis_set = "cc-pvtz")
+function init_hf(mol_name, ps, basis_set)
+    data = JSON.parsefile("hf.json")
+    C = reduce(hcat, data[basis_set][mol_name]["C_occ"])' |> x->permutedims(x)
+    ps1 = deepcopy(ps)
+    ps1.branch.bf.linear.weight .= C
+    return ps1
+end
+
+function setup(mol, mol_name, method, TD, worldsize; nchains = 2^8, ν = 2, basis_set = "cc-pvtz", hf = false)
     atoms = [nuc.name for nuc in mol.nuclei]
     basis = Vector([load_basis_from_json("basis.json", atom, basis_set) for atom in atoms])  # Load basis from JSON
     A = []
@@ -144,8 +152,19 @@ function setup(mol, mol_name, method, TD, worldsize; nchains = 2^8, ν = 2, basi
     spec1p_list  = [i for i in new_spec1p_list[1:end]]
     totdeg_list  = [i for i in new_totdeg_list[1:end]]
     ν_list       = [i for i in new_ν_list[1:end]]
-
     ACEpsi.test_wavefunction(model_list, ps_list, st_list, spec_list, spec1p_list, mol)
+
+    if hf
+        ind = findall(i == 1 for i in ν_list)
+        model_list   = [i for i in model_list[ind[end]:end]]   
+        ps_list      = [i for i in ps_list[ind[end]:end]]
+        st_list      = [i for i in st_list[ind[end]:end]]
+        spec_list    = [i for i in spec_list[ind[end]:end]]
+        spec1p_list  = [i for i in spec1p_list[ind[end]:end]]
+        totdeg_list  = [i for i in totdeg_list[ind[end]:end]]
+        ν_list       = [i for i in ν_list[ind[end]:end]]
+        ps_list[1] = init_hf(mol_name, ps_list[1], basis_set)
+    end
 
     solver = (SPRINGSolver(), SketchSolver(800, 50, 50, 1.4), SVDSolver(800, 50, 50, 1.4))
     iterations = ones(Int, length(spec_list))
