@@ -177,13 +177,13 @@ function setup(mol, mol_name, method, TD, worldsize; nchains = 2^8, ν = 2, basi
                     iterations[i] = 50
                 end
             else
-                iterations[i] = 10000
+                iterations[i] = 100000
             end
         elseif ν_list[i] == 2
             iterations[i] = 500
         end
     end
-    iterations[end] = 10000
+    iterations[end] = 100000
     
     checkpoints = []
     for i = 1:length(iterations)- 1
